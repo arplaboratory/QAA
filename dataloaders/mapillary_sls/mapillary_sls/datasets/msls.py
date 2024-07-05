@@ -10,7 +10,7 @@ import math
 import torch
 import random
 import sys
-from mapillary_sls.datasets.generic_dataset import ImagesFromList
+from mapillary_sls.mapillary_sls.datasets.generic_dataset import ImagesFromList
 from tqdm import tqdm
 
 default_cities = {
@@ -22,7 +22,7 @@ default_cities = {
 }
 
 class MSLS(Dataset):
-    def __init__(self, root_dir, cities = '', nNeg = 5, transform = None, mode = 'train', task = 'im2im', subtask = 'all', seq_length = 1, posDistThr = 10, negDistThr = 25, cached_queries = 1000, cached_negatives = 1000, positive_sampling = True):
+    def __init__(self, root_dir, save=False, cities = '', nNeg = 5, transform = None, mode = 'train', task = 'im2im', subtask = 'all', seq_length = 1, posDistThr = 10, negDistThr = 25, cached_queries = 1000, cached_negatives = 1000, positive_sampling = True):
 
         # initializing
         assert mode in ('train', 'val', 'test')
@@ -214,11 +214,17 @@ class MSLS(Dataset):
         # cast to np.arrays for indexing during training
         self.qIdx = np.asarray(self.qIdx)
         self.qImages = np.asarray(self.qImages)
-        self.pIdx = np.asarray(self.pIdx)
-        self.nonNegIdx = np.asarray(self.nonNegIdx)
+        self.pIdx = np.asarray(self.pIdx, dtype=object)
+        self.nonNegIdx = np.asarray(self.nonNegIdx, dtype=object)
         self.dbImages = np.asarray(self.dbImages)
         self.sideways = np.asarray(self.sideways)
         self.night = np.asarray(self.night)
+        if save:
+            np.save(join('npys', 'msls_'+self.mode+'_qIdx.npy'), self.qIdx)
+            np.save(join('npys', 'msls_' + self.mode + '_qImages.npy'), self.qImages)
+            np.save(join('npys', 'msls_' + self.mode + '_dbImages.npy'), self.dbImages)
+            np.save(join('npys', 'msls_' + self.mode + '_pIdx.npy'), self.pIdx)
+            np.save(join('npys', 'msls_' + self.mode + '_nonNegIdx.npy'), self.nonNegIdx)
 
         # decide device type ( important for triplet mining )
         self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")

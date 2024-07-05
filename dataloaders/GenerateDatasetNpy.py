@@ -4,14 +4,15 @@ from glob import glob
 from os.path import join
 from sklearn.neighbors import NearestNeighbors
 import argparse
+from mapillary_sls.mapillary_sls.datasets.msls import MSLS
+import shutil
 
 def generate_dataset_npy(datasets_folder, dataset_name, split, val_positive_dist_threshold=25):
-    dataset_folder = join(datasets_folder, dataset_name, "images", split)
-    if not os.path.exists(dataset_folder):
-        raise FileNotFoundError(f"Folder {dataset_folder} does not exist")
-    
     #### Read paths and UTM coordinates for all images.
     if args.dataset_name == "svox":
+        dataset_folder = join(datasets_folder, dataset_name, "images", split)
+        if not os.path.exists(dataset_folder):
+            raise FileNotFoundError(f"Folder {dataset_folder} does not exist")
         svox_query_types = ["queries", "queries_night", "queries_overcast", "queries_rain", "queries_snow", "queries_sun"]
         if split=="val":
             database_folder = join(dataset_folder, "gallery")
@@ -25,7 +26,24 @@ def generate_dataset_npy(datasets_folder, dataset_name, split, val_positive_dist
                     save_dataset_npy(database_folder, queries_folder, dataset_name, split, val_positive_dist_threshold, suffix="_" + query_type.split("_")[-1])
                 else:
                     save_dataset_npy(database_folder, queries_folder, dataset_name, split, val_positive_dist_threshold)
+    elif args.dataset_name == "mapillary_sls":
+        dataset_folder = join(datasets_folder, dataset_name)
+        if not os.path.exists(dataset_folder):
+            raise FileNotFoundError(f"Folder {dataset_folder} does not exist")
+        if os.path.isdir("npys"):
+            shutil.rmtree("npys")
+        os.mkdir("npys")
+        if split == "val":
+            _ = MSLS(root_dir=dataset_folder, save=True, mode=split, posDistThr=25)
+        else:
+            _ = MSLS(root_dir=dataset_folder, save=True, mode=split)
+        
+        shutil.copytree("npys", os.path.join(f"cache/datasets/{dataset_name}/"), dirs_exist_ok=True)
+        shutil.rmtree("npys")
     else:
+        dataset_folder = join(datasets_folder, dataset_name, "images", split)
+        if not os.path.exists(dataset_folder):
+            raise FileNotFoundError(f"Folder {dataset_folder} does not exist")
         database_folder = join(dataset_folder, "database")
         queries_folder = join(dataset_folder, "queries")
         save_dataset_npy(database_folder, queries_folder, dataset_name, split, val_positive_dist_threshold)
