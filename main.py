@@ -5,6 +5,9 @@ from vpr_model import VPRModel
 from utils.load_cfg import load_config, load_datasets_config
 from dataloaders.GSVCitiesDataloader import GSVCitiesDataModule
 
+import ssl
+ssl._create_default_https_context = ssl._create_unverified_context # For downloading the pretrained models
+
 if __name__ == '__main__':
     args = argparse.ArgumentParser()
     args.add_argument('--config', type=str)
