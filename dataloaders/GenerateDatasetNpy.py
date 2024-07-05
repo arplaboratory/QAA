@@ -35,8 +35,11 @@ def save_dataset_npy(database_folder, queries_folder, dataset_name, split, val_p
         raise FileNotFoundError(f"Folder {database_folder} does not exist")
     if not os.path.exists(queries_folder):
         raise FileNotFoundError(f"Folder {queries_folder} does not exist")
-    database_paths = sorted(glob(join(database_folder, "**", "*.jpg"), recursive=True))
-    queries_paths = sorted(glob(join(queries_folder, "**", "*.jpg"),  recursive=True))
+    # Sort the path according to the utm coordinates
+    database_paths = glob(join(database_folder, "**", "*.jpg"), recursive=True)
+    database_paths.sort(key=lambda x: (float(x.split("@")[1]), float(x.split("@")[2])))
+    queries_paths = glob(join(queries_folder, "**", "*.jpg"),  recursive=True)
+    queries_paths.sort(key=lambda x: (float(x.split("@")[1]), float(x.split("@")[2])))
     # The format must be path/to/file/@utm_easting@utm_northing@...@.jpg
     database_utms = np.array([(path.split("@")[1], path.split("@")[2]) for path in database_paths]).astype(float)
     queries_utms = np.array([(path.split("@")[1], path.split("@")[2]) for path in queries_paths]).astype(float)
@@ -46,6 +49,8 @@ def save_dataset_npy(database_folder, queries_folder, dataset_name, split, val_p
     soft_positives_per_query = knn.radius_neighbors(queries_utms,
                                                     radius=val_positive_dist_threshold,
                                                     return_distance=False)
+    for i in range(len(soft_positives_per_query)):
+        soft_positives_per_query[i].sort()
     # Save the dataset in cache/datasets/{dataset_name}{suffix}/
     if not os.path.exists(f"cache/datasets/{dataset_name}{suffix}/"):
         os.makedirs(f"cache/datasets/{dataset_name}{suffix}/")
