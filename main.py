@@ -1,54 +1,51 @@
 import pytorch_lightning as pl
+import argparse
 
 from vpr_model import VPRModel
+from utils.load_cfg import load_config, load_datasets_config
 from dataloaders.GSVCitiesDataloader import GSVCitiesDataModule
 
-if __name__ == '__main__':        
-    datamodule = GSVCitiesDataModule(
-        batch_size=60,
-        img_per_place=4,
-        min_img_per_place=4,
-        shuffle_all=False, # shuffle all images or keep shuffling in-city only
-        random_sample_from_each_place=True,
-        image_size=(224, 224),
-        num_workers=10,
-        show_data_stats=True,
-        val_set_names=['pitts30k_val', 'pitts30k_test', 'msls_val'], # pitts30k_val, pitts30k_test, msls_val
-    )
+if __name__ == '__main__':
+    args = argparse.ArgumentParser()
+    args.add_argument('--config', type=str)
+    args = args.parse_args()
+    # we load the training configuration
+    train_cfg = load_config(args.config)
+    datasets_cfg = load_datasets_config(train_cfg.datasets)
+    datamodules = []
+    for dataset in train_cfg.datasets.train_datasets:
+        if dataset == 'GSV':
+            datamodule = GSVCitiesDataModule(
+                batch_size=train_cfg.training.batch_size,
+                img_per_place=datasets_cfg["GSV"].training.img_per_place,
+                min_img_per_place=datasets_cfg["GSV"].training.min_img_per_place,
+                shuffle_all=datasets_cfg["GSV"].training.shuffle_all, # shuffle all images or keep shuffling in-city only
+                random_sample_from_each_place=datasets_cfg["GSV"].training.random_sample_from_each_place,
+                image_size=train_cfg.training.image_size,
+                num_workers=train_cfg.training.num_workers,
+                show_data_stats=datasets_cfg["GSV"].training.show_data_stats
+            )
     
     model = VPRModel(
         #---- Encoder
-        backbone_arch='dinov2_vitb14',
-        backbone_config={
-            'num_trainable_blocks': 4,
-            'return_token': True,
-            'norm_layer': True,
-        },
-        agg_arch='SALAD',
-        agg_config={
-            'num_channels': 768,
-            'num_clusters': 64,
-            'cluster_dim': 128,
-            'token_dim': 256,
-        },
-        lr = 6e-5,
-        optimizer='adamw',
-        weight_decay=9.5e-9, # 0.001 for sgd and 0 for adam,
-        momentum=0.9,
-        lr_sched='linear',
-        lr_sched_args = {
-            'start_factor': 1,
-            'end_factor': 0.2,
-            'total_iters': 4000,
-        },
+        backbone_arch=train_cfg.model.backbone_arch,
+        backbone_config=train_cfg.model.backbone_config,
+        agg_arch=train_cfg.model.agg_arch,
+        agg_config=train_cfg.model.agg_config,
+        lr=train_cfg.training.optimizer["lr"],
+        optimizer=train_cfg.training.optimizer["name"],
+        weight_decay=train_cfg.training.optimizer["weight_decay"], # 0.001 for sgd and 0 for adam,
+        momentum=train_cfg.training.optimizer["momentum"],
+        lr_sched=train_cfg.training.scheduler["name"],
+        lr_sched_args = train_cfg.training.scheduler["args"],
 
         #----- Loss functions
         # example: ContrastiveLoss, TripletMarginLoss, MultiSimilarityLoss,
         # FastAPLoss, CircleLoss, SupConLoss,
-        loss_name='MultiSimilarityLoss',
-        miner_name='MultiSimilarityMiner', # example: TripletMarginMiner, MultiSimilarityMiner, PairMarginMiner
-        miner_margin=0.1,
-        faiss_gpu=False
+        loss_name=train_cfg.training.loss["name"],
+        miner_name=train_cfg.training.miner["name"], # example: TripletMarginMiner, MultiSimilarityMiner, PairMarginMiner
+        miner_margin=train_cfg.training.miner["margin"],
+        faiss_gpu=train_cfg.training.faiss_gpu
     )
 
     # model params saving using Pytorch Lightning

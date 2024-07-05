@@ -1,0 +1,42 @@
+# PyTorch Training Parameters
+model:
+  backbone_arch: dinov2_vitb14
+  backbone_config: 
+    num_trainable_blocks: 4
+    return_token: True
+    norm_layer: True
+  agg_arch: SALAD
+  agg_config:
+    num_channels: 768
+    num_clusters: 64
+    cluster_dim: 128
+    token_dim: 256
+
+datasets:
+  train_datasets: 
+    - GSV
+  val_datasets: 
+    - pitts30k
+
+training:
+  num_epochs: 50
+  batch_size: 32
+  num_workers: 4
+  image_size: (224, 224)
+  optimizer:
+    name: AdamW
+    lr: 6e-5
+    weight_decay: 9.5e-9
+    momentum: 0.9
+  scheduler:
+    name: linear
+    args:
+      start_factor: 1
+      end_factor: 0.2
+      total_iters: 4000
+  loss:
+    name: 'MultiSimilarityLoss'
+  miner:
+    name: 'MultiSimilarityMiner'
+    margin: 0.1
+  faiss_gpu: False

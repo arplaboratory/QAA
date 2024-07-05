@@ -1,0 +1,8 @@
+# Dataset Training Parameters
+training:
+  img_per_place: 4
+  min_img_per_place: 4
+  shuffle_all: False
+  random_sample_from_each_place: True
+  show_data_stats: True
+  
