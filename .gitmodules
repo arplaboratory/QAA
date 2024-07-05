@@ -1,0 +1,3 @@
+[submodule "dataloaders/mapillary_sls"]
+	path = dataloaders/mapillary_sls
+	url = https://github.com/mapillary/mapillary_sls.git
