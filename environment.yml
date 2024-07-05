@@ -1,4 +1,4 @@
-name: salad
+name: UniVG
 channels:
   - defaults
   - xformers
