@@ -15,7 +15,7 @@ default_transform = T.Compose([
 
 # NOTE: Hard coded path to dataset folder 
 BASE_PATH = 'datasets/GSV/'
-
+        
 class GSVCitiesDataset(Dataset):
     def __init__(self,
                  cities=['London', 'Boston'],
