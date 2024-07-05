@@ -120,16 +120,21 @@ class GenericDataModule(pl.LightningDataModule):
             transform=self.train_transform)
 
     def train_dataloader(self):
-        train_dataloaders = []
-        for train_dataset in self.train_datasets:
-            if train_dataset.__class__.__name__ == "GSVCitiesDataset":
-                GSV_params = self.train_datasets_cfg["GSV"]
-                GSV_train_dataset = self.reload(GSV_params) # Following reload routine to shuffle cities
-                train_dataloaders.append(DataLoader(
-                    dataset=GSV_train_dataset, shuffle=GSV_params.training.shuffle_all, **self.train_loader_config))
-            else:
-                train_dataloaders.append(DataLoader(
-                    dataset=train_dataset, shuffle=True, **self.train_loader_config))
+        if not hasattr(self, "current_train_dataset_index"):
+            self.current_train_dataset_index = 0
+        else:
+            self.current_train_dataset_index += 1
+            if self.current_train_dataset_index >= len(self.train_datasets):
+                self.current_train_dataset_index = 0
+        train_dataset = self.train_datasets[self.current_train_dataset_index]
+        if train_dataset.__class__.__name__ == "GSVCitiesDataset":
+            GSV_params = self.train_datasets_cfg["GSV"]
+            GSV_train_dataset = self.reload(GSV_params) # Following reload routine to shuffle cities
+            train_dataloaders = DataLoader(
+                dataset=GSV_train_dataset, shuffle=GSV_params.training.shuffle_all, **self.train_loader_config)
+        else:
+            train_dataloaders = DataLoader(
+                dataset=train_dataset, shuffle=True, **self.train_loader_config)
         return train_dataloaders
 
     def val_dataloader(self):

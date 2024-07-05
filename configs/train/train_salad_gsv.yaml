@@ -22,7 +22,7 @@ training:
   num_epochs: 50
   batch_size: 32
   num_workers: 4
-  image_size: (224, 224)
+  image_size: [224, 224]
   optimizer:
     name: AdamW
     lr: 6e-5
