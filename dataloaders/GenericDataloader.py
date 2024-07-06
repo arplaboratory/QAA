@@ -7,6 +7,7 @@ from prettytable import PrettyTable
 from dataloaders.GSVCitiesDataset import GSVCitiesDataset
 from dataloaders.GenericDataset import GenericDataset
 from dataloaders.MapillaryDataset import MapillaryDataset
+from dataloaders.CliqueMiningDataset import CliqueMapillaryDataset
 from utils.load_cfg import load_datasets_config
 
 IMAGENET_MEAN_STD = {'mean': [0.485, 0.456, 0.406], 
@@ -52,12 +53,13 @@ class GenericDataModule(pl.LightningDataModule):
             'pin_memory': True,
             'shuffle': False} # Shuffle is done in CliqueMining reload
     
-        self.train_loader_config_GSV = {
-            'batch_size': self.batch_size,
-            'num_workers': self.num_workers,
-            'drop_last': False,
-            'pin_memory': True,
-            'shuffle': self.train_datasets_cfg["GSV"].training.shuffle_all}
+        if "GSV" in self.train_dataset_names:
+            self.train_loader_config_GSV = {
+                'batch_size': self.batch_size,
+                'num_workers': self.num_workers,
+                'drop_last': False,
+                'pin_memory': True,
+                'shuffle': self.train_datasets_cfg["GSV"].training.shuffle_all}
 
         self.valid_loader_config = {
             'batch_size': self.batch_size,
@@ -85,7 +87,10 @@ class GenericDataModule(pl.LightningDataModule):
                     if GSV_params.training.show_data_stats:
                         self.print_GSV_stats(self.train_datasets[-1], GSV_params)
                 elif dataset_name == "mapillary_sls":
-                    self.train_datasets.append(MapillaryDataset(split="train", input_transform=self.train_transform))
+                    self.train_datasets.append(CliqueMapillaryDataset(
+                                                split="train", 
+                                                transform=self.train_transform,
+                                                **self.train_datasets_cfg["mapillary_sls"].training.clique_mapillary_args))
                 else:
                     self.train_datasets.append(GenericDataset(dataset_name=dataset_name, split="train", input_transform=self.train_transform))
 
