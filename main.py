@@ -3,7 +3,7 @@ import argparse
 
 from vpr_model import VPRModel
 from utils.load_cfg import load_config, load_datasets_config
-from dataloaders.GSVCitiesDataloader import GSVCitiesDataModule
+from dataloaders.GenericDataloader import GenericDataModule
 
 import ssl
 ssl._create_default_https_context = ssl._create_unverified_context # For downloading the pretrained models
@@ -14,20 +14,12 @@ if __name__ == '__main__':
     args = args.parse_args()
     # we load the training configuration
     train_cfg = load_config(args.config)
-    datasets_cfg = load_datasets_config(train_cfg.datasets)
-    datamodules = []
-    for dataset in train_cfg.datasets.train_datasets:
-        if dataset == 'GSV':
-            datamodule = GSVCitiesDataModule(
-                batch_size=train_cfg.training.batch_size,
-                img_per_place=datasets_cfg["GSV"].training.img_per_place,
-                min_img_per_place=datasets_cfg["GSV"].training.min_img_per_place,
-                shuffle_all=datasets_cfg["GSV"].training.shuffle_all, # shuffle all images or keep shuffling in-city only
-                random_sample_from_each_place=datasets_cfg["GSV"].training.random_sample_from_each_place,
-                image_size=train_cfg.training.image_size,
-                num_workers=train_cfg.training.num_workers,
-                show_data_stats=datasets_cfg["GSV"].training.show_data_stats
-            )
+    datamodule = GenericDataModule(
+        batch_size=train_cfg.training.batch_size,
+        image_size=train_cfg.training.image_size,
+        num_workers=train_cfg.training.num_workers,
+        dataset_names=train_cfg.datasets
+    )
     
     model = VPRModel(
         #---- Encoder

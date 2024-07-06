@@ -194,6 +194,8 @@ class VPRModel(pl.LightningModule):
     def validation_step(self, batch, batch_idx, dataloader_idx=None):
         places, _ = batch
         descriptors = self(places)
+        if dataloader_idx is None: # Only one val dataset
+            dataloader_idx = 0
         self.val_outputs[dataloader_idx].append(descriptors.detach().cpu())
         return descriptors.detach().cpu()
     
@@ -210,25 +212,23 @@ class VPRModel(pl.LightningModule):
         val_step_outputs = self.val_outputs
 
         dm = self.trainer.datamodule
-        # The following line is a hack: if we have only one validation set, then
-        # we need to put the outputs in a list (Pytorch Lightning does not do it presently)
-        if len(dm.val_datasets)==1: # we need to put the outputs in a list
-            val_step_outputs = [val_step_outputs]
+        # # The following line is a hack: if we have only one validation set, then
+        # # we need to put the outputs in a list (Pytorch Lightning does not do it presently)
+        # if len(dm.val_datasets)==1: # we need to put the outputs in a list
+        #     val_step_outputs = [val_step_outputs]
         
-        for i, (val_set_name, val_dataset) in enumerate(zip(dm.val_set_names, dm.val_datasets)):
+        for i, (val_set_name, val_dataset) in enumerate(zip(dm.val_dataset_names, dm.val_datasets)):
             feats = torch.concat(val_step_outputs[i], dim=0)
             
-            if 'pitts' in val_set_name:
-                # split to ref and queries
-                num_references = val_dataset.dbStruct.numDb
-                positives = val_dataset.getPositives()
-            elif 'msls' in val_set_name:
+            if val_set_name == "mapillary_sls":
                 # split to ref and queries
                 num_references = val_dataset.num_references
                 positives = val_dataset.pIdx
             else:
-                print(f'Please implement validation_epoch_end for {val_set_name}')
-                raise NotImplemented
+                num_references = val_dataset.num_references
+                positives = val_dataset.ground_truth
+                # print(f'Please implement validation_epoch_end for {val_set_name}')
+                # raise NotImplemented
 
             r_list = feats[ : num_references]
             q_list = feats[num_references : ]
