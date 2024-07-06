@@ -7,9 +7,6 @@ from torch.utils.data import Dataset
 # make sure the path where the mapillary_sls validation dataset resides on your computer is correct.
 # the folder named train_val should reside in DATASET_ROOT path (that's the only folder you need from mapillary_sls)
 # I hardcoded the groundtruth for image to image evaluation, otherwise it would take ages to run the groundtruth script at each epoch.
-DATASET_ROOT = 'datasets/mapillary_sls/'
-
-path_obj = Path(DATASET_ROOT)
 
 class MapillaryDataset(Dataset):
     def __init__(self, split, input_transform = None):
@@ -37,7 +34,7 @@ class MapillaryDataset(Dataset):
         self.num_references = len(self.dbImages)
     
     def __getitem__(self, index):
-        img = Image.open(DATASET_ROOT+self.images[index])
+        img = Image.open(self.images[index])
 
         if self.input_transform:
             img = self.input_transform(img)
