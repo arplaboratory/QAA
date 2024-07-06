@@ -15,6 +15,7 @@ class MapillaryDataset(Dataset):
     def __init__(self, split, input_transform = None):
         
         self.input_transform = input_transform
+        self.split = split
         
         # hard coded reference image names, this avoids the hassle of listing them at each epoch.
         self.dbImages = np.load(f'./cache/datasets/mapillary_sls/msls_{split}_dbImages.npy')

@@ -3,6 +3,7 @@ import numpy as np
 from PIL import Image
 from torch.utils.data import Dataset
 
+# NOTE: Only for validation purposes
 NPY_ROOT = 'cache/datasets/'
 
 class GenericDataset(Dataset):
@@ -10,6 +11,7 @@ class GenericDataset(Dataset):
         
 
         self.input_transform = input_transform
+        self.split = split
 
         # reference images names
         self.dbImages = np.load(NPY_ROOT + f'{dataset_name}/{dataset_name}_{split}_dbImages.npy')

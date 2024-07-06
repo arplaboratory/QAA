@@ -18,6 +18,7 @@ BASE_PATH = 'datasets/GSV/'
         
 class GSVCitiesDataset(Dataset):
     def __init__(self,
+                 split,
                  cities=['London', 'Boston'],
                  img_per_place=4,
                  min_img_per_place=4,
@@ -28,6 +29,7 @@ class GSVCitiesDataset(Dataset):
         super(GSVCitiesDataset, self).__init__()
         self.base_path = base_path
         self.cities = cities
+        self.split = split
 
         assert img_per_place <= min_img_per_place, \
             f"img_per_place should be less than {min_img_per_place}"
