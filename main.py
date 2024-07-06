@@ -1,4 +1,5 @@
 import pytorch_lightning as pl
+from pytorch_lightning.loggers import WandbLogger
 import argparse
 
 from vpr_model import VPRModel
@@ -14,6 +15,7 @@ if __name__ == '__main__':
     args = args.parse_args()
     # we load the training configuration
     train_cfg = load_config(args.config)
+    wandb_logger = WandbLogger(project="UniVG", log_model="all")
     datamodule = GenericDataModule(
         batch_size=train_cfg.training.batch_size,
         image_size=train_cfg.training.image_size,
@@ -46,7 +48,7 @@ if __name__ == '__main__':
     # model params saving using Pytorch Lightning
     # we save the best 3 models accoring to Recall@1 on pittsburg val
     checkpoint_cb = pl.callbacks.ModelCheckpoint(
-        monitor='pitts30k_val/R1',
+        monitor=f'{train_cfg.datasets.target_val_dataset}_val/R1',
         filename=f'{model.encoder_arch}' + '_({epoch:02d})_R1[{pitts30k_val/R1:.4f}]_R5[{pitts30k_val/R5:.4f}]',
         auto_insert_metric_name=False,
         save_weights_only=True,
@@ -69,6 +71,7 @@ if __name__ == '__main__':
         callbacks=[checkpoint_cb],# we only run the checkpointing callback (you can add more)
         reload_dataloaders_every_n_epochs=1, # we reload the dataset to shuffle the order
         log_every_n_steps=20,
+        logger=wandb_logger
     )
 
     # we call the trainer, we give it the model and the datamodule
