@@ -7,6 +7,7 @@ from torch.utils.data import Dataset
 import torchvision.transforms as T
 import numpy as np
 import tqdm
+import os
 
 import concurrent.futures
 from scipy.spatial.distance import cdist, pdist, squareform
@@ -18,7 +19,7 @@ default_transform = T.Compose([
 ])
 
 # NOTE: Hard coded path to dataset folder 
-BASE_PATH = '../data/mapillary_sls/train_val/'
+BASE_PATH = 'datasets/mapillary_sls/train_val/'
 
 if not Path(BASE_PATH).exists():
     raise FileNotFoundError(
@@ -180,7 +181,7 @@ def create_dataset_part(
 
                 # Append place to batch
                 rows = df.iloc[list(clique)]
-                images[i, batch_idx] = np.char.add(np.char.add(np.where(rows['query'].values, f'{city}/query/images/', f'{city}/database/images/').astype('<U100'), rows['key'].values), '.jpg')
+                images[i, batch_idx] = np.char.add(np.char.add(np.where(rows['query'].values, f'{city}/query/images/', f'{city}/database/images/').astype('<U100'), rows['key'].values.astype('<U100')), '.jpg')
                 batch_idx += 1
 
                 # Remove selected place and its neighbors from the graph
@@ -196,6 +197,7 @@ def create_dataset_part(
 class CliqueMapillaryDataset(Dataset):
     def __init__(
             self,
+            split="train",
             transform=default_transform,
             base_path=BASE_PATH,
             num_batches=4000,
@@ -208,6 +210,7 @@ class CliqueMapillaryDataset(Dataset):
         super(CliqueMapillaryDataset, self).__init__()
         self.base_path = base_path
         self.transform = transform
+        self.split = split
 
         self.batch_size = batch_size
 
@@ -272,13 +275,13 @@ class CliqueMapillaryDataset(Dataset):
 
         city_df = load_city_df(BASE_PATH)
 
-        cluster_descriptors_path = (Path(__file__).parent.parent) / 'cluster_descriptors.npy'
+        cluster_descriptors_path = 'cache/datasets/mapillary_sls/cluster_descriptors.npy'
 
         # Compute cluster descriptors if model is provided
         if model is not None:
             cluster_descriptors_dict = compute_cluster_descriptors(city_df, model)
             np.save(cluster_descriptors_path, cluster_descriptors_dict)
-        elif cluster_descriptors_path.exists():
+        elif os.path.isfile(cluster_descriptors_path):
             cluster_descriptors_dict = np.load(cluster_descriptors_path, allow_pickle=True).item()
         else:
             print('Model must be provided to compute cluster descriptors')
