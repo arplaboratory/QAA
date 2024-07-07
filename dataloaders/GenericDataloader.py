@@ -124,13 +124,6 @@ class GenericDataModule(pl.LightningDataModule):
                 else:
                     self.val_datasets.append(GenericDataset(dataset_name=dataset_name, split="val", input_transform=self.valid_transform))
 
-            # load test sets (pitts_val, msls_val, ...etc)
-            self.test_datasets = []
-            for dataset_name in self.test_dataset_names:
-                if dataset_name == "mapillary_sls":
-                    self.test_datasets.append(MapillaryTestDataset(split="test", input_transform=self.test_transform))
-                else:
-                    self.test_datasets.append(GenericDataset(dataset_name=dataset_name, split="test", input_transform=self.test_transform))
         elif stage=="test":
             # load test sets (pitts_val, msls_val, ...etc)
             self.test_datasets = []
