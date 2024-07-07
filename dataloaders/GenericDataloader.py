@@ -8,6 +8,7 @@ from dataloaders.GSVCitiesDataset import GSVCitiesDataset
 from dataloaders.GenericDataset import GenericDataset
 from dataloaders.MapillaryDataset import MapillaryDataset, MapillaryTestDataset
 from dataloaders.CliqueMapillaryDataset import CliqueMapillaryDataset
+from dataloaders.CliqueGenericDataset import CliqueGenericDataset
 from utils.load_cfg import load_datasets_config
 
 IMAGENET_MEAN_STD = {'mean': [0.485, 0.456, 0.406], 
@@ -96,6 +97,7 @@ class GenericDataModule(pl.LightningDataModule):
             # load train dataloader (pitts_train, msls_train, ...etc)
             self.train_datasets = []
             for dataset_name in self.train_dataset_names:
+                assert self.train_datasets_cfg[dataset_name].training.available
                 if dataset_name == "GSV":
                     GSV_params = self.train_datasets_cfg[dataset_name]
                     self.train_datasets.append(GSVCitiesDataset(
@@ -112,13 +114,18 @@ class GenericDataModule(pl.LightningDataModule):
                                                 split="train", 
                                                 transform=self.train_transform,
                                                 batch_size=self.batch_size,
-                                                **self.train_datasets_cfg["mapillary_sls"].training.clique_mapillary_args))
+                                                **self.train_datasets_cfg["mapillary_sls"].training.clique_args))
                 else:
-                    self.train_datasets.append(GenericDataset(dataset_name=dataset_name, split="train", input_transform=self.train_transform))
+                    self.train_datasets.append(CliqueGenericDataset(
+                                                dataset_name=dataset_name, 
+                                                split="train", 
+                                                transform=self.train_transform,
+                                                **self.train_datasets_cfg[dataset_name].training.clique_args))
 
             # load validation sets (pitts_val, msls_val, ...etc)
             self.val_datasets = []
             for dataset_name in self.val_dataset_names:
+                assert self.train_datasets_cfg[dataset_name].validation.available
                 if dataset_name == "mapillary_sls":
                     self.val_datasets.append(MapillaryDataset(split="val", input_transform=self.valid_transform))
                 else:
@@ -128,6 +135,7 @@ class GenericDataModule(pl.LightningDataModule):
             # load test sets (pitts_val, msls_val, ...etc)
             self.test_datasets = []
             for dataset_name in self.test_dataset_names:
+                assert self.train_datasets_cfg[dataset_name].test.available
                 if dataset_name == "mapillary_sls":
                     self.test_datasets.append(MapillaryTestDataset(split="test", input_transform=self.test_transform))
                 else:

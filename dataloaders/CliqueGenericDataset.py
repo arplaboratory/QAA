@@ -21,39 +21,30 @@ default_transform = T.Compose([
 # NOTE: Hard coded path to dataset folder 
 NPY_ROOT = 'cache/datasets/'
 
-def load_city_df(base_path):
-    # Load cities
+def construct_df(dataset_name, split):
     city_df = {}
-    for city in (Path(base_path)).iterdir():
-        
-        # Database
-        db = pd.read_csv(city / 'database' / 'postprocessed.csv')
-        db = db.join(
-            pd.read_csv(city / 'database' / 'raw.csv')[['pano', 'key']].set_index('key'),
-            on='key'
-        )
-        db.insert(0, 'query', False)
-
-        # Query
-        q = pd.read_csv(city / 'query' / 'postprocessed.csv')
-        q = q.join(
-            pd.read_csv(city / 'query' / 'raw.csv')[['pano', 'key']].set_index('key'),
-            on='key'
-        )
-        q.insert(0, 'query', True)
-
-        df = pd.concat([db, q])
-
-        # Remove where pano is True
-        df = df[df['pano'] == False]
-
-        city_df[city.name] = df
-
+    db = np.load(os.path.join(NPY_ROOT, dataset_name, f"{dataset_name}_{split}_dbImages.npy"))
+    db = pd.DataFrame(db, columns=["key"])
+    db.insert(0, 'query', False)
+    db.insert(0, 'unique_cluster', 0) # One cluster
+    easting = db["key"].apply(lambda x: float(x.split('/')[-1].split('@')[1]))
+    northing = db["key"].apply(lambda x: float(x.split('/')[-1].split('@')[2]))
+    db.insert(0, 'easting', easting)
+    db.insert(0, 'northing', northing)
+    q = np.load(os.path.join(NPY_ROOT, dataset_name, f"{dataset_name}_{split}_qImages.npy"))
+    q = pd.DataFrame(q, columns=["key"])
+    q.insert(0, 'query', True)
+    q.insert(0, 'unique_cluster', 0) # One cluster
+    easting = q["key"].apply(lambda x: float(x.split('/')[-1].split('@')[1]))
+    northing = q["key"].apply(lambda x: float(x.split('/')[-1].split('@')[2]))
+    q.insert(0, 'easting', easting)
+    q.insert(0, 'northing', northing)
+    city_df[dataset_name] = pd.concat([db, q])
     return city_df
 
 def compute_cluster_descriptors(city_df, model, descriptor_size=8192 + 256, batch_size=64):
 
-    class MSLSDataset(torch.utils.data.Dataset):
+    class FrontViewDataset(torch.utils.data.Dataset):
         def __init__(self, rows, city_path):
             self.rows = rows
             self.city_path = city_path
@@ -69,7 +60,7 @@ def compute_cluster_descriptors(city_df, model, descriptor_size=8192 + 256, batc
         
         def __getitem__(self, idx):
             row = self.rows.iloc[idx]
-            path = Path(BASE_PATH) / self.city_path / ('query' if row['query'] else 'database') / 'images' / f'{row["key"]}.jpg'
+            path = f'{row["key"]}.jpg'
             try:
                 img = Image.open(path)
             except:
@@ -83,9 +74,9 @@ def compute_cluster_descriptors(city_df, model, descriptor_size=8192 + 256, batc
     for city, df in tqdm.tqdm(city_df.items(), desc='Computing cluster descriptors'):
 
         # Create dataloader with one sample per cluster
-        msls = MSLSDataset(df.groupby('unique_cluster').sample(1), city)
+        frontviewdataset = FrontViewDataset(df.groupby('unique_cluster').sample(1), city)
         dataloader = torch.utils.data.DataLoader(
-            dataset=msls, 
+            dataset=frontviewdataset, 
             batch_size=batch_size,
             num_workers=8,
             drop_last=False,
@@ -126,21 +117,12 @@ def create_dataset_part(
 
     for i in tqdm.tqdm(range(num_batches)):
 
-        cities_this_batch = []
-
         batch_idx = 0
         while batch_idx < batch_size:
 
             cities_to_sample = [c for c in cluster_descriptors_dict.keys()]
             num_clusters = np.array([d.shape[0] for c, d in cluster_descriptors_dict.items()])
-
             city = np.random.choice(cities_to_sample, p=num_clusters/num_clusters.sum())
-
-            # Don't sample already done in this batch
-            while city in cities_this_batch:
-                city = np.random.choice(cities_to_sample, p=num_clusters/num_clusters.sum())
-            cities_this_batch.append(city)
-
 
             df = city_df[city]
             descriptor = cluster_descriptors_dict[city]
@@ -148,15 +130,8 @@ def create_dataset_part(
             # Sample a random cluster
             place_id = np.random.choice(df.unique_cluster.unique())
 
-            # Compute similarity between the selected cluster and all the others
-            distances = cdist(descriptor[place_id, None, :], descriptor)[0]
-            # Normalize distances as probabilities (where min distance is max probability)
-            distances[distances != 0] = distances.max() - distances[distances != 0]
-            distances = distances / distances.sum()
-
-            # Sample similar places
-            other_places = np.random.choice(np.arange(df.unique_cluster.max() + 1), size=sampled_similar_places, p=distances, replace=False)
-            other_places = np.concatenate([np.array([place_id]), other_places])
+            # Only one place for the whole dataset
+            other_places = np.array([place_id])
 
             df = df[df['unique_cluster'].isin(other_places)]
 
@@ -190,12 +165,12 @@ def create_dataset_part(
     return images
 
 
-class CliqueMapillaryDataset(Dataset):
+class CliqueGenericDataset(Dataset):
     def __init__(
             self,
+            dataset_name,
             split="train",
             transform=default_transform,
-            base_path=BASE_PATH,
             num_batches=4000,
             num_processes=4,
             batch_size=30,
@@ -203,8 +178,8 @@ class CliqueMapillaryDataset(Dataset):
             sampled_similar_places=15,
             same_place_threshold=20.0,
     ):
-        super(CliqueMapillaryDataset, self).__init__()
-        self.base_path = base_path
+        super(CliqueGenericDataset, self).__init__()
+        self.dataset_name = dataset_name
         self.transform = transform
         self.split = split
 
@@ -227,7 +202,7 @@ class CliqueMapillaryDataset(Dataset):
          
         imgs = []
         for img_name in self.data[batch_idx, img_idx]:
-            img_path = self.base_path + img_name
+            img_path = img_name
             img = self.image_loader(img_path)
 
             if self.transform is not None:
@@ -269,9 +244,9 @@ class CliqueMapillaryDataset(Dataset):
         same_place_threshold=20.0,
     ):
 
-        city_df = load_city_df(BASE_PATH)
-
-        cluster_descriptors_path = 'cache/datasets/mapillary_sls/cluster_descriptors.npy'
+        city_df = construct_df(self.dataset_name, self.split)
+        
+        cluster_descriptors_path = f'cache/datasets/{self.dataset_name}/cluster_descriptors.npy'
 
         # Compute cluster descriptors if model is provided
         if model is not None:

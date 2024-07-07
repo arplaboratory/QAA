@@ -1,4 +1,9 @@
 # Dataset Training Parameters
 training:
-  pos_threshold: 25
+  available: True
+validation:
+  # partial
+  available: True
+test:
+  available: True
   

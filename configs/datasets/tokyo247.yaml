@@ -1,3 +1,7 @@
 # Dataset Training Parameters
 training:
-  pos_threshold: 25
+  available: False
+validation:
+  available: False
+test:
+  available: True

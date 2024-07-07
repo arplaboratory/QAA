@@ -1,5 +1,6 @@
 # Dataset Training Parameters
 training:
+  available: True
   img_per_place: 4
   min_img_per_place: 4
   shuffle_all: False
@@ -29,4 +30,8 @@ training:
     - 'Melbourne'
     - 'Osaka'
     - 'PRS'
+validation:
+  available: False
+test:
+  available: False
   
