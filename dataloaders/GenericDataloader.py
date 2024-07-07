@@ -53,6 +53,12 @@ class GenericDataModule(pl.LightningDataModule):
             T.ToTensor(),
             T.Normalize(mean=self.mean_dataset, std=self.std_dataset)])
         
+        self.test_grayscale_transform = T.Compose([
+            T.Grayscale(num_output_channels=3),
+            T.Resize(image_size, interpolation=T.InterpolationMode.BILINEAR),
+            T.ToTensor(),
+            T.Normalize(mean=self.mean_dataset, std=self.std_dataset)])
+        
         self.train_loader_config_general = {
             'batch_size': self.batch_size,
             'num_workers': self.num_workers,
@@ -125,7 +131,15 @@ class GenericDataModule(pl.LightningDataModule):
                     self.test_datasets.append(MapillaryTestDataset(split="test", input_transform=self.test_transform))
                 else:
                     self.test_datasets.append(GenericDataset(dataset_name=dataset_name, split="test", input_transform=self.test_transform))
-
+        elif stage=="test":
+            # load test sets (pitts_val, msls_val, ...etc)
+            self.test_datasets = []
+            for dataset_name in self.test_dataset_names:
+                if dataset_name == "mapillary_sls":
+                    self.test_datasets.append(MapillaryTestDataset(split="test", input_transform=self.test_transform))
+                else:
+                    self.test_datasets.append(GenericDataset(dataset_name=dataset_name, split="test", input_transform=self.test_transform, backup_transform=self.test_grayscale_transform))
+    
 
     def reload(self, dataset_name):
         if dataset_name == "GSV":

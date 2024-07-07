@@ -7,10 +7,11 @@ from torch.utils.data import Dataset
 NPY_ROOT = 'cache/datasets/'
 
 class GenericDataset(Dataset):
-    def __init__(self, dataset_name, split, input_transform = None):
+    def __init__(self, dataset_name, split, input_transform = None, backup_transform = None):
         
 
         self.input_transform = input_transform
+        self.backup_transform = backup_transform
         self.split = split
 
         # reference images names
@@ -33,7 +34,11 @@ class GenericDataset(Dataset):
         img = Image.open(self.images[index])
 
         if self.input_transform:
-            img = self.input_transform(img)
+            try:
+                img = self.input_transform(img)
+            except Exception as e:
+                # Grayscale images
+                img = self.backup_transform(img)
 
         return img, index
 
