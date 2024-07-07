@@ -212,19 +212,26 @@ class MSLS(Dataset):
             sys.exit()
 
         # cast to np.arrays for indexing during training
-        self.qIdx = np.asarray(self.qIdx)
-        self.qImages = np.asarray(self.qImages)
-        self.pIdx = np.asarray(self.pIdx, dtype=object)
-        self.nonNegIdx = np.asarray(self.nonNegIdx, dtype=object)
-        self.dbImages = np.asarray(self.dbImages)
-        self.sideways = np.asarray(self.sideways)
-        self.night = np.asarray(self.night)
-        if save:
-            np.save(join('npys', 'msls_'+self.mode+'_qIdx.npy'), self.qIdx)
-            np.save(join('npys', 'msls_' + self.mode + '_qImages.npy'), self.qImages)
-            np.save(join('npys', 'msls_' + self.mode + '_dbImages.npy'), self.dbImages)
-            np.save(join('npys', 'msls_' + self.mode + '_pIdx.npy'), self.pIdx)
-            np.save(join('npys', 'msls_' + self.mode + '_nonNegIdx.npy'), self.nonNegIdx)
+        if mode == "test":
+            self.qImages = np.asarray(self.qImages)
+            self.dbImages = np.asarray(self.dbImages)
+            if save:
+                np.save(join('npys', 'msls_' + self.mode + '_qImages.npy'), self.qImages)
+                np.save(join('npys', 'msls_' + self.mode + '_dbImages.npy'), self.dbImages)
+        else:
+            self.qIdx = np.asarray(self.qIdx)
+            self.qImages = np.asarray(self.qImages)
+            self.pIdx = np.asarray(self.pIdx, dtype=object)
+            self.nonNegIdx = np.asarray(self.nonNegIdx, dtype=object)
+            self.dbImages = np.asarray(self.dbImages)
+            self.sideways = np.asarray(self.sideways)
+            self.night = np.asarray(self.night)
+            if save:
+                np.save(join('npys', 'msls_'+self.mode+'_qIdx.npy'), self.qIdx)
+                np.save(join('npys', 'msls_' + self.mode + '_qImages.npy'), self.qImages)
+                np.save(join('npys', 'msls_' + self.mode + '_dbImages.npy'), self.dbImages)
+                np.save(join('npys', 'msls_' + self.mode + '_pIdx.npy'), self.pIdx)
+                np.save(join('npys', 'msls_' + self.mode + '_nonNegIdx.npy'), self.nonNegIdx)
 
         # decide device type ( important for triplet mining )
         self.device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
