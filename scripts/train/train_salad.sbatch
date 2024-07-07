@@ -19,11 +19,6 @@ overlay_path_sped="datasets_sqf/sped.sqf"
 overlay_path_tokyo247="datasets_sqf/tokyo247.sqf"
 overlay_path_eynsham="datasets_sqf/eynsham.sqf"
 overlay_path_amstertime="datasets_sqf/amstertime.sqf"
-overlay_path_svox_night="datasets_sqf/svox_night.sqf"
-overlay_path_svox_overcast="datasets_sqf/svox_overcast.sqf"
-overlay_path_svox_rain="datasets_sqf/svox_rain.sqf"
-overlay_path_svox_snow="datasets_sqf/svox_snow.sqf"
-overlay_path_svox_sun="datasets_sqf/svox_sun.sqf"
 
 singularity exec --nv \
                 --overlay $overlay_path_gsv:ro \
@@ -37,10 +32,5 @@ singularity exec --nv \
                 --overlay $overlay_path_tokyo247:ro \
                 --overlay $overlay_path_eynsham:ro \
                 --overlay $overlay_path_amstertime:ro \
-                --overlay $overlay_path_svox_night:ro \
-                --overlay $overlay_path_svox_overcast:ro \
-                --overlay $overlay_path_svox_rain:ro \
-                --overlay $overlay_path_svox_snow:ro \
-                --overlay $overlay_path_svox_sun:ro \
                  /scratch/work/public/singularity/cuda12.1.1-cudnn8.9.0-devel-ubuntu22.04.2.sif \
                  /bin/bash -c "source ~/.bashrc; conda activate UniVG; python3 -u main.py --config configs/train/"$CONFIG".yaml"

@@ -32,6 +32,7 @@ class MapillaryDataset(Dataset):
         # we need to keeo the number of references so that we can split references-queries 
         # when calculating recall@K
         self.num_references = len(self.dbImages)
+        self.num_queries = len(self.qImages)
     
     def __getitem__(self, index):
         img = Image.open(self.images[index])
@@ -43,3 +44,44 @@ class MapillaryDataset(Dataset):
 
     def __len__(self):
         return len(self.images)
+    
+class MapillaryTestDataset(Dataset):
+    def __init__(self, split, input_transform = None):
+        
+        self.input_transform = input_transform
+        self.split = split
+        
+        # hard coded reference image names, this avoids the hassle of listing them at each epoch.
+        self.dbImages = np.load(f'./cache/datasets/mapillary_sls/msls_{split}_dbImages.npy')
+        
+        # hard coded query image names.
+        self.qImages = np.load(f'./cache/datasets/mapillary_sls/msls_{split}_qImages.npy')
+        
+        # concatenate reference images then query images so that we can use only one dataloader
+        self.images = np.concatenate((self.dbImages, self.qImages))
+        
+        # ground truth
+        self.ground_truth = None
+
+        # we need to keeo the number of references so that we can split references-queries 
+        # when calculating recall@K
+        self.num_references = len(self.dbImages)
+        self.num_queries = len(self.qImages)
+    
+    def __getitem__(self, index):
+        img = Image.open(self.images[index])
+
+        if self.input_transform:
+            img = self.input_transform(img)
+
+        return img, index
+
+    def __len__(self):
+        return len(self.images)
+    
+    def save_predictions(self, preds, path):
+        with open(path, 'w') as f:
+            for i in range(len(preds)):
+                q = Path(self.qImages[i]).stem
+                db = ' '.join([Path(self.dbImages[j]).stem for j in preds[i]])
+                f.write(f"{q} {db}\n")

@@ -6,7 +6,7 @@ from prettytable import PrettyTable
 
 from dataloaders.GSVCitiesDataset import GSVCitiesDataset
 from dataloaders.GenericDataset import GenericDataset
-from dataloaders.MapillaryDataset import MapillaryDataset
+from dataloaders.MapillaryDataset import MapillaryDataset, MapillaryTestDataset
 from dataloaders.CliqueMapillaryDataset import CliqueMapillaryDataset
 from utils.load_cfg import load_datasets_config
 
@@ -31,8 +31,10 @@ class GenericDataModule(pl.LightningDataModule):
         self.std_dataset = mean_std['std']
         self.train_dataset_names = dataset_names.train_datasets
         self.val_dataset_names = dataset_names.val_datasets
+        self.test_dataset_names = dataset_names.test_datasets
         self.train_datasets_cfg = load_datasets_config(self.train_dataset_names)
         self.val_datasets_cfg = load_datasets_config(self.val_dataset_names)
+        self.test_datasets_cfg = load_datasets_config(self.test_dataset_names)
 
         self.train_transform = T.Compose([
             T.Resize(image_size, interpolation=T.InterpolationMode.BILINEAR),
@@ -45,7 +47,12 @@ class GenericDataModule(pl.LightningDataModule):
             T.Resize(image_size, interpolation=T.InterpolationMode.BILINEAR),
             T.ToTensor(),
             T.Normalize(mean=self.mean_dataset, std=self.std_dataset)])
-
+        
+        self.test_transform = T.Compose([
+            T.Resize(image_size, interpolation=T.InterpolationMode.BILINEAR),
+            T.ToTensor(),
+            T.Normalize(mean=self.mean_dataset, std=self.std_dataset)])
+        
         self.train_loader_config_general = {
             'batch_size': self.batch_size,
             'num_workers': self.num_workers,
@@ -67,6 +74,14 @@ class GenericDataModule(pl.LightningDataModule):
             'drop_last': False,
             'pin_memory': True,
             'shuffle': False}
+
+        self.test_loader_config = {
+            'batch_size': self.batch_size,
+            'num_workers': self.num_workers,
+            'drop_last': False,
+            'pin_memory': True,
+            'shuffle': False}
+
 
         self.save_hyperparameters() # save hyperparameter with Pytorch Lightening
 
@@ -102,6 +117,14 @@ class GenericDataModule(pl.LightningDataModule):
                     self.val_datasets.append(MapillaryDataset(split="val", input_transform=self.valid_transform))
                 else:
                     self.val_datasets.append(GenericDataset(dataset_name=dataset_name, split="val", input_transform=self.valid_transform))
+
+            # load test sets (pitts_val, msls_val, ...etc)
+            self.test_datasets = []
+            for dataset_name in self.test_dataset_names:
+                if dataset_name == "mapillary_sls":
+                    self.test_datasets.append(MapillaryTestDataset(split="test", input_transform=self.test_transform))
+                else:
+                    self.test_datasets.append(GenericDataset(dataset_name=dataset_name, split="test", input_transform=self.test_transform))
 
 
     def reload(self, dataset_name):
@@ -141,6 +164,13 @@ class GenericDataModule(pl.LightningDataModule):
             val_dataloaders.append(DataLoader(
                 dataset=val_dataset, **self.valid_loader_config))
         return val_dataloaders
+    
+    def test_dataloader(self):
+        test_dataloaders = []
+        for test_dataset in self.test_datasets:
+            test_dataloaders.append(DataLoader(
+                dataset=test_dataset, **self.valid_loader_config))
+        return test_dataloaders
 
     def print_GSV_stats(self, GSV_dataset, GSV_params):
         print()  # print a new line
