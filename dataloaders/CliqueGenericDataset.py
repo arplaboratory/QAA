@@ -12,6 +12,7 @@ import os
 import concurrent.futures
 from scipy.spatial.distance import cdist, pdist, squareform
 import networkx
+import time
 
 default_transform = T.Compose([
     T.ToTensor(),
@@ -26,7 +27,6 @@ def construct_df(dataset_name, split):
     db = np.load(os.path.join(NPY_ROOT, dataset_name, f"{dataset_name}_{split}_dbImages.npy"))
     db = pd.DataFrame(db, columns=["key"])
     db.insert(0, 'query', False)
-    db.insert(0, 'unique_cluster', 0) # One cluster
     easting = db["key"].apply(lambda x: float(x.split('/')[-1].split('@')[1]))
     northing = db["key"].apply(lambda x: float(x.split('/')[-1].split('@')[2]))
     db.insert(0, 'easting', easting)
@@ -34,17 +34,33 @@ def construct_df(dataset_name, split):
     q = np.load(os.path.join(NPY_ROOT, dataset_name, f"{dataset_name}_{split}_qImages.npy"))
     q = pd.DataFrame(q, columns=["key"])
     q.insert(0, 'query', True)
-    q.insert(0, 'unique_cluster', 0) # One cluster
     easting = q["key"].apply(lambda x: float(x.split('/')[-1].split('@')[1]))
     northing = q["key"].apply(lambda x: float(x.split('/')[-1].split('@')[2]))
     q.insert(0, 'easting', easting)
     q.insert(0, 'northing', northing)
-    city_df[dataset_name] = pd.concat([db, q])
+    df = pd.concat([db, q], ignore_index=True)
+    if os.path.isfile("cache/datasets/" + dataset_name + "/cluster_id.npy"):
+        cluster_id = np.load("cache/datasets/" + dataset_name + "/cluster_id.npy")
+        cluster_count = len(np.unique(cluster_id))
+        df.insert(0, 'unique_cluster', cluster_id)
+        print(f'Loading {cluster_count} unique clusters')
+    else:
+        cluster_count = 0
+        df.insert(0, 'unique_cluster', -1)
+        utms = squareform(pdist(df[['easting', 'northing']].values)) < same_place_threshold
+        for c in networkx.community.louvain_communities(networkx.Graph(utms), weight='weight', resolution=1, threshold=1e-07, max_level=None):
+            for index in c:
+                df.loc[index, 'unique_cluster'] = cluster_count
+            cluster_count += 1
+        print(f'Found {cluster_count} unique clusters')
+        cluster_id = df['unique_cluster'].values
+        np.save("cache/datasets/" + dataset_name + "/cluster_id.npy", cluster_id)
+    city_df[dataset_name] = df
     return city_df
 
 def compute_cluster_descriptors(city_df, model, descriptor_size=8192 + 256, batch_size=64):
 
-    class FrontViewDataset(torch.utils.data.Dataset):
+    class DenseDataset(torch.utils.data.Dataset):
         def __init__(self, rows, city_path):
             self.rows = rows
             self.city_path = city_path
@@ -60,7 +76,7 @@ def compute_cluster_descriptors(city_df, model, descriptor_size=8192 + 256, batc
         
         def __getitem__(self, idx):
             row = self.rows.iloc[idx]
-            path = f'{row["key"]}.jpg'
+            path = f'{row["key"]}'
             try:
                 img = Image.open(path)
             except:
@@ -74,9 +90,9 @@ def compute_cluster_descriptors(city_df, model, descriptor_size=8192 + 256, batc
     for city, df in tqdm.tqdm(city_df.items(), desc='Computing cluster descriptors'):
 
         # Create dataloader with one sample per cluster
-        frontviewdataset = FrontViewDataset(df.groupby('unique_cluster').sample(1), city)
+        densedataset = DenseDataset(df.groupby('unique_cluster').sample(1), city)
         dataloader = torch.utils.data.DataLoader(
-            dataset=frontviewdataset, 
+            dataset=densedataset, 
             batch_size=batch_size,
             num_workers=8,
             drop_last=False,
@@ -122,7 +138,7 @@ def create_dataset_part(
 
             cities_to_sample = [c for c in cluster_descriptors_dict.keys()]
             num_clusters = np.array([d.shape[0] for c, d in cluster_descriptors_dict.items()])
-            city = np.random.choice(cities_to_sample, p=num_clusters/num_clusters.sum())
+            city = cities_to_sample[0]
 
             df = city_df[city]
             descriptor = cluster_descriptors_dict[city]
@@ -130,8 +146,15 @@ def create_dataset_part(
             # Sample a random cluster
             place_id = np.random.choice(df.unique_cluster.unique())
 
-            # Only one place for the whole dataset
-            other_places = np.array([place_id])
+            # Compute similarity between the selected cluster and all the others
+            distances = cdist(descriptor[place_id, None, :], descriptor)[0]
+            # Normalize distances as probabilities (where min distance is max probability)
+            distances[distances != 0] = distances.max() - distances[distances != 0]
+            distances = distances / distances.sum()
+
+            # Sample similar places
+            other_places = np.random.choice(np.arange(df.unique_cluster.max() + 1), size=sampled_similar_places, p=distances, replace=False)
+            other_places = np.concatenate([np.array([place_id]), other_places])
 
             df = df[df['unique_cluster'].isin(other_places)]
 
@@ -147,7 +170,6 @@ def create_dataset_part(
                         break
                 else:
                     break
-
                 neighbors = np.unique(np.where(utms[clique, :])[1])
 
                 # Append place to batch
