@@ -7,7 +7,7 @@ from prettytable import PrettyTable
 from dataloaders.GSVCitiesDataset import GSVCitiesDataset
 from dataloaders.GenericDataset import GenericDataset
 from dataloaders.MapillaryDataset import MapillaryDataset
-from dataloaders.CliqueMiningDataset import CliqueMapillaryDataset
+from dataloaders.CliqueMapillaryDataset import CliqueMapillaryDataset
 from utils.load_cfg import load_datasets_config
 
 IMAGENET_MEAN_STD = {'mean': [0.485, 0.456, 0.406], 
@@ -63,7 +63,7 @@ class GenericDataModule(pl.LightningDataModule):
 
         self.valid_loader_config = {
             'batch_size': self.batch_size,
-            'num_workers': self.num_workers//2,
+            'num_workers': self.num_workers,
             'drop_last': False,
             'pin_memory': True,
             'shuffle': False}
@@ -90,6 +90,7 @@ class GenericDataModule(pl.LightningDataModule):
                     self.train_datasets.append(CliqueMapillaryDataset(
                                                 split="train", 
                                                 transform=self.train_transform,
+                                                batch_size=self.batch_size,
                                                 **self.train_datasets_cfg["mapillary_sls"].training.clique_mapillary_args))
                 else:
                     self.train_datasets.append(GenericDataset(dataset_name=dataset_name, split="train", input_transform=self.train_transform))

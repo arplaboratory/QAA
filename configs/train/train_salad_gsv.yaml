@@ -20,11 +20,22 @@ datasets:
     - pitts250k
     - mapillary_sls
     - svox
+  test_datasets:
+    - pitts30k
+    - pitts250k
+    - mapillary_sls
+    - svox
+    - tokyo247
+    - SPED
+    - nordland
+    - nordland_subset
+    - amstertime
+    - eynsham
   target_val_dataset: mapillary_sls
 training:
   num_epochs: 50
-  batch_size: 32
-  num_workers: 8
+  batch_size: 64
+  num_workers: 12
   image_size: [224, 224]
   optimizer:
     name: AdamW

@@ -49,7 +49,7 @@ if __name__ == '__main__':
     # we save the best 3 models accoring to Recall@1 on pittsburg val
     checkpoint_cb = pl.callbacks.ModelCheckpoint(
         monitor=f'{train_cfg.datasets.target_val_dataset}_val/R1',
-        filename=f'{model.encoder_arch}' + '_({epoch:02d})_R1[{pitts30k_val/R1:.4f}]_R5[{pitts30k_val/R5:.4f}]',
+        filename=f'{model.encoder_arch}' + '_{epoch:02d}_R1[{pitts30k_val/R1:.4f}]_R5[{pitts30k_val/R5:.4f}]',
         auto_insert_metric_name=False,
         save_weights_only=True,
         save_top_k=3,
@@ -66,7 +66,7 @@ if __name__ == '__main__':
         num_nodes=1,
         num_sanity_val_steps=0, # runs a validation step before stating training
         precision='16-mixed', # we use half precision to reduce  memory usage
-        max_epochs=4,
+        max_epochs=train_cfg.training.num_epochs,
         check_val_every_n_epoch=1, # run validation every epoch
         callbacks=[checkpoint_cb],# we only run the checkpointing callback (you can add more)
         reload_dataloaders_every_n_epochs=1, # we reload the dataset to shuffle the order
