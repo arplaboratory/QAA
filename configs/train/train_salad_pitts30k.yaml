@@ -14,7 +14,7 @@ model:
 
 datasets:
   train_datasets: 
-    - SF-XL
+    - pitts30k
   val_datasets: 
     - pitts30k
     - pitts250k
@@ -34,7 +34,7 @@ datasets:
   target_val_dataset: mapillary_sls
 training:
   num_epochs: 10
-  batch_size: 64
+  batch_size: 32
   num_workers: 12
   image_size: [224, 224]
   optimizer:

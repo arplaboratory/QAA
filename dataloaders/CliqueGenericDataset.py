@@ -22,7 +22,7 @@ default_transform = T.Compose([
 # NOTE: Hard coded path to dataset folder 
 NPY_ROOT = 'cache/datasets/'
 
-def construct_df(dataset_name, split):
+def construct_df(dataset_name, split, same_place_threshold, cluster_resolution):
     city_df = {}
     db = np.load(os.path.join(NPY_ROOT, dataset_name, f"{dataset_name}_{split}_dbImages.npy"))
     db = pd.DataFrame(db, columns=["key"])
@@ -48,13 +48,15 @@ def construct_df(dataset_name, split):
         cluster_count = 0
         df.insert(0, 'unique_cluster', -1)
         utms = squareform(pdist(df[['easting', 'northing']].values)) < same_place_threshold
-        for c in networkx.community.louvain_communities(networkx.Graph(utms), weight='weight', resolution=1, threshold=1e-07, max_level=None):
+        for c in networkx.community.louvain_communities(networkx.Graph(utms), weight=None, resolution=cluster_resolution, threshold=1e-07, max_level=None):
             for index in c:
                 df.loc[index, 'unique_cluster'] = cluster_count
             cluster_count += 1
         print(f'Found {cluster_count} unique clusters')
         cluster_id = df['unique_cluster'].values
         np.save("cache/datasets/" + dataset_name + "/cluster_id.npy", cluster_id)
+    average_count = df.groupby('unique_cluster').size().mean()
+    print(f"Average number of samples for each cluster: {average_count}")
     city_df[dataset_name] = df
     return city_df
 
@@ -199,6 +201,7 @@ class CliqueGenericDataset(Dataset):
             num_images_per_place=4,
             sampled_similar_places=15,
             same_place_threshold=20.0,
+            cluster_resolution=1.0,
     ):
         super(CliqueGenericDataset, self).__init__()
         self.dataset_name = dataset_name
@@ -214,6 +217,7 @@ class CliqueGenericDataset(Dataset):
             num_images_per_place=num_images_per_place,
             sampled_similar_places=sampled_similar_places,
             same_place_threshold=same_place_threshold,
+            cluster_resolution=cluster_resolution,
         )
         
         
@@ -264,9 +268,10 @@ class CliqueGenericDataset(Dataset):
         num_images_per_place=4,
         sampled_similar_places=15,
         same_place_threshold=20.0,
+        cluster_resolution=1.0,
     ):
 
-        city_df = construct_df(self.dataset_name, self.split)
+        city_df = construct_df(self.dataset_name, self.split, same_place_threshold, cluster_resolution)
         
         cluster_descriptors_path = f'cache/datasets/{self.dataset_name}/cluster_descriptors.npy'
 
