@@ -249,19 +249,19 @@ class VPRModel(pl.LightningModule):
         # reset the outputs list
         self.val_outputs = []
 
-        # For validation, we will also iterate step by step over the validation set
+    # For validation, we will also iterate step by step over the validation set
     # this is the way Pytorch Lghtning is made. All about modularity, folks.
     def test_step(self, batch, batch_idx, dataloader_idx=None):
         places, _ = batch
         descriptors = self(places)
         if dataloader_idx is None: # Only one val dataset
             dataloader_idx = 0
-        self.val_outputs[dataloader_idx].append(descriptors.detach().cpu())
+        self.test_outputs[dataloader_idx].append(descriptors.detach().cpu())
         return descriptors.detach().cpu()
     
     def on_test_epoch_start(self):
         # reset the outputs list
-        self.val_outputs = [[] for _ in range(len(self.trainer.datamodule.test_datasets))]
+        self.test_outputs = [[] for _ in range(len(self.trainer.datamodule.test_datasets))]
     
     def on_test_epoch_end(self):
         """this return descriptors in their order
@@ -269,7 +269,7 @@ class VPRModel(pl.LightningModule):
         for this project (MSLS val, Pittburg val), it is always references then queries
         [R1, R2, ..., Rn, Q1, Q2, ...]
         """
-        val_step_outputs = self.val_outputs
+        test_step_outputs = self.test_outputs
 
         dm = self.trainer.datamodule
         # The following line is a hack: if we have only one validation set, then
@@ -277,12 +277,12 @@ class VPRModel(pl.LightningModule):
         # if len(dm.val_datasets)==1: # we need to put the outputs in a list
         #     val_step_outputs = [val_step_outputs]
         
-        for i, (val_set_name, val_dataset) in enumerate(zip(dm.val_dataset_names, dm.val_datasets)):
-            feats = torch.concat(val_step_outputs[i], dim=0)
+        for i, (test_set_name, test_dataset) in enumerate(zip(dm.test_dataset_names, dm.test_datasets)):
+            feats = torch.concat(test_step_outputs[i], dim=0)
             
-            if val_set_name == "mapillary_sls":
+            if test_set_name == "mapillary_sls":
                 # split to ref and queries
-                num_references = val_dataset.num_references
+                num_references = test_dataset.num_references
                 positives = None
                 testing = True # This flag is for msls
 
@@ -294,17 +294,17 @@ class VPRModel(pl.LightningModule):
                     k_values=[1, 5, 10, 15, 20, 50, 100],
                     gt=positives,
                     print_results=True,
-                    dataset_name=val_set_name,
+                    dataset_name=test_set_name,
                     faiss_gpu=self.faiss_gpu,
                     testing=testing,
                 )
                 del r_list, q_list, feats, num_references, positives
-                assert val_dataset.split == "test"
+                assert test_dataset.split == "test"
                 print(f"Save predictions to msls_preds.txt")
-                val_dataset.save_predictions(preds, 'msls_preds.txt')
+                test_dataset.save_predictions(preds, 'msls_preds.txt')
             else:
-                num_references = val_dataset.num_references
-                positives = val_dataset.ground_truth
+                num_references = test_dataset.num_references
+                positives = test_dataset.ground_truth
                 testing = False # This flag is for other dataset that has ground truth
 
                 r_list = feats[ : num_references]
@@ -315,16 +315,16 @@ class VPRModel(pl.LightningModule):
                     k_values=[1, 5, 10, 15, 20, 50, 100],
                     gt=positives,
                     print_results=True,
-                    dataset_name=val_set_name,
+                    dataset_name=test_set_name,
                     faiss_gpu=self.faiss_gpu,
                     testing=testing,
                 )
-            del r_list, q_list, feats, num_references, positives
-            assert val_dataset.split == "test"
-            self.log(f'{val_set_name}_{val_dataset.split}/R1', pitts_dict[1], prog_bar=False, logger=True)
-            self.log(f'{val_set_name}_{val_dataset.split}/R5', pitts_dict[5], prog_bar=False, logger=True)
-            self.log(f'{val_set_name}_{val_dataset.split}/R10', pitts_dict[10], prog_bar=False, logger=True)        
+                del r_list, q_list, feats, num_references, positives
+                assert test_dataset.split == "test"
+                self.log(f'{test_set_name}_{test_dataset.split}/R1', pitts_dict[1], prog_bar=False, logger=True)
+                self.log(f'{test_set_name}_{test_dataset.split}/R5', pitts_dict[5], prog_bar=False, logger=True)
+                self.log(f'{test_set_name}_{test_dataset.split}/R10', pitts_dict[10], prog_bar=False, logger=True)        
         print('\n\n')
 
         # reset the outputs list
-        self.val_outputs = []
+        self.test_outputs = []
