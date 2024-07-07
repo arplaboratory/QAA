@@ -125,7 +125,7 @@ class GenericDataModule(pl.LightningDataModule):
             # load validation sets (pitts_val, msls_val, ...etc)
             self.val_datasets = []
             for dataset_name in self.val_dataset_names:
-                assert self.train_datasets_cfg[dataset_name].validation.available
+                assert self.val_datasets_cfg[dataset_name].validation.available
                 if dataset_name == "mapillary_sls":
                     self.val_datasets.append(MapillaryDataset(split="val", input_transform=self.valid_transform))
                 else:
@@ -135,7 +135,7 @@ class GenericDataModule(pl.LightningDataModule):
             # load test sets (pitts_val, msls_val, ...etc)
             self.test_datasets = []
             for dataset_name in self.test_dataset_names:
-                assert self.train_datasets_cfg[dataset_name].test.available
+                assert self.test_datasets_cfg[dataset_name].test.available
                 if dataset_name == "mapillary_sls":
                     self.test_datasets.append(MapillaryTestDataset(split="test", input_transform=self.test_transform))
                 else:
