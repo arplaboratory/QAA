@@ -14,6 +14,7 @@ model:
 
 datasets:
   train_datasets: 
+    - GSV
     - pitts250k
   val_datasets: 
     - pitts30k

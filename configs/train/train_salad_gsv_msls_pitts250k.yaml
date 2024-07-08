@@ -14,6 +14,8 @@ model:
 
 datasets:
   train_datasets: 
+    - GSV
+    - mapillary_sls
     - pitts250k
   val_datasets: 
     - pitts30k
