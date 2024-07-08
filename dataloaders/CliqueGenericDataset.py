@@ -305,5 +305,5 @@ class CliqueGenericDataset(Dataset):
             # Collect results in all_images
             for task in concurrent.futures.as_completed(tasks):
                 all_images.append(task.result())
-        print(all_images[0])
+
         self.data = np.concatenate(all_images)
