@@ -176,7 +176,7 @@ def create_dataset_part(
 
                 # Append place to batch
                 rows = df.iloc[list(clique)]
-                images[i, batch_idx] = np.char.add(np.char.add(np.where(rows['query'].values, f'{city}/query/images/', f'{city}/database/images/').astype('<U100'), rows['key'].values.astype('<U100')), '.jpg')
+                images[i, batch_idx] = rows['key'].values
                 batch_idx += 1
 
                 # Remove selected place and its neighbors from the graph
@@ -305,5 +305,5 @@ class CliqueGenericDataset(Dataset):
             # Collect results in all_images
             for task in concurrent.futures.as_completed(tasks):
                 all_images.append(task.result())
-
+        print(all_images[0])
         self.data = np.concatenate(all_images)
