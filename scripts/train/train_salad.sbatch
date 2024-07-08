@@ -3,7 +3,7 @@
 #SBATCH --ntasks-per-node=1              # runs 2 tasks on each server
 #SBATCH --cpus-per-task=12               # uses 1 compute core per task
 #SBATCH --time=6:00:00
-#SBATCH --gres=gpu:a100:1
+#SBATCH --gres=gpu:h100:1
 #SBATCH --mem=150GB
 #SBATCH --job-name=train_salad_gsv
 #SBATCH --output=train_salad_gsv.out

@@ -12,7 +12,6 @@ import os
 import concurrent.futures
 from scipy.spatial.distance import cdist, pdist, squareform
 import networkx
-import time
 
 default_transform = T.Compose([
     T.ToTensor(),

@@ -52,6 +52,8 @@ def load_city_df(base_path):
         df = df[df['pano'] == False]
 
         city_df[city.name] = df
+        average_count = df.groupby('unique_cluster').size().mean()
+        print(f"Average number of samples for each cluster for city {city.name}: {average_count}")
 
     return city_df
 

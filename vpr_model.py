@@ -1,10 +1,14 @@
 import pytorch_lightning as pl
 import torch
 from torch.optim import lr_scheduler, optimizer
+import torchvision
 
 import utils
 from models import helper
 
+
+IMAGENET_MEAN_STD = {'mean': [0.485, 0.456, 0.406], 
+                     'std': [0.229, 0.224, 0.225]}
 
 class VPRModel(pl.LightningModule):
     """This is the main model for Visual Place Recognition
@@ -79,6 +83,7 @@ class VPRModel(pl.LightningModule):
 
         # For validation in Lightning v2.0.0
         self.val_outputs = []
+        self.log_img_first_iter = False
         
     # the forward pass of the lightning model
     def forward(self, x):
@@ -165,7 +170,14 @@ class VPRModel(pl.LightningModule):
     # This is the training step that's executed at each iteration
     def training_step(self, batch, batch_idx):
         places, labels = batch
-        
+        if not self.log_img_first_iter:
+            self.log_img_first_iter = True
+            mean_tensor = torch.Tensor(IMAGENET_MEAN_STD['mean']).view(1, 1, 3, 1, 1)
+            std_tensor = torch.Tensor(IMAGENET_MEAN_STD['std']).view(1, 1, 3, 1, 1)
+            denormalized_image = places.cpu() * std_tensor + mean_tensor
+            list_images = [img for img in denormalized_image.view(-1, denormalized_image.shape[-3], denormalized_image.shape[-2], denormalized_image.shape[-1])]
+            list_images = list_images[:16]
+            self.logger.log_image('input_images', list_images)
         # Note that GSVCities yields places (each containing N images)
         # which means the dataloader will return a batch containing BS places
         BS, N, ch, h, w = places.shape
@@ -188,6 +200,7 @@ class VPRModel(pl.LightningModule):
     def on_train_epoch_end(self):
         # we empty the batch_acc list for next epoch
         self.batch_acc = []
+        self.log_img_first_iter = False
 
     # For validation, we will also iterate step by step over the validation set
     # this is the way Pytorch Lghtning is made. All about modularity, folks.
