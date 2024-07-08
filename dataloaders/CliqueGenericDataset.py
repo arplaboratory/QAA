@@ -8,6 +8,7 @@ import torchvision.transforms as T
 import numpy as np
 import tqdm
 import os
+from sklearn.neighbors import NearestNeighbors
 
 import concurrent.futures
 from scipy.spatial.distance import cdist, pdist, squareform
@@ -53,7 +54,7 @@ def construct_df(dataset_name, split, same_place_threshold):
     city_df[dataset_name] = df
     return city_df
 
-def compute_cluster_descriptors(city_df, model, dataset_name, same_place_threshold, cluster_k, descriptor_size=8192 + 256, batch_size=64):
+def compute_cluster_descriptors(city_df, model, dataset_name, same_place_threshold, cluster_desc_threshold_percentage, descriptor_size=8192 + 256, batch_size=64):
 
     class DenseDataset(torch.utils.data.Dataset):
         def __init__(self, rows, city_path):
@@ -102,33 +103,43 @@ def compute_cluster_descriptors(city_df, model, dataset_name, same_place_thresho
                     descriptors = model(img)
                     instance_descriptors[idxs] = descriptors
 
-            instance_descriptors = instance_descriptors.cpu().numpy()
-            faiss_index = faiss.IndexFlatL2(instance_descriptors.shape[1])
-            faiss_index.add(instance_descriptors)
+            image_utms = df[['easting', 'northing']] # Include database and query images
+            # Find soft_positives_per_query, which are within val_positive_dist_threshold (deafult 25 meters)
+            knn = NearestNeighbors(n_jobs=-1)
+            knn.fit(image_utms)
+            soft_positives_per_query = knn.radius_neighbors(image_utms,
+                                                            radius=same_place_threshold,
+                                                            return_distance=False)
+            distances_positive = []
+            for i, soft_positives in enumerate(soft_positives_per_query):
+                # calculate the feature distance between query and soft postive
+                distance = torch.cdist(instance_descriptors[i:i+1], instance_descriptors[soft_positives])
+                distances_positive.append(distance.squeeze(0))
+            distances_positive = torch.cat(distances_positive)
+            # Find cluster_desc_threshold_percentage * len(distances_positive) nearest neighbors
+            distances_threshold = torch.topk(distances_positive, round(cluster_desc_threshold_percentage * len(distances_positive)), largest=False)[0][-1]
+            print(f"Found distance threshold of {cluster_desc_threshold_percentage * 100}% of the positives: {distances_threshold}")
             available_keys = np.array(df['key'])
-            parallel_search = 1
             cluster_id = 0
             print("Allocating clusters")
             while len(available_keys)>0:
                 try:
-                    keys = np.random.choice(available_keys, parallel_search, replace=False)
+                    query_key = np.random.choice(available_keys, 1, replace=False)
                 except Exception as e:
-                    keys = available_keys
-                idx_in_df = df[df['key'].isin(keys)].index
-                desc = instance_descriptors[idx_in_df]
-                _, predictions = faiss_index.search(desc, cluster_k)
-                for i, pred in enumerate(predictions):
-                    if keys[i] in available_keys: # Otherwise it has been already assigned
-                        query_utm = df.iloc[idx_in_df[i]][['easting', 'northing']]
-                        df.loc[idx_in_df[i], 'unique_cluster'] = cluster_id
-                        for j, p in enumerate(pred[1:]):
-                            pred_utm = df.iloc[p][['easting', 'northing']]
-                            if np.linalg.norm(query_utm - pred_utm) < same_place_threshold:
-                                df.loc[p, 'unique_cluster'] = cluster_id
-                                available_keys = np.delete(available_keys, np.where(available_keys == df.iloc[p]['key'])[0])
-                        available_keys = np.delete(available_keys, np.where(available_keys == df.iloc[idx_in_df[i]]['key'])[0])
-                        df.loc[idx_in_df[i], 'representative'] = True
-                        cluster_id += 1
+                    query_key = available_keys
+                query_idx_in_df = df[df['key'].isin(query_key)].index.values.astype(int)[0]
+                query_desc = instance_descriptors[query_idx_in_df:query_idx_in_df+1]
+                positives_idxs_in_df = soft_positives_per_query[query_idx_in_df]
+                positives_desc = instance_descriptors[positives_idxs_in_df]
+                distances = torch.cdist(query_desc, positives_desc).squeeze(0)
+                for i in range(len(positives_desc)):
+                    if distances[i] <= distances_threshold:
+                        df.loc[positives_idxs_in_df[i], 'unique_cluster'] = cluster_id
+                        available_keys = np.delete(available_keys, np.where(available_keys == df.iloc[positives_idxs_in_df[i]]['key'])[0])
+                df.loc[query_idx_in_df, 'unique_cluster'] = cluster_id
+                available_keys = np.delete(available_keys, np.where(available_keys == df.iloc[query_idx_in_df]['key'])[0])
+                df.loc[query_idx_in_df, 'representative'] = True
+                cluster_id += 1
                 print("Unassigned keys: ", len(available_keys))
             print("Done")
             cluster_id = df['unique_cluster']
@@ -246,7 +257,7 @@ class CliqueGenericDataset(Dataset):
             num_images_per_place=4,
             sampled_similar_places=15,
             same_place_threshold=20.0,
-            cluster_k=20,
+            cluster_desc_threshold_percentage=0.7,
     ):
         super(CliqueGenericDataset, self).__init__()
         self.dataset_name = dataset_name
@@ -263,7 +274,7 @@ class CliqueGenericDataset(Dataset):
             num_images_per_place=num_images_per_place,
             sampled_similar_places=sampled_similar_places,
             same_place_threshold=same_place_threshold,
-            cluster_k=cluster_k,
+            cluster_desc_threshold_percentage=cluster_desc_threshold_percentage,
         )
         
         
@@ -314,7 +325,7 @@ class CliqueGenericDataset(Dataset):
         num_images_per_place=4,
         sampled_similar_places=15,
         same_place_threshold=20.0,
-        cluster_k=20,
+        cluster_desc_threshold_percentage=0.7,
     ):
 
         city_df = construct_df(self.dataset_name, self.split, same_place_threshold)
@@ -323,7 +334,7 @@ class CliqueGenericDataset(Dataset):
 
         # Compute cluster descriptors if model is provided
         if model is not None:
-            cluster_descriptors_dict = compute_cluster_descriptors(city_df, model, self.dataset_name, same_place_threshold, cluster_k)
+            cluster_descriptors_dict = compute_cluster_descriptors(city_df, model, self.dataset_name, same_place_threshold, cluster_desc_threshold_percentage)
             np.save(cluster_descriptors_path, cluster_descriptors_dict)
         elif os.path.isfile(cluster_descriptors_path):
             cluster_descriptors_dict = np.load(cluster_descriptors_path, allow_pickle=True).item()
@@ -331,7 +342,7 @@ class CliqueGenericDataset(Dataset):
             print('Model must be provided to compute cluster descriptors')
             print('- Computing descriptors using torch.hub DINOv2 SALAD')
             model = torch.hub.load("serizba/salad", "dinov2_salad").eval().cuda()
-            cluster_descriptors_dict = compute_cluster_descriptors(city_df, model, self.dataset_name, same_place_threshold, cluster_k)
+            cluster_descriptors_dict = compute_cluster_descriptors(city_df, model, self.dataset_name, same_place_threshold, cluster_desc_threshold_percentage)
             np.save(cluster_descriptors_path, cluster_descriptors_dict)
 
         # Create dataset in parallel
