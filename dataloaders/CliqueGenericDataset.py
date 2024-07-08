@@ -97,7 +97,7 @@ def compute_cluster_descriptors(city_df, model, dataset_name, same_place_thresho
             instance_descriptors = torch.zeros((len(df), descriptor_size)).cuda() # global mining or partial mining
             # Compute descriptors for each instance
             with torch.no_grad():
-                for batch in dataloader:
+                for batch in tqdm.tqdm(dataloader):
                     img, idxs, _ = batch
                     img = img.cuda()
                     descriptors = model(img)
@@ -147,6 +147,8 @@ def compute_cluster_descriptors(city_df, model, dataset_name, same_place_thresho
             np.save("cache/datasets/" + dataset_name + "/cluster_id.npy", cluster_id)
             np.save("cache/datasets/" + dataset_name + "/representative.npy", representative)
             average_count = df.groupby('unique_cluster').size().mean()
+            cluster_count = len(np.unique(cluster_id))
+            print(f'Creating {cluster_count} unique clusters')
             print(f"Average number of samples for each cluster: {average_count}")
 
         densedataset = DenseDataset(df[df['representative'] == True], city)
@@ -162,7 +164,7 @@ def compute_cluster_descriptors(city_df, model, dataset_name, same_place_thresho
         cluster_descriptors = torch.zeros((df.unique_cluster.max() + 1, descriptor_size)).cuda()
         # Compute descriptors for each cluster
         with torch.no_grad():
-            for batch in dataloader:
+            for batch in tqdm.tqdm(dataloader):
                 img, _, clusters = batch
                 img = img.cuda()
                 descriptors = model(img)
