@@ -1,6 +1,7 @@
 import pytorch_lightning as pl
 from torch.utils.data.dataloader import DataLoader
 from torchvision import transforms as T
+import os
 
 from prettytable import PrettyTable
 
@@ -13,6 +14,9 @@ from utils.load_cfg import load_datasets_config
 
 IMAGENET_MEAN_STD = {'mean': [0.485, 0.456, 0.406], 
                      'std': [0.229, 0.224, 0.225]}
+
+DEBUG = False if not "DEBUG" in os.environ else True
+print(f"DEBUG: {DEBUG}")
 
 class GenericDataModule(pl.LightningDataModule):
     def __init__(self,
@@ -131,6 +135,15 @@ class GenericDataModule(pl.LightningDataModule):
                     self.val_datasets.append(MapillaryDataset(split="val", input_transform=self.valid_transform))
                 else:
                     self.val_datasets.append(GenericDataset(dataset_name=dataset_name, split="val", input_transform=self.valid_transform))
+            # Add the train dataset itself to the validation set for debugging
+            if DEBUG:
+                for dataset_name in self.train_dataset_names:
+                    if dataset_name == "mapillary_sls":
+                        self.val_datasets.append(MapillaryDataset(split="train", input_transform=self.valid_transform))
+                    elif dataset_name == "GSV":
+                        pass
+                    else:
+                        self.val_datasets.append(GenericDataset(dataset_name=dataset_name, split="train", input_transform=self.valid_transform))
 
         elif stage=="test":
             # load test sets (pitts_val, msls_val, ...etc)
