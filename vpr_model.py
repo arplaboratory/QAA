@@ -175,6 +175,7 @@ class VPRModel(pl.LightningModule):
             mean_tensor = torch.Tensor(IMAGENET_MEAN_STD['mean']).view(1, 1, 3, 1, 1)
             std_tensor = torch.Tensor(IMAGENET_MEAN_STD['std']).view(1, 1, 3, 1, 1)
             denormalized_image = places.cpu() * std_tensor + mean_tensor
+            denormalized_image = torch.clamp(denormalized_image, 0, 1)
             list_images = [img for img in denormalized_image.view(-1, denormalized_image.shape[-3], denormalized_image.shape[-2], denormalized_image.shape[-1])]
             list_images = list_images[:16]
             self.logger.log_image('input_images', list_images)

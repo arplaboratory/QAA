@@ -57,6 +57,8 @@ if __name__ == '__main__':
         mode='max'
     )
 
+    lr_monitor = LearningRateMonitor(logging_interval='epoch')
+
     #------------------
     # we instanciate a trainer
     trainer = pl.Trainer(
@@ -68,7 +70,7 @@ if __name__ == '__main__':
         precision='16-mixed', # we use half precision to reduce  memory usage
         max_epochs=train_cfg.training.num_epochs,
         check_val_every_n_epoch=1, # run validation every epoch
-        callbacks=[checkpoint_cb],# we only run the checkpointing callback (you can add more)
+        callbacks=[checkpoint_cb, lr_monitor],# we only run the checkpointing callback (you can add more)
         reload_dataloaders_every_n_epochs=1, # we reload the dataset to shuffle the order
         log_every_n_steps=20,
         logger=wandb_logger

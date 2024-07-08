@@ -15,7 +15,7 @@ model:
 datasets:
   train_datasets: 
     - mapillary_sls
-    - pitts250k
+    - pitts250kk
   val_datasets: 
     - pitts30k
     - pitts250k
@@ -48,7 +48,7 @@ training:
     args:
       start_factor: 1
       end_factor: 0.2
-      total_iters: 4000
+      total_iters: 30
   loss:
     name: 'MultiSimilarityLoss'
   miner:
