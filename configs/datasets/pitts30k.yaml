@@ -6,7 +6,7 @@ training:
     num_batches: 2000
     num_processes: 10
     sampled_similar_places: 15
-    cluster_resolution: 20.0
+    cluster_k: 20
 validation:
   available: True
 test:
