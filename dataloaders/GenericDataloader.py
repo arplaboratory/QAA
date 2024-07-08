@@ -120,6 +120,7 @@ class GenericDataModule(pl.LightningDataModule):
                                                 dataset_name=dataset_name, 
                                                 split="train", 
                                                 transform=self.train_transform,
+                                                batch_size=self.batch_size,
                                                 **self.train_datasets_cfg[dataset_name].training.clique_args))
 
             # load validation sets (pitts_val, msls_val, ...etc)

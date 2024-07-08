@@ -209,6 +209,7 @@ class CliqueGenericDataset(Dataset):
         self.split = split
 
         self.batch_size = batch_size
+        self.num_batches = num_batches
 
         self.create_dataset(
             num_batches=num_batches,
@@ -244,7 +245,7 @@ class CliqueGenericDataset(Dataset):
 
     def __len__(self):
         '''Denotes the total number of places (not images)'''
-        return self.batch_size * 2000
+        return self.batch_size * self.num_batches
 
     @staticmethod
     def image_loader(path):
