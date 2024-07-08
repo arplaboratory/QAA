@@ -40,10 +40,13 @@ def construct_df(dataset_name, split, same_place_threshold):
     q.insert(0, 'northing', northing)
     df = pd.concat([db, q], ignore_index=True)
     df.insert(0, 'unique_cluster', -1)
+    df.insert(0, 'representative', False)
     if os.path.isfile("cache/datasets/" + dataset_name + "/cluster_id.npy"):
         cluster_id = np.load("cache/datasets/" + dataset_name + "/cluster_id.npy")
+        representative = np.load("cache/datasets/" + dataset_name + "/representative.npy")
         cluster_count = len(np.unique(cluster_id))
-        df.insert(0, 'unique_cluster', cluster_id)
+        df['unique_cluster'] = cluster_id
+        df['representative'] = representative
         print(f'Loading {cluster_count} unique clusters')
         average_count = df.groupby('unique_cluster').size().mean()
         print(f"Average number of samples for each cluster: {average_count}")
@@ -75,46 +78,44 @@ def compute_cluster_descriptors(city_df, model, dataset_name, same_place_thresho
                 print(f'Image {path} could not be loaded')
                 img = Image.new('RGB', (322, 322))
             img = self.valid_transform(img)
-            return img, idx
+            return img, idx, row['unique_cluster']
 
-    
     cluster_descriptors_dict = {}
     for city, df in tqdm.tqdm(city_df.items(), desc='Computing cluster descriptors'):
 
-        # Create dataloader with one sample per cluster
-        densedataset = DenseDataset(df, city)
-        dataloader = torch.utils.data.DataLoader(
-            dataset=densedataset, 
-            batch_size=batch_size,
-            num_workers=8,
-            drop_last=False,
-            pin_memory=True,
-            shuffle=False
-        )
-
-        cluster_descriptors = torch.zeros((len(df), descriptor_size)).cuda() # global mining or partial mining
-
-        # Compute descriptors for each cluster
-        with torch.no_grad():
-            for batch in dataloader:
-                img, idxs = batch
-                img = img.cuda()
-                descriptors = model(img)
-                cluster_descriptors[idxs] = descriptors
-
-        cluster_descriptors_dict[city] = cluster_descriptors.cpu().numpy()
-        faiss_index = faiss.IndexFlatL2(cluster_descriptors.shape[1])
-        faiss_index.add(cluster_descriptors.cpu().numpy())
-
         if not os.path.isfile("cache/datasets/" + dataset_name + "/cluster_id.npy"):
+            densedataset = DenseDataset(df, city)
+            dataloader = torch.utils.data.DataLoader(
+                dataset=densedataset, 
+                batch_size=batch_size,
+                num_workers=8,
+                drop_last=False,
+                pin_memory=True,
+                shuffle=False
+            )
+            instance_descriptors = torch.zeros((len(df), descriptor_size)).cuda() # global mining or partial mining
+            # Compute descriptors for each instance
+            with torch.no_grad():
+                for batch in dataloader:
+                    img, idxs, _ = batch
+                    img = img.cuda()
+                    descriptors = model(img)
+                    instance_descriptors[idxs] = descriptors
+
+            instance_descriptors = instance_descriptors.cpu().numpy()
+            faiss_index = faiss.IndexFlatL2(instance_descriptors.shape[1])
+            faiss_index.add(instance_descriptors)
             available_keys = np.array(df['key'])
-            parallel_search = 16
+            parallel_search = 1
             cluster_id = 0
             print("Allocating clusters")
             while len(available_keys)>0:
-                keys = np.random.choice(available_keys, parallel_search, replace=False)
+                try:
+                    keys = np.random.choice(available_keys, parallel_search, replace=False)
+                except Exception as e:
+                    keys = available_keys
                 idx_in_df = df[df['key'].isin(keys)].index
-                desc = cluster_descriptors_dict[city][idx_in_df]
+                desc = instance_descriptors[idx_in_df]
                 _, predictions = faiss_index.search(desc, cluster_k)
                 for i, pred in enumerate(predictions):
                     if keys[i] in available_keys: # Otherwise it has been already assigned
@@ -126,11 +127,37 @@ def compute_cluster_descriptors(city_df, model, dataset_name, same_place_thresho
                                 df.loc[p, 'unique_cluster'] = cluster_id
                                 available_keys = np.delete(available_keys, np.where(available_keys == df.iloc[p]['key'])[0])
                         available_keys = np.delete(available_keys, np.where(available_keys == df.iloc[idx_in_df[i]]['key'])[0])
+                        df.loc[idx_in_df[i], 'representative'] = True
                         cluster_id += 1
                 print("Unassigned keys: ", len(available_keys))
             print("Done")
-            cluster_id = df['unique_cluster'].values
+            cluster_id = df['unique_cluster']
+            representative = df['representative']
             np.save("cache/datasets/" + dataset_name + "/cluster_id.npy", cluster_id)
+            np.save("cache/datasets/" + dataset_name + "/representative.npy", representative)
+            average_count = df.groupby('unique_cluster').size().mean()
+            print(f"Average number of samples for each cluster: {average_count}")
+
+        densedataset = DenseDataset(df[df['representative'] == True], city)
+        dataloader = torch.utils.data.DataLoader(
+            dataset=densedataset, 
+            batch_size=batch_size,
+            num_workers=8,
+            drop_last=False,
+            pin_memory=True,
+            shuffle=False
+        )
+
+        cluster_descriptors = torch.zeros((df.unique_cluster.max() + 1, descriptor_size)).cuda()
+        # Compute descriptors for each cluster
+        with torch.no_grad():
+            for batch in dataloader:
+                img, _, clusters = batch
+                img = img.cuda()
+                descriptors = model(img)
+                cluster_descriptors[clusters] = descriptors
+
+        cluster_descriptors_dict[city] = cluster_descriptors.cpu().numpy()
 
     return cluster_descriptors_dict
 
