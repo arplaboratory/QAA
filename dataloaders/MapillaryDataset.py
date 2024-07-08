@@ -11,6 +11,7 @@ from torch.utils.data import Dataset
 class MapillaryDataset(Dataset):
     def __init__(self, split, input_transform = None):
         
+        self.dataset_name = "mapillary_sls"
         self.input_transform = input_transform
         self.split = split
         
@@ -48,6 +49,7 @@ class MapillaryDataset(Dataset):
 class MapillaryTestDataset(Dataset):
     def __init__(self, split, input_transform = None):
         
+        self.dataset_name = "mapillary_sls"
         self.input_transform = input_transform
         self.split = split
         

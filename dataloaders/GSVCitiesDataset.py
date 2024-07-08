@@ -27,6 +27,7 @@ class GSVCitiesDataset(Dataset):
                  base_path=BASE_PATH
                  ):
         super(GSVCitiesDataset, self).__init__()
+        self.dataset_name = "GSV"
         self.base_path = base_path
         self.cities = cities
         self.split = split

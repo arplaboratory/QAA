@@ -9,7 +9,7 @@ NPY_ROOT = 'cache/datasets/'
 class GenericDataset(Dataset):
     def __init__(self, dataset_name, split, input_transform = None, backup_transform = None):
         
-
+        self.dataset_name = dataset_name
         self.input_transform = input_transform
         self.backup_transform = backup_transform
         self.split = split

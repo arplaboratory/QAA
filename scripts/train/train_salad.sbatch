@@ -5,8 +5,8 @@
 #SBATCH --time=6:00:00
 #SBATCH --gres=gpu:h100:1
 #SBATCH --mem=150GB
-#SBATCH --job-name=train_salad_gsv
-#SBATCH --output=train_salad_gsv.out
+#SBATCH --job-name=train_salad
+#SBATCH --output=train_salad.out
 
 overlay_path_gsv="datasets_sqf/GSV.sqf"
 overlay_path_pitts30k="datasets_sqf/pitts30k.sqf"

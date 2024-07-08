@@ -1,7 +1,6 @@
 # Dataset Training Parameters
 training:
   available: True
-  pos_threshold: 25
   clique_args:
     same_place_threshold: 25.0
     num_batches: 4000

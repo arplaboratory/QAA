@@ -230,7 +230,8 @@ class VPRModel(pl.LightningModule):
         # if len(dm.val_datasets)==1: # we need to put the outputs in a list
         #     val_step_outputs = [val_step_outputs]
         
-        for i, (val_set_name, val_dataset) in enumerate(zip(dm.val_dataset_names, dm.val_datasets)):
+        for i, val_dataset in enumerate(dm.val_datasets):
+            val_set_name = val_dataset.dataset_name
             feats = torch.concat(val_step_outputs[i], dim=0)
             
             if val_set_name == "mapillary_sls":
@@ -253,7 +254,6 @@ class VPRModel(pl.LightningModule):
                 faiss_gpu=self.faiss_gpu
             )
             del r_list, q_list, feats, num_references, positives
-            assert val_dataset.split == "val"
             self.log(f'{val_set_name}_{val_dataset.split}/R1', pitts_dict[1], prog_bar=False, logger=True)
             self.log(f'{val_set_name}_{val_dataset.split}/R5', pitts_dict[5], prog_bar=False, logger=True)
             self.log(f'{val_set_name}_{val_dataset.split}/R10', pitts_dict[10], prog_bar=False, logger=True)        
@@ -290,7 +290,8 @@ class VPRModel(pl.LightningModule):
         # if len(dm.val_datasets)==1: # we need to put the outputs in a list
         #     val_step_outputs = [val_step_outputs]
         
-        for i, (test_set_name, test_dataset) in enumerate(zip(dm.test_dataset_names, dm.test_datasets)):
+        for i, test_dataset in enumerate(dm.test_datasets):
+            test_set_name = test_dataset.dataset_name
             feats = torch.concat(test_step_outputs[i], dim=0)
             
             if test_set_name == "mapillary_sls":
@@ -333,7 +334,6 @@ class VPRModel(pl.LightningModule):
                     testing=testing,
                 )
                 del r_list, q_list, feats, num_references, positives
-                assert test_dataset.split == "test"
                 self.log(f'{test_set_name}_{test_dataset.split}/R1', pitts_dict[1], prog_bar=False, logger=True)
                 self.log(f'{test_set_name}_{test_dataset.split}/R5', pitts_dict[5], prog_bar=False, logger=True)
                 self.log(f'{test_set_name}_{test_dataset.split}/R10', pitts_dict[10], prog_bar=False, logger=True)        

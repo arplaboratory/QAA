@@ -15,7 +15,7 @@ if __name__ == '__main__':
     args = args.parse_args()
     # we load the training configuration
     train_cfg = load_config(args.config)
-    wandb_logger = WandbLogger(name=args.config.split('/')[-1].split('.')[0], project="UniVG", log_model="all")
+    wandb_logger = WandbLogger(name=args.config.split('/')[-1].split('.')[0], project="UniVG")
     datamodule = GenericDataModule(
         batch_size=train_cfg.training.batch_size,
         image_size=train_cfg.training.image_size,
