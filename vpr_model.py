@@ -314,7 +314,7 @@ class VPRModel(pl.LightningModule):
                 del r_list, q_list, feats, num_references, positives
                 assert test_dataset.split == "test"
                 print(f"Save predictions to msls_preds.txt")
-                test_dataset.save_predictions(preds, 'msls_preds.txt')
+                test_dataset.save_predictions(preds, f'UniVG/{self.logger.version}/checkpoints/msls_preds.txt')
             else:
                 num_references = test_dataset.num_references
                 positives = test_dataset.ground_truth
