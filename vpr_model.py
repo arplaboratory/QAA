@@ -245,8 +245,7 @@ class VPRModel(pl.LightningModule):
         val_step_outputs = self.val_outputs
 
         dm = self.trainer.datamodule
-        print("Update model for recomputing if recomputing is enabled")
-        dm.model = self
+
         # The following line is a hack: if we have only one validation set, then
         # we need to put the outputs in a list (Pytorch Lightning does not do it presently)
         # if len(dm.val_datasets)==1: # we need to put the outputs in a list
@@ -283,6 +282,9 @@ class VPRModel(pl.LightningModule):
 
         # reset the outputs list
         self.val_outputs = []
+
+        print("Update model for recomputing if recomputing is enabled")
+        dm.model = self.model
 
     # For validation, we will also iterate step by step over the validation set
     # this is the way Pytorch Lghtning is made. All about modularity, folks.

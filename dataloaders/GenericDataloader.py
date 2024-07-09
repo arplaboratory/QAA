@@ -234,6 +234,3 @@ class GenericDataModule(pl.LightningDataModule):
             ["# of iterations", f"{GSV_dataset.__len__()//self.batch_size}"])
         table.add_row(["Image size", f"{self.image_size}"])
         print(table.get_string(title="Training config"))
-
-    def update_model(self, model):
-        self.model = model
