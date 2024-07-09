@@ -228,6 +228,8 @@ class CliqueMapillaryDataset(Dataset):
         self.num_batches = num_batches
         self.batch_size = batch_size
         self.num_processes = num_processes
+        self.num_images_per_place = num_images_per_place
+        self.sampled_similar_places = sampled_similar_places
         self.recompute_clusters = recompute_clusters
         self.only_top_k = only_top_k
 
