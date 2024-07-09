@@ -156,10 +156,10 @@ class GenericDataModule(pl.LightningDataModule):
                     self.test_datasets.append(GenericDataset(dataset_name=dataset_name, split="test", input_transform=self.test_transform, backup_transform=self.test_grayscale_transform))
     
 
-    def reload(self, dataset_name):
+    def reload(self, dataset_name, index):
         if dataset_name == "GSV":
             GSV_params = self.train_datasets_cfg["GSV"]
-            self.train_datasets[self.current_train_dataset_index] = GSVCitiesDataset(
+            self.train_datasets[index] = GSVCitiesDataset(
                                                                     split="train",
                                                                     cities=GSV_params.training.GSV_TRAIN_CITIES,
                                                                     img_per_place=GSV_params.training.img_per_place,
@@ -167,24 +167,20 @@ class GenericDataModule(pl.LightningDataModule):
                                                                     random_sample_from_each_place=GSV_params.training.random_sample_from_each_place,
                                                                     transform=self.train_transform)
         else:
-            self.train_datasets[self.current_train_dataset_index].reload()
+            self.train_datasets[index].reload()
 
     def train_dataloader(self):
-        if not hasattr(self, "current_train_dataset_index"):
-            self.current_train_dataset_index = 0
-        else:
-            self.current_train_dataset_index += 1
-            if self.current_train_dataset_index >= len(self.train_datasets):
-                self.current_train_dataset_index = 0
-        train_dataset_name = self.train_dataset_names[self.current_train_dataset_index]
-        self.reload(train_dataset_name) # Following reload routine to shuffle cities
-        train_dataset = self.train_datasets[self.current_train_dataset_index]
-        if train_dataset_name == "GSV":
-            train_dataloaders = DataLoader(
-                dataset=train_dataset, **self.train_loader_config_GSV)
-        else:
-            train_dataloaders = DataLoader(
-                dataset=train_dataset, **self.train_loader_config_general)
+        train_dataloaders = {}
+        for index, train_dataset_name in enumerate(self.train_dataset_names):
+            self.reload(train_dataset_name, index) # Following reload routine to shuffle cities
+            train_dataset = self.train_datasets[index]
+            if train_dataset_name == "GSV":
+                train_dataloaders[train_dataset_name] = DataLoader(
+                    dataset=train_dataset, **self.train_loader_config_GSV)
+            else:
+                train_dataloaders[train_dataset_name] = DataLoader(
+                    dataset=train_dataset, **self.train_loader_config_general)
+        print(f"Train dataloaders: {train_dataloaders}")
         return train_dataloaders
 
     def val_dataloader(self):

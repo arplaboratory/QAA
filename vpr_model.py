@@ -169,23 +169,34 @@ class VPRModel(pl.LightningModule):
     
     # This is the training step that's executed at each iteration
     def training_step(self, batch, batch_idx):
-        places, labels = batch
-        if not self.log_img_first_iter:
-            self.log_img_first_iter = True
-            mean_tensor = torch.Tensor(IMAGENET_MEAN_STD['mean']).view(1, 1, 3, 1, 1)
-            std_tensor = torch.Tensor(IMAGENET_MEAN_STD['std']).view(1, 1, 3, 1, 1)
-            denormalized_image = places.cpu() * std_tensor + mean_tensor
-            denormalized_image = torch.clamp(denormalized_image, 0, 1)
-            list_images = [img for img in denormalized_image.view(-1, denormalized_image.shape[-3], denormalized_image.shape[-2], denormalized_image.shape[-1])]
-            list_images = list_images[:64]
-            self.logger.log_image('input_images', list_images)
-        # Note that GSVCities yields places (each containing N images)
-        # which means the dataloader will return a batch containing BS places
-        BS, N, ch, h, w = places.shape
-        
-        # reshape places and labels
-        images = places.view(BS*N, ch, h, w)
-        labels = labels.view(-1)
+        print(batch)
+        prev_label = -1
+        images = []
+        labels = []
+        BS_list = []
+        N_list = []
+        for train_dataset_name in batch.keys():
+            places_single = batch[train_dataset_name][0]
+            labels_single = batch[train_dataset_name][1]
+            if not self.log_img_first_iter:
+                mean_tensor = torch.Tensor(IMAGENET_MEAN_STD['mean']).view(1, 1, 3, 1, 1)
+                std_tensor = torch.Tensor(IMAGENET_MEAN_STD['std']).view(1, 1, 3, 1, 1)
+                denormalized_image = places_single.cpu() * std_tensor + mean_tensor
+                denormalized_image = torch.clamp(denormalized_image, 0, 1)
+                list_images = [img for img in denormalized_image.view(-1, denormalized_image.shape[-3], denormalized_image.shape[-2], denormalized_image.shape[-1])]
+                list_images = list_images[:64]
+                self.logger.log_image(f'input_images_{train_dataset_name}', list_images)
+            labels_single += prev_label + 1
+            prev_label = labels_single.max()
+            BS, N, ch, h, w = places_single.shape
+            BS_list.append(BS)
+            N_list.append(N)
+            images.append(places_single.view(-1, ch, h, w))
+            labels.append(labels_single.view(-1))
+        self.log_img_first_iter = True
+
+        images = torch.cat(images, dim=0)
+        labels = torch.cat(labels, dim=0)
 
         # Feed forward the batch to the model
         descriptors = self(images) # Here we are calling the method forward that we defined above
@@ -193,7 +204,16 @@ class VPRModel(pl.LightningModule):
         if torch.isnan(descriptors).any():
             raise ValueError('NaNs in descriptors')
 
-        loss = self.loss_function(descriptors, labels) # Call the loss_function we defined above
+        loss = 0
+        for i in range(len(BS_list)):
+            BS = BS_list[i]
+            N = N_list[i]
+            if i == 0:
+                loss += self.loss_function(descriptors[:BS*N], labels[:BS*N])
+                prev_BS_N = BS*N
+            else:
+                loss += self.loss_function(descriptors[prev_BS_N:prev_BS_N+BS*N], labels[prev_BS_N:prev_BS_N+BS*N])
+                prev_BS_N += BS*N
         
         self.log('loss', loss.item(), logger=True, prog_bar=True)
         return {'loss': loss}
