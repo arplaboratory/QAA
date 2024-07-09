@@ -14,7 +14,6 @@ from sklearn.neighbors import NearestNeighbors
 import concurrent.futures
 from scipy.spatial.distance import cdist, pdist, squareform
 import networkx
-import faiss
 
 default_transform = T.Compose([
     T.ToTensor(),
@@ -43,9 +42,12 @@ def construct_df(dataset_name, split, same_place_threshold):
     df = pd.concat([db, q], ignore_index=True)
     df.insert(0, 'unique_cluster', -1)
     df.insert(0, 'representative', False)
+    df.insert(0, 'valid', True)
     if os.path.isfile("cache/datasets/" + dataset_name + "/cluster_id.npy"):
         cluster_id = np.load("cache/datasets/" + dataset_name + "/cluster_id.npy")
         representative = np.load("cache/datasets/" + dataset_name + "/representative.npy")
+        valid =  np.load("cache/datasets/" + dataset_name + "/valid.npy")
+        df = df[df['valid'] == True]
         cluster_count = len(np.unique(cluster_id))
         df['unique_cluster'] = cluster_id
         df['representative'] = representative
@@ -55,7 +57,7 @@ def construct_df(dataset_name, split, same_place_threshold):
     city_df[dataset_name] = df
     return city_df
 
-def compute_cluster_descriptors(city_df, model, dataset_name, same_place_threshold, cluster_desc_threshold_percentage, descriptor_size=8192 + 256, batch_size=64):
+def compute_cluster_descriptors(city_df, model, dataset_name, same_place_threshold, num_images_per_place, cluster_desc_threshold_percentage, descriptor_size=8192 + 256, batch_size=64):
 
     class DenseDataset(torch.utils.data.Dataset):
         def __init__(self, rows, city_path):
@@ -82,7 +84,7 @@ def compute_cluster_descriptors(city_df, model, dataset_name, same_place_thresho
             img = self.valid_transform(img)
             return img, idx, row['unique_cluster']
 
-
+    
     cluster_descriptors_dict = {}
     for city, df in tqdm.tqdm(city_df.items(), desc='Computing cluster descriptors'):
 
@@ -144,14 +146,24 @@ def compute_cluster_descriptors(city_df, model, dataset_name, same_place_thresho
                 cluster_id += 1
                 print("Unassigned keys: ", len(available_keys))
             print("Done")
-            cluster_id = df['unique_cluster']
-            representative = df['representative']
-            np.save("cache/datasets/" + dataset_name + "/cluster_id.npy", cluster_id)
-            np.save("cache/datasets/" + dataset_name + "/representative.npy", representative)
+            # Remove clusters with too few samples
+            clusters_freq = df.groupby('unique_cluster').size()
+            clusters_to_remove = clusters_freq[clusters_freq < num_images_per_place].index
+            print(f'Removing {len(clusters_to_remove)} clusters with less than {num_images_per_place} samples')
+            print(f'Before Removal: {len(df)} samples')
+            df.loc[df['unique_cluster'].isin(clusters_to_remove), 'valid'] = False
+            df = df[df['valid'] == True]
+            print(f'After Removal: {len(df)} samples')
             average_count = df.groupby('unique_cluster').size().mean()
-            cluster_count = len(np.unique(cluster_id))
+            cluster_count = len(np.unique(df['unique_cluster']))
             print(f'Creating {cluster_count} unique clusters')
             print(f"Average number of samples for each cluster: {average_count}")
+            cluster_id = df['unique_cluster']
+            representative = df['representative']
+            valid = df['valid']
+            np.save("cache/datasets/" + dataset_name + "/cluster_id.npy", cluster_id)
+            np.save("cache/datasets/" + dataset_name + "/representative.npy", representative)
+            np.save("cache/datasets/" + dataset_name + "/valid.npy", valid)
 
         densedataset = DenseDataset(df.groupby('unique_cluster').sample(1), city)
         dataloader = torch.utils.data.DataLoader(
@@ -197,29 +209,34 @@ def create_dataset_part(
     for i in tqdm.tqdm(range(num_batches)):
 
         batch_idx = 0
+        cities_to_sample = [c for c in cluster_descriptors_dict.keys()]
+        city = cities_to_sample[0]
+        df = city_df[city]
+        descriptor = cluster_descriptors_dict[city]
+        valid = np.ones(len(df['unique_cluster'].unique()))
         while batch_idx < batch_size:
-
-            cities_to_sample = [c for c in cluster_descriptors_dict.keys()]
-            num_clusters = np.array([d.shape[0] for c, d in cluster_descriptors_dict.items()])
-            city = cities_to_sample[0]
-
-            df = city_df[city]
-            descriptor = cluster_descriptors_dict[city]
             
             # Sample a random cluster
-            place_id = np.random.choice(df.unique_cluster.unique())
+            available_clusters = df['unique_cluster'].unique()[valid == 1]
+            place_id = np.random.choice(available_clusters)
 
             # Compute similarity between the selected cluster and all the others
             distances = cdist(descriptor[place_id, None, :], descriptor)[0]
             # Normalize distances as probabilities (where min distance is max probability)
+            all_places = np.arange(df.unique_cluster.max() + 1)
             distances = np.delete(distances, place_id)
+            distances = np.delete(distances, np.where(valid == 0))
+            other_places = np.delete(np.arange(df.unique_cluster.max() + 1), place_id)
+            other_places = np.delete(other_places, np.where(valid == 0))
             topk = np.argsort(distances)[:sampled_similar_places]
 
             # Sample similar places
             ## My Changes: Change to use topk because the distances are similar and remove the the place itself from the sample
-            other_places = np.delete(np.arange(df.unique_cluster.max() + 1), place_id)
             other_places = other_places[topk]
             other_places = np.concatenate([np.array([place_id]), other_places])
+
+            valid[place_id] = 0
+            valid[other_places] = 0
 
             df = df[df['unique_cluster'].isin(other_places)]
 
@@ -360,7 +377,7 @@ class CliqueGenericDataset(Dataset):
 
         # Compute cluster descriptors if model is provided
         if model is not None:
-            cluster_descriptors_dict = compute_cluster_descriptors(city_df, model, self.dataset_name, same_place_threshold, cluster_desc_threshold_percentage)
+            cluster_descriptors_dict = compute_cluster_descriptors(city_df, model, self.dataset_name, same_place_threshold, num_images_per_place, cluster_desc_threshold_percentage)
             np.save(cluster_descriptors_path, cluster_descriptors_dict)
         elif os.path.isfile(cluster_descriptors_path):
             cluster_descriptors_dict = np.load(cluster_descriptors_path, allow_pickle=True).item()
@@ -368,7 +385,7 @@ class CliqueGenericDataset(Dataset):
             print('Model must be provided to compute cluster descriptors')
             print('- Computing descriptors using torch.hub DINOv2 SALAD')
             model = torch.hub.load("serizba/salad", "dinov2_salad").eval().cuda()
-            cluster_descriptors_dict = compute_cluster_descriptors(city_df, model, self.dataset_name, same_place_threshold, cluster_desc_threshold_percentage)
+            cluster_descriptors_dict = compute_cluster_descriptors(city_df, model, self.dataset_name, same_place_threshold, num_images_per_place, cluster_desc_threshold_percentage)
             np.save(cluster_descriptors_path, cluster_descriptors_dict)
 
         # Create dataset in parallel

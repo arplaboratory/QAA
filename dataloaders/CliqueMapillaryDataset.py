@@ -122,6 +122,7 @@ def create_dataset_part(
         num_images_per_place=4,
         sampled_similar_places=15,
         same_place_threshold=20.0,
+        only_top_k=False,
     ):
 
     import os
@@ -157,11 +158,20 @@ def create_dataset_part(
             # Compute similarity between the selected cluster and all the others
             distances = cdist(descriptor[place_id, None, :], descriptor)[0]
             # Normalize distances as probabilities (where min distance is max probability)
-            distances[distances != 0] = distances.max() - distances[distances != 0]
-            distances = distances / distances.sum()
+            if only_top_k:
+                distances = np.delete(distances, place_id)
+                topk = np.argsort(distances)[:sampled_similar_places]
 
-            # Sample similar places
-            other_places = np.random.choice(np.arange(df.unique_cluster.max() + 1), size=sampled_similar_places, p=distances, replace=False)
+                # Sample similar places
+                ## My Changes: Change to use topk because the distances are similar and remove the the place itself from the sample
+                other_places = np.delete(np.arange(df.unique_cluster.max() + 1), place_id)
+                other_places = other_places[topk]
+            else:
+                distances[distances != 0] = distances.max() - distances[distances != 0]
+                distances = distances / distances.sum()
+
+                # Sample similar places
+                other_places = np.random.choice(np.arange(df.unique_cluster.max() + 1), size=sampled_similar_places, p=distances, replace=False)
             other_places = np.concatenate([np.array([place_id]), other_places])
 
             df = df[df['unique_cluster'].isin(other_places)]
@@ -208,6 +218,7 @@ class CliqueMapillaryDataset(Dataset):
             num_images_per_place=4,
             sampled_similar_places=15,
             same_place_threshold=20.0,
+            only_top_k=False,
     ):
         super(CliqueMapillaryDataset, self).__init__()
         self.base_path = base_path
@@ -224,6 +235,7 @@ class CliqueMapillaryDataset(Dataset):
             num_images_per_place=num_images_per_place,
             sampled_similar_places=sampled_similar_places,
             same_place_threshold=same_place_threshold,
+            only_top_k=only_top_k,
         )
         
         
@@ -274,6 +286,7 @@ class CliqueMapillaryDataset(Dataset):
         num_images_per_place=4,
         sampled_similar_places=15,
         same_place_threshold=20.0,
+        only_top_k=False,
     ):
 
         city_df = load_city_df(BASE_PATH)
@@ -305,6 +318,7 @@ class CliqueMapillaryDataset(Dataset):
                 num_images_per_place,
                 sampled_similar_places,
                 same_place_threshold,
+                only_top_k,
             ) for _ in range(num_processes)]
             
             # Collect results in all_images
