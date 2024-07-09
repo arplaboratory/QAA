@@ -3,6 +3,7 @@ from pathlib import Path
 from PIL import Image, ImageFile, UnidentifiedImageError
 ImageFile.LOAD_TRUNCATED_IMAGES = True
 import torch
+import torch.nn.functional as F
 from torch.utils.data import Dataset
 import torchvision.transforms as T
 import numpy as np
@@ -81,6 +82,7 @@ def compute_cluster_descriptors(city_df, model, dataset_name, same_place_thresho
             img = self.valid_transform(img)
             return img, idx, row['unique_cluster']
 
+
     cluster_descriptors_dict = {}
     for city, df in tqdm.tqdm(city_df.items(), desc='Computing cluster descriptors'):
 
@@ -151,7 +153,7 @@ def compute_cluster_descriptors(city_df, model, dataset_name, same_place_thresho
             print(f'Creating {cluster_count} unique clusters')
             print(f"Average number of samples for each cluster: {average_count}")
 
-        densedataset = DenseDataset(df[df['representative'] == True], city)
+        densedataset = DenseDataset(df.groupby('unique_cluster').sample(1), city)
         dataloader = torch.utils.data.DataLoader(
             dataset=densedataset, 
             batch_size=batch_size,
@@ -162,6 +164,7 @@ def compute_cluster_descriptors(city_df, model, dataset_name, same_place_thresho
         )
 
         cluster_descriptors = torch.zeros((df.unique_cluster.max() + 1, descriptor_size)).cuda()
+
         # Compute descriptors for each cluster
         with torch.no_grad():
             for batch in tqdm.tqdm(dataloader):
@@ -209,11 +212,13 @@ def create_dataset_part(
             # Compute similarity between the selected cluster and all the others
             distances = cdist(descriptor[place_id, None, :], descriptor)[0]
             # Normalize distances as probabilities (where min distance is max probability)
-            distances[distances != 0] = distances.max() - distances[distances != 0]
-            distances = distances / distances.sum()
+            distances = np.delete(distances, place_id)
+            topk = np.argsort(distances)[:sampled_similar_places]
 
             # Sample similar places
-            other_places = np.random.choice(np.arange(df.unique_cluster.max() + 1), size=sampled_similar_places, p=distances, replace=False)
+            ## My Changes: Change to use topk because the distances are similar and remove the the place itself from the sample
+            other_places = np.delete(np.arange(df.unique_cluster.max() + 1), place_id)
+            other_places = other_places[topk]
             other_places = np.concatenate([np.array([place_id]), other_places])
 
             df = df[df['unique_cluster'].isin(other_places)]
@@ -230,6 +235,7 @@ def create_dataset_part(
                         break
                 else:
                     break
+
                 neighbors = np.unique(np.where(utms[clique, :])[1])
 
                 # Append place to batch
@@ -259,16 +265,23 @@ class CliqueGenericDataset(Dataset):
             num_images_per_place=4,
             sampled_similar_places=15,
             same_place_threshold=20.0,
-            cluster_desc_threshold_percentage=0.7,
+            cluster_desc_threshold_percentage=0.1,
+            recompute_clusters=False,
     ):
         super(CliqueGenericDataset, self).__init__()
         self.dataset_name = dataset_name
         self.transform = transform
         self.split = split
 
-        self.batch_size = batch_size
         self.num_batches = num_batches
-
+        self.batch_size = batch_size
+        self.num_processes = num_processes
+        self.num_images_per_place = num_images_per_place
+        self.sampled_similar_places = sampled_similar_places
+        self.same_place_threshold = same_place_threshold
+        self.cluster_desc_threshold_percentage = cluster_desc_threshold_percentage
+        self.recompute_clusters = recompute_clusters
+        
         self.create_dataset(
             num_batches=num_batches,
             num_processes=num_processes,
@@ -315,7 +328,18 @@ class CliqueGenericDataset(Dataset):
         
 
     def reload(self):
-        self.data = self.data[np.random.permutation(self.data.shape[0])]
+        if self.recompute_clusters:
+            self.create_dataset(
+            num_batches=self.num_batches,
+            num_processes=self.num_processes,
+            batch_size=self.batch_size,
+            num_images_per_place=self.num_images_per_place,
+            sampled_similar_places=self.sampled_similar_places,
+            same_place_threshold=self.same_place_threshold,
+            cluster_desc_threshold_percentage=self.cluster_desc_threshold_percentage,
+            )
+        else:
+            self.data = self.data[np.random.permutation(self.data.shape[0])]
         
 
     def create_dataset(
@@ -327,11 +351,11 @@ class CliqueGenericDataset(Dataset):
         num_images_per_place=4,
         sampled_similar_places=15,
         same_place_threshold=20.0,
-        cluster_desc_threshold_percentage=0.7,
+        cluster_desc_threshold_percentage=0.1,
     ):
 
         city_df = construct_df(self.dataset_name, self.split, same_place_threshold)
-        
+
         cluster_descriptors_path = f'cache/datasets/{self.dataset_name}/cluster_descriptors.npy'
 
         # Compute cluster descriptors if model is provided
