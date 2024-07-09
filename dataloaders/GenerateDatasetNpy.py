@@ -120,7 +120,30 @@ def save_dataset_npy_sfxl(database_folder, queries_folder, dataset_name, split, 
         # Save the dataset in .npy format
         np.save(join(f"cache/datasets/{dataset_name}{suffix}/", f"{dataset_name}_{split}_dbImages.npy"), database_paths)
         np.save(join(f"cache/datasets/{dataset_name}{suffix}/", f"{dataset_name}_{split}_gt.npy"), soft_positives_per_query, allow_pickle=True)
-    else: # Single level
+    elif split == "val": # Single level
+        database_paths = glob(join(database_folder, "*.jpg"), recursive=True)
+        database_paths.sort(key=lambda x: (float(x.split("@")[1]), float(x.split("@")[2])))
+        queries_paths = glob(join(queries_folder, "*.jpg"),  recursive=True)
+        queries_paths.sort(key=lambda x: (float(x.split("@")[1]), float(x.split("@")[2])))
+        # The format must be path/to/file/@utm_easting@utm_northing@...@.jpg
+        database_utms = np.array([(path.split("@")[1], path.split("@")[2]) for path in database_paths]).astype(float)
+        queries_utms = np.array([(path.split("@")[1], path.split("@")[2]) for path in queries_paths]).astype(float)
+        # Find soft_positives_per_query, which are within val_positive_dist_threshold (deafult 25 meters)
+        knn = NearestNeighbors(n_jobs=-1)
+        knn.fit(database_utms)
+        soft_positives_per_query = knn.radius_neighbors(queries_utms,
+                                                        radius=val_positive_dist_threshold,
+                                                        return_distance=False)
+        for i in range(len(soft_positives_per_query)):
+            soft_positives_per_query[i].sort()
+        # Save the dataset in cache/datasets/{dataset_name}{suffix}/
+        if not os.path.exists(f"cache/datasets/{dataset_name}{suffix}/"):
+            os.makedirs(f"cache/datasets/{dataset_name}{suffix}/")
+        # Save the dataset in .npy format
+        np.save(join(f"cache/datasets/{dataset_name}{suffix}/", f"{dataset_name}_{split}_dbImages.npy"), database_paths)
+        np.save(join(f"cache/datasets/{dataset_name}{suffix}/", f"{dataset_name}_{split}_qImages.npy"), queries_paths)
+        np.save(join(f"cache/datasets/{dataset_name}{suffix}/", f"{dataset_name}_{split}_gt.npy"), soft_positives_per_query, allow_pickle=True)
+    elif split == "test": # Single level
         database_paths = glob(join(database_folder, "**", "*.jpg"), recursive=True)
         database_paths.sort(key=lambda x: (float(x.split("@")[1]), float(x.split("@")[2])))
         queries_paths = glob(join(queries_folder, "*.jpg"),  recursive=True)
