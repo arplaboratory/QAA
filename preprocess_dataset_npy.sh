@@ -49,3 +49,18 @@ overlay_path="datasets_sqf/mapillary_sls.sqf"
 singularity exec --overlay $overlay_path:ro \
                  /scratch/work/public/singularity/cuda12.1.1-cudnn8.9.0-devel-ubuntu22.04.2.sif \
                  /bin/bash -c "source ~/.bashrc; conda activate UniVG; python3 dataloaders/GenerateDatasetNpy.py --dataset_name mapillary_sls --split train; python3 dataloaders/GenerateDatasetNpy.py --dataset_name mapillary_sls --split val; python3 dataloaders/GenerateDatasetNpy.py --dataset_name mapillary_sls --split test"
+
+overlay_path="datasets_sqf/SF_XL_train.sqf"
+singularity exec --overlay $overlay_path:ro \
+                 /scratch/work/public/singularity/cuda12.1.1-cudnn8.9.0-devel-ubuntu22.04.2.sif \
+                 /bin/bash -c "source ~/.bashrc; conda activate UniVG; python3 dataloaders/GenerateDatasetNpy.py --dataset_name SF_XL --split train"
+
+overlay_path="datasets_sqf/SF_XL_val.sqf"
+singularity exec --overlay $overlay_path:ro \
+                 /scratch/work/public/singularity/cuda12.1.1-cudnn8.9.0-devel-ubuntu22.04.2.sif \
+                 /bin/bash -c "source ~/.bashrc; conda activate UniVG; python3 dataloaders/GenerateDatasetNpy.py --dataset_name SF_XL --split val"
+
+overlay_path="datasets_sqf/SF_XL_test.sqf"
+singularity exec --overlay $overlay_path:ro \
+                 /scratch/work/public/singularity/cuda12.1.1-cudnn8.9.0-devel-ubuntu22.04.2.sif \
+                 /bin/bash -c "source ~/.bashrc; conda activate UniVG; python3 dataloaders/GenerateDatasetNpy.py --dataset_name SF_XL --split test"
