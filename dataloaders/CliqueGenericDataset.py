@@ -47,7 +47,7 @@ def construct_df(dataset_name, split, same_place_threshold):
         cluster_id = np.load("cache/datasets/" + dataset_name + "/cluster_id.npy")
         representative = np.load("cache/datasets/" + dataset_name + "/representative.npy")
         valid =  np.load("cache/datasets/" + dataset_name + "/valid.npy")
-        df = df[df['valid'] == True]
+        df = df[valid]
         cluster_count = len(np.unique(cluster_id))
         df['unique_cluster'] = cluster_id
         df['representative'] = representative
@@ -152,6 +152,8 @@ def compute_cluster_descriptors(city_df, model, dataset_name, same_place_thresho
             print(f'Removing {len(clusters_to_remove)} clusters with less than {num_images_per_place} samples')
             print(f'Before Removal: {len(df)} samples')
             df.loc[df['unique_cluster'].isin(clusters_to_remove), 'valid'] = False
+            valid = df['valid']
+            np.save("cache/datasets/" + dataset_name + "/valid.npy", valid)
             df = df[df['valid'] == True]
             print(f'After Removal: {len(df)} samples')
             average_count = df.groupby('unique_cluster').size().mean()
@@ -160,10 +162,8 @@ def compute_cluster_descriptors(city_df, model, dataset_name, same_place_thresho
             print(f"Average number of samples for each cluster: {average_count}")
             cluster_id = df['unique_cluster']
             representative = df['representative']
-            valid = df['valid']
             np.save("cache/datasets/" + dataset_name + "/cluster_id.npy", cluster_id)
             np.save("cache/datasets/" + dataset_name + "/representative.npy", representative)
-            np.save("cache/datasets/" + dataset_name + "/valid.npy", valid)
 
         densedataset = DenseDataset(df.groupby('unique_cluster').sample(1), city)
         dataloader = torch.utils.data.DataLoader(
