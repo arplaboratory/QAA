@@ -177,7 +177,7 @@ class VPRModel(pl.LightningModule):
             denormalized_image = places.cpu() * std_tensor + mean_tensor
             denormalized_image = torch.clamp(denormalized_image, 0, 1)
             list_images = [img for img in denormalized_image.view(-1, denormalized_image.shape[-3], denormalized_image.shape[-2], denormalized_image.shape[-1])]
-            list_images = list_images[:16]
+            list_images = list_images[:64]
             self.logger.log_image('input_images', list_images)
         # Note that GSVCities yields places (each containing N images)
         # which means the dataloader will return a batch containing BS places

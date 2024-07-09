@@ -57,7 +57,7 @@ if __name__ == '__main__':
         mode='max'
     )
 
-    lr_monitor = LearningRateMonitor(logging_interval='epoch')
+    lr_monitor = pl.callbacks.LearningRateMonitor(logging_interval='epoch')
 
     #------------------
     # we instanciate a trainer
