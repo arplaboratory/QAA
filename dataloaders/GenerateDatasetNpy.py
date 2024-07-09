@@ -163,9 +163,9 @@ def save_dataset_npy_sfxl(database_folder, queries_folder, dataset_name, split, 
         if not os.path.exists(f"cache/datasets/{dataset_name}{suffix}/"):
             os.makedirs(f"cache/datasets/{dataset_name}{suffix}/")
         # Save the dataset in .npy format
-        np.save(join(f"cache/datasets/{dataset_name}{suffix}/", f"{dataset_name}_{split}_dbImages.npy"), database_paths)
-        np.save(join(f"cache/datasets/{dataset_name}{suffix}/", f"{dataset_name}_{split}_qImages.npy"), queries_paths)
-        np.save(join(f"cache/datasets/{dataset_name}{suffix}/", f"{dataset_name}_{split}_gt.npy"), soft_positives_per_query, allow_pickle=True)
+        np.save(join(f"cache/datasets/{dataset_name}{suffix}/", f"{dataset_name}{suffix}_{split}_dbImages.npy"), database_paths)
+        np.save(join(f"cache/datasets/{dataset_name}{suffix}/", f"{dataset_name}{suffix}_{split}_qImages.npy"), queries_paths)
+        np.save(join(f"cache/datasets/{dataset_name}{suffix}/", f"{dataset_name}{suffix}_{split}_gt.npy"), soft_positives_per_query, allow_pickle=True)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Generate dataset in .npy format")

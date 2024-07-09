@@ -11,6 +11,7 @@ from dataloaders.MapillaryDataset import MapillaryDataset, MapillaryTestDataset
 from dataloaders.CliqueMapillaryDataset import CliqueMapillaryDataset
 from dataloaders.CliqueGenericDataset import CliqueGenericDataset
 from utils.load_cfg import load_datasets_config
+import wandb
 
 IMAGENET_MEAN_STD = {'mean': [0.485, 0.456, 0.406], 
                      'std': [0.229, 0.224, 0.225]}
@@ -40,6 +41,7 @@ class GenericDataModule(pl.LightningDataModule):
         self.train_datasets_cfg = load_datasets_config(self.train_dataset_names)
         self.val_datasets_cfg = load_datasets_config(self.val_dataset_names)
         self.test_datasets_cfg = load_datasets_config(self.test_dataset_names)
+        self.model = None
 
         self.train_transform = T.Compose([
             T.Resize(image_size, interpolation=T.InterpolationMode.BILINEAR),
@@ -155,19 +157,19 @@ class GenericDataModule(pl.LightningDataModule):
                 else:
                     self.test_datasets.append(GenericDataset(dataset_name=dataset_name, split="test", input_transform=self.test_transform, backup_transform=self.test_grayscale_transform))
     
+        wandb.config.update({'train_datasets': self.train_datasets_cfg, 'val_datasets': self.val_datasets_cfg, 'test_datasets': self.test_datasets_cfg})
 
     def reload(self, dataset_name, index):
         if dataset_name == "GSV":
             GSV_params = self.train_datasets_cfg["GSV"]
-            self.train_datasets[index] = GSVCitiesDataset(
-                                                                    split="train",
-                                                                    cities=GSV_params.training.GSV_TRAIN_CITIES,
-                                                                    img_per_place=GSV_params.training.img_per_place,
-                                                                    min_img_per_place=GSV_params.training.min_img_per_place,
-                                                                    random_sample_from_each_place=GSV_params.training.random_sample_from_each_place,
-                                                                    transform=self.train_transform)
+            self.train_datasets[index] = GSVCitiesDataset(split="train",
+                                                        cities=GSV_params.training.GSV_TRAIN_CITIES,
+                                                        img_per_place=GSV_params.training.img_per_place,
+                                                        min_img_per_place=GSV_params.training.min_img_per_place,
+                                                        random_sample_from_each_place=GSV_params.training.random_sample_from_each_place,
+                                                        transform=self.train_transform)
         else:
-            self.train_datasets[index].reload()
+            self.train_datasets[index].reload(model=self.model)
 
     def train_dataloader(self):
         train_dataloaders = {}
@@ -233,7 +235,5 @@ class GenericDataModule(pl.LightningDataModule):
         table.add_row(["Image size", f"{self.image_size}"])
         print(table.get_string(title="Training config"))
 
-    def log_params(self, logger):
-        logger.experiment.config['train_datasets'] = train_datasets_cfg
-        logger.experiment.config['val_datasets'] = val_datasets_cfg
-        logger.experiment.config['test_datasets'] = test_datasets_cfg
+    def update_model(self, model):
+        self.model = model

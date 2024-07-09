@@ -343,9 +343,10 @@ class CliqueGenericDataset(Dataset):
             return Image.new('RGB', (224, 224))
         
 
-    def reload(self):
+    def reload(self, model=None):
         if self.recompute_clusters:
             self.create_dataset(
+                model=model,
                 num_batches=self.num_batches,
                 num_processes=self.num_processes,
                 batch_size=self.batch_size,
