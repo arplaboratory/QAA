@@ -20,6 +20,7 @@ datasets:
     - pitts250k
     - mapillary_sls
     - svox
+    - SF_XL
   test_datasets:
     - pitts30k
     - pitts250k
@@ -31,6 +32,8 @@ datasets:
     - nordland_subset
     - amstertime
     - eynsham
+    - SF_XL_v1
+    - SF_XL_v2
   target_val_dataset: mapillary_sls
 training:
   num_epochs: 30

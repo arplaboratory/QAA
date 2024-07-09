@@ -1,0 +1,7 @@
+# Dataset Training Parameters
+training:
+  available: True
+validation:
+  available: True
+test:
+  available: False # Need to indicate the specific set
