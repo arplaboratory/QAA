@@ -48,7 +48,7 @@ training:
     args:
       start_factor: 1
       end_factor: 0.2
-      total_iters: 30
+      total_iters: 4000
   loss:
     name: 'MultiSimilarityLoss'
   miner:
