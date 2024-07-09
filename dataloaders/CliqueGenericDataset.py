@@ -41,16 +41,13 @@ def construct_df(dataset_name, split, same_place_threshold):
     q.insert(0, 'northing', northing)
     df = pd.concat([db, q], ignore_index=True)
     df.insert(0, 'unique_cluster', -1)
-    df.insert(0, 'representative', False)
     df.insert(0, 'valid', True)
     if os.path.isfile("cache/datasets/" + dataset_name + "/cluster_id.npy"):
         cluster_id = np.load("cache/datasets/" + dataset_name + "/cluster_id.npy")
-        representative = np.load("cache/datasets/" + dataset_name + "/representative.npy")
         valid =  np.load("cache/datasets/" + dataset_name + "/valid.npy")
         df = df[valid]
         cluster_count = len(np.unique(cluster_id))
         df['unique_cluster'] = cluster_id
-        df['representative'] = representative
         print(f'Loading {cluster_count} unique clusters')
         average_count = df.groupby('unique_cluster').size().mean()
         print(f"Average number of samples for each cluster: {average_count}")
@@ -127,22 +124,18 @@ def compute_cluster_descriptors(city_df, model, dataset_name, same_place_thresho
             cluster_id = 0
             print("Allocating clusters")
             while len(available_keys)>0:
-                try:
-                    query_key = np.random.choice(available_keys, 1, replace=False)
-                except Exception as e:
-                    query_key = available_keys
-                query_idx_in_df = df[df['key'].isin(query_key)].index.values.astype(int)[0]
-                query_desc = instance_descriptors[query_idx_in_df:query_idx_in_df+1]
-                positives_idxs_in_df = soft_positives_per_query[query_idx_in_df]
-                positives_desc = instance_descriptors[positives_idxs_in_df]
-                distances = torch.cdist(query_desc, positives_desc).squeeze(0)
-                for i in range(len(positives_desc)):
-                    if distances[i] <= distances_threshold:
-                        df.loc[positives_idxs_in_df[i], 'unique_cluster'] = cluster_id
-                        available_keys = np.delete(available_keys, np.where(available_keys == df.iloc[positives_idxs_in_df[i]]['key'])[0])
-                df.loc[query_idx_in_df, 'unique_cluster'] = cluster_id
-                available_keys = np.delete(available_keys, np.where(available_keys == df.iloc[query_idx_in_df]['key'])[0])
-                df.loc[query_idx_in_df, 'representative'] = True
+                query_key = np.random.choice(available_keys, 1, replace=False)
+                for l in range(3): # Extend 2 levels
+                    query_idx_in_df = df[df['key'].isin(query_key)].index
+                    df.loc[query_idx_in_df, 'unique_cluster'] = cluster_id
+                    available_keys = np.setdiff1d(available_keys, query_key)
+                    query_desc = instance_descriptors[query_idx_in_df]
+                    positives_idxs_in_df = soft_positives_per_query[query_idx_in_df]
+                    for i in range(len(query_desc)):
+                        positives_desc = instance_descriptors[positives_idxs_in_df[i]]
+                        distances = torch.cdist(query_desc, positives_desc)
+                        df.loc[positives_idxs_in_df[i][(distances[i] <= distances_threshold).cpu()], 'unique_cluster'] = cluster_id
+                    query_key = df[df['unique_cluster'] == cluster_id]['key'].values
                 cluster_id += 1
                 print("Unassigned keys: ", len(available_keys))
             print("Done")
@@ -161,9 +154,7 @@ def compute_cluster_descriptors(city_df, model, dataset_name, same_place_thresho
             print(f'Creating {cluster_count} unique clusters')
             print(f"Average number of samples for each cluster: {average_count}")
             cluster_id = df['unique_cluster']
-            representative = df['representative']
             np.save("cache/datasets/" + dataset_name + "/cluster_id.npy", cluster_id)
-            np.save("cache/datasets/" + dataset_name + "/representative.npy", representative)
 
         densedataset = DenseDataset(df.groupby('unique_cluster').sample(1), city)
         dataloader = torch.utils.data.DataLoader(
@@ -217,17 +208,17 @@ def create_dataset_part(
         while batch_idx < batch_size:
             
             # Sample a random cluster
+            print(df['unique_cluster'].unique().shape)
             available_clusters = df['unique_cluster'].unique()[valid == 1]
-            place_id = np.random.choice(available_clusters)
+            available_descriptor = descriptor[available_clusters]
+            place_id_idx = np.random.choice(len(available_clusters))
+            place_id = available_clusters[place_id_idx]
 
             # Compute similarity between the selected cluster and all the others
-            distances = cdist(descriptor[place_id, None, :], descriptor)[0]
+            distances = cdist(available_descriptor[place_id_idx, None, :], available_descriptor)[0]
             # Normalize distances as probabilities (where min distance is max probability)
-            all_places = np.arange(df.unique_cluster.max() + 1)
-            distances = np.delete(distances, place_id)
-            distances = np.delete(distances, np.where(valid == 0))
-            other_places = np.delete(np.arange(df.unique_cluster.max() + 1), place_id)
-            other_places = np.delete(other_places, np.where(valid == 0))
+            distances = np.delete(distances, place_id_idx)
+            other_places = np.delete(available_clusters, place_id_idx)
             topk = np.argsort(distances)[:sampled_similar_places]
 
             # Sample similar places
@@ -235,13 +226,13 @@ def create_dataset_part(
             other_places = other_places[topk]
             other_places = np.concatenate([np.array([place_id]), other_places])
 
-            valid[place_id] = 0
-            valid[other_places] = 0
+            invalid_idx = np.where(np.isin(df['unique_cluster'].unique(), other_places, assume_unique=True))[0]
+            valid[invalid_idx] = 0
 
-            df = df[df['unique_cluster'].isin(other_places)]
+            current_df = df[df['unique_cluster'].isin(other_places)]
 
             # Create adjacency matrix from UTM coordinates (two places are connected if they are closer than same_place_threshold)
-            utms = squareform(pdist(df[['easting', 'northing']].values)) < same_place_threshold
+            utms = squareform(pdist(current_df[['easting', 'northing']].values)) < same_place_threshold
 
             while batch_idx < batch_size:
 
@@ -256,7 +247,7 @@ def create_dataset_part(
                 neighbors = np.unique(np.where(utms[clique, :])[1])
 
                 # Append place to batch
-                rows = df.iloc[list(clique)]
+                rows = current_df.iloc[list(clique)]
                 images[i, batch_idx] = rows['key'].values
                 batch_idx += 1
 
