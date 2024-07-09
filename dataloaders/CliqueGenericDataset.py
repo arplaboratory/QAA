@@ -295,6 +295,7 @@ class CliqueGenericDataset(Dataset):
         self.same_place_threshold = same_place_threshold
         self.cluster_desc_threshold_percentage = cluster_desc_threshold_percentage
         self.recompute_clusters = recompute_clusters
+        self.only_top_k = only_top_k
 
         self.create_dataset(
             num_batches=num_batches,
@@ -352,6 +353,7 @@ class CliqueGenericDataset(Dataset):
                 sampled_similar_places=self.sampled_similar_places,
                 same_place_threshold=self.same_place_threshold,
                 cluster_desc_threshold_percentage=self.cluster_desc_threshold_percentage,
+                only_top_k=self.only_top_k,
             )
         else:
             self.data = self.data[np.random.permutation(self.data.shape[0])]

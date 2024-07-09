@@ -218,6 +218,7 @@ class CliqueMapillaryDataset(Dataset):
             sampled_similar_places=15,
             same_place_threshold=20.0,
             only_top_k=False,
+            recompute_clusters=False,
     ):
         super(CliqueMapillaryDataset, self).__init__()
         self.base_path = base_path
@@ -226,6 +227,8 @@ class CliqueMapillaryDataset(Dataset):
 
         self.num_batches = num_batches
         self.batch_size = batch_size
+        self.recompute_clusters = recompute_clusters
+        self.only_top_k = only_top_k
 
         self.create_dataset(
             num_batches=num_batches,
@@ -273,7 +276,19 @@ class CliqueMapillaryDataset(Dataset):
         
 
     def reload(self):
-        self.data = self.data[np.random.permutation(self.data.shape[0])]
+        if self.recompute_clusters:
+            self.create_dataset(
+                num_batches=self.num_batches,
+                num_processes=self.num_processes,
+                batch_size=self.batch_size,
+                num_images_per_place=self.num_images_per_place,
+                sampled_similar_places=self.sampled_similar_places,
+                same_place_threshold=self.same_place_threshold,
+                cluster_desc_threshold_percentage=self.cluster_desc_threshold_percentage,
+                only_top_k=self.only_top_k,
+            )
+        else:
+            self.data = self.data[np.random.permutation(self.data.shape[0])]
         
 
     def create_dataset(
@@ -295,7 +310,7 @@ class CliqueMapillaryDataset(Dataset):
         # Compute cluster descriptors if model is provided
         if model is not None:
             cluster_descriptors_dict = compute_cluster_descriptors(city_df, model)
-            np.save(cluster_descriptors_path, cluster_descriptors_dict)
+            # np.save(cluster_descriptors_path, cluster_descriptors_dict)
         elif os.path.isfile(cluster_descriptors_path):
             cluster_descriptors_dict = np.load(cluster_descriptors_path, allow_pickle=True).item()
         else:
@@ -303,7 +318,7 @@ class CliqueMapillaryDataset(Dataset):
             print('- Computing descriptors using torch.hub DINOv2 SALAD')
             model = torch.hub.load("serizba/salad", "dinov2_salad").eval().cuda()
             cluster_descriptors_dict = compute_cluster_descriptors(city_df, model)
-            np.save(cluster_descriptors_path, cluster_descriptors_dict)
+            # np.save(cluster_descriptors_path, cluster_descriptors_dict)
 
         # Create dataset in parallel
         all_images = []
