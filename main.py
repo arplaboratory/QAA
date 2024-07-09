@@ -59,6 +59,8 @@ if __name__ == '__main__':
 
     lr_monitor = pl.callbacks.LearningRateMonitor(logging_interval='epoch')
 
+    datamodule.log_params(wandb_logger)
+
     #------------------
     # we instanciate a trainer
     trainer = pl.Trainer(

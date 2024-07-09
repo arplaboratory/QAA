@@ -232,3 +232,8 @@ class GenericDataModule(pl.LightningDataModule):
             ["# of iterations", f"{GSV_dataset.__len__()//self.batch_size}"])
         table.add_row(["Image size", f"{self.image_size}"])
         print(table.get_string(title="Training config"))
+
+    def log_params(self, logger):
+        logger.experiment.config['train_datasets'] = train_datasets_cfg
+        logger.experiment.config['val_datasets'] = val_datasets_cfg
+        logger.experiment.config['test_datasets'] = test_datasets_cfg
