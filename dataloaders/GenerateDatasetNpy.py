@@ -31,20 +31,20 @@ def generate_dataset_npy(datasets_folder, dataset_name, split, val_positive_dist
         if not os.path.exists(dataset_folder):
             raise FileNotFoundError(f"Folder {dataset_folder} does not exist")
         sfxl_query_types = ["queries_night", "queries_occlusion", "queries_v1", "queries_v2"]
-        database_folder = join(dataset_folder, "database", split)
+        database_folder = join(dataset_folder, "database")
         if split=="train": # Only DB images
             queries_folder = None
-            save_dataset_npy(database_folder, queries_folder, dataset_name, split, val_positive_dist_threshold)
+            save_dataset_npy_sfxl(database_folder, queries_folder, dataset_name, split, val_positive_dist_threshold)
         if split=="val":
             queries_folder = join(dataset_folder, "queries")
-            save_dataset_npy(database_folder, queries_folder, dataset_name, split, val_positive_dist_threshold)
-        elif split="test":
-            for query_type in svox_query_types:
+            save_dataset_npy_sfxl(database_folder, queries_folder, dataset_name, split, val_positive_dist_threshold)
+        elif split=="test":
+            for query_type in sfxl_query_types:
                 queries_folder = join(dataset_folder, query_type)
                 if query_type != "queries":
-                    save_dataset_npy(database_folder, queries_folder, dataset_name, split, val_positive_dist_threshold, suffix="_" + query_type.split("_")[-1])
+                    save_dataset_npy_sfxl(database_folder, queries_folder, dataset_name, split, val_positive_dist_threshold, suffix="_" + query_type.split("_")[-1])
                 else:
-                    save_dataset_npy(database_folder, queries_folder, dataset_name, split, val_positive_dist_threshold)
+                    save_dataset_npy_sfxl(database_folder, queries_folder, dataset_name, split, val_positive_dist_threshold)
     elif args.dataset_name == "mapillary_sls":
         dataset_folder = join(datasets_folder, dataset_name)
         if not os.path.exists(dataset_folder):
@@ -121,7 +121,7 @@ def save_dataset_npy_sfxl(database_folder, queries_folder, dataset_name, split, 
         np.save(join(f"cache/datasets/{dataset_name}{suffix}/", f"{dataset_name}_{split}_dbImages.npy"), database_paths)
         np.save(join(f"cache/datasets/{dataset_name}{suffix}/", f"{dataset_name}_{split}_gt.npy"), soft_positives_per_query, allow_pickle=True)
     else: # Single level
-        database_paths = glob(join(database_folder, "*.jpg"), recursive=True)
+        database_paths = glob(join(database_folder, "**", "*.jpg"), recursive=True)
         database_paths.sort(key=lambda x: (float(x.split("@")[1]), float(x.split("@")[2])))
         queries_paths = glob(join(queries_folder, "*.jpg"),  recursive=True)
         queries_paths.sort(key=lambda x: (float(x.split("@")[1]), float(x.split("@")[2])))
