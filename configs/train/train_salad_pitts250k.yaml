@@ -34,7 +34,7 @@ datasets:
   target_val_dataset: mapillary_sls
 training:
   num_epochs: 30
-  batch_size: 32
+  batch_size: 30
   num_workers: 12
   image_size: [224, 224]
   optimizer:

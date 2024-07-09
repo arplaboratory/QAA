@@ -7,6 +7,8 @@ training:
     num_processes: 10
     sampled_similar_places: 15
     cluster_desc_threshold_percentage: 0.1
+    only_top_k: False
+    recompute_clusters: False
 validation:
   available: True
 test:

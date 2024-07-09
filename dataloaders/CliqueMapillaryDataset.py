@@ -160,11 +160,10 @@ def create_dataset_part(
             # Normalize distances as probabilities (where min distance is max probability)
             if only_top_k:
                 distances = np.delete(distances, place_id)
-                topk = np.argsort(distances)[:sampled_similar_places]
-
-                # Sample similar places
-                ## My Changes: Change to use topk because the distances are similar and remove the the place itself from the sample
                 other_places = np.delete(np.arange(df.unique_cluster.max() + 1), place_id)
+                
+                # Sample similar places
+                topk = np.argsort(distances)[:sampled_similar_places]
                 other_places = other_places[topk]
             else:
                 distances[distances != 0] = distances.max() - distances[distances != 0]

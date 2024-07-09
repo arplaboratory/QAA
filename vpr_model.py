@@ -169,7 +169,6 @@ class VPRModel(pl.LightningModule):
     
     # This is the training step that's executed at each iteration
     def training_step(self, batch, batch_idx):
-        print(batch)
         prev_label = -1
         images = []
         labels = []

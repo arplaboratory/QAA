@@ -4,9 +4,11 @@ training:
   clique_args:
     same_place_threshold: 25.0
     num_batches: 4000
-    num_processes: 10
+    num_processes: 1 # DEBUG
     sampled_similar_places: 15
     cluster_desc_threshold_percentage: 0.1
+    only_top_k: False
+    recompute_clusters: False
 validation:
   available: True
 test:

@@ -6,6 +6,7 @@ training:
     num_batches: 4000
     num_processes: 10
     sampled_similar_places: 15
+    only_top_k: False
 validation:
   available: True
 test:
