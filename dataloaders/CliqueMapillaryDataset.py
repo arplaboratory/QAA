@@ -230,6 +230,7 @@ class CliqueMapillaryDataset(Dataset):
         self.num_processes = num_processes
         self.num_images_per_place = num_images_per_place
         self.sampled_similar_places = sampled_similar_places
+        self.same_place_threshold = same_place_threshold
         self.recompute_clusters = recompute_clusters
         self.only_top_k = only_top_k
 
