@@ -41,16 +41,6 @@ def construct_df(dataset_name, split, same_place_threshold):
     q.insert(0, 'northing', northing)
     df = pd.concat([db, q], ignore_index=True)
     df.insert(0, 'unique_cluster', -1)
-    df.insert(0, 'valid', True)
-    if os.path.isfile("cache/datasets/" + dataset_name + "/cluster_id.npy"):
-        cluster_id = np.load("cache/datasets/" + dataset_name + "/cluster_id.npy")
-        valid =  np.load("cache/datasets/" + dataset_name + "/valid.npy")
-        df['unique_cluster'] = cluster_id
-        df['valid'] = valid
-        cluster_count = len(np.unique(df['unique_cluster']))
-        print(f'Loading {cluster_count} unique clusters')
-        average_count = df.groupby('unique_cluster').size().mean()
-        print(f"Average number of samples for each cluster: {average_count}")
     city_df[dataset_name] = df
     return city_df
 
@@ -83,6 +73,7 @@ def compute_cluster_descriptors(city_df, model, dataset_name, same_place_thresho
 
     
     cluster_descriptors_dict = {}
+    cluster_id = 0
     for city, df in tqdm.tqdm(city_df.items(), desc='Computing cluster descriptors'):
 
         if not os.path.isfile("cache/datasets/" + dataset_name + "/cluster_id.npy"):
@@ -121,7 +112,6 @@ def compute_cluster_descriptors(city_df, model, dataset_name, same_place_thresho
             distances_threshold = torch.topk(distances_positive, round(cluster_desc_threshold_percentage * len(distances_positive)), largest=False)[0][-1]
             print(f"Found distance threshold of {cluster_desc_threshold_percentage * 100}% of the positives: {distances_threshold}")
             available_keys = np.array(df['key'])
-            cluster_id = 0
             print("Allocating clusters")
             while len(available_keys)>0:
                 query_key = np.random.choice(available_keys, 1, replace=False)
@@ -143,11 +133,6 @@ def compute_cluster_descriptors(city_df, model, dataset_name, same_place_thresho
             clusters_freq = df.groupby('unique_cluster').size()
             clusters_to_remove = clusters_freq[clusters_freq < num_images_per_place].index
             print(f'Removing {len(clusters_to_remove)} clusters with less than {num_images_per_place} samples')
-            df.loc[df['unique_cluster'].isin(clusters_to_remove), 'valid'] = False
-            valid = df['valid']
-            np.save("cache/datasets/" + dataset_name + "/valid.npy", valid)
-            cluster_id = df['unique_cluster']
-            np.save("cache/datasets/" + dataset_name + "/cluster_id.npy", cluster_id)
             average_count = df.groupby('unique_cluster').size().mean()
             cluster_count = len(np.unique(df['unique_cluster']))
             print(f'Creating {cluster_count} unique clusters')
@@ -198,7 +183,6 @@ def create_dataset_part(
     cities_to_sample = [c for c in cluster_descriptors_dict.keys()]
     city = cities_to_sample[0]
     df = city_df[city]
-    df = df[df['valid'] == True]
     descriptor = cluster_descriptors_dict[city]
 
     for i in tqdm.tqdm(range(num_batches)):

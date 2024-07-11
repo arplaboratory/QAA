@@ -314,7 +314,7 @@ class CliqueMapillaryDataset(Dataset):
         # Compute cluster descriptors if model is provided
         if model is not None:
             cluster_descriptors_dict = compute_cluster_descriptors(city_df, model)
-            # np.save(cluster_descriptors_path, cluster_descriptors_dict)
+            np.save(cluster_descriptors_path, cluster_descriptors_dict)
         elif os.path.isfile(cluster_descriptors_path):
             cluster_descriptors_dict = np.load(cluster_descriptors_path, allow_pickle=True).item()
         else:
@@ -322,7 +322,7 @@ class CliqueMapillaryDataset(Dataset):
             print('- Computing descriptors using torch.hub DINOv2 SALAD')
             model = torch.hub.load("serizba/salad", "dinov2_salad").eval().cuda()
             cluster_descriptors_dict = compute_cluster_descriptors(city_df, model)
-            # np.save(cluster_descriptors_path, cluster_descriptors_dict)
+            np.save(cluster_descriptors_path, cluster_descriptors_dict)
 
         # Create dataset in parallel
         all_images = []
