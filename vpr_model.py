@@ -284,7 +284,7 @@ class VPRModel(pl.LightningModule):
         self.val_outputs = []
 
         print("Update model for recomputing if recomputing is enabled")
-        dm.model = self.model
+        dm.model = self # Not sure if this is correct
 
     # For validation, we will also iterate step by step over the validation set
     # this is the way Pytorch Lghtning is made. All about modularity, folks.

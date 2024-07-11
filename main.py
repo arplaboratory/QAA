@@ -20,7 +20,8 @@ if __name__ == '__main__':
         batch_size=train_cfg.training.batch_size,
         image_size=train_cfg.training.image_size,
         num_workers=train_cfg.training.num_workers,
-        dataset_names=train_cfg.datasets
+        dataset_names=train_cfg.datasets,
+        train_cfg_training=train_cfg.training,
     )
     
     model = VPRModel(
