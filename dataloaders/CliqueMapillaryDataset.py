@@ -289,7 +289,6 @@ class CliqueMapillaryDataset(Dataset):
                 num_images_per_place=self.num_images_per_place,
                 sampled_similar_places=self.sampled_similar_places,
                 same_place_threshold=self.same_place_threshold,
-                cluster_desc_threshold_percentage=self.cluster_desc_threshold_percentage,
                 only_top_k=self.only_top_k,
             )
         else:

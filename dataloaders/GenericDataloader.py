@@ -26,7 +26,8 @@ class GenericDataModule(pl.LightningDataModule):
                  num_workers=4,
                  mean_std=IMAGENET_MEAN_STD,
                  batch_sampler=None,
-                 dataset_names=None
+                 dataset_names=None,
+                 train_cfg_training=None
                  ):
         super().__init__()
         self.batch_size = batch_size
@@ -41,11 +42,12 @@ class GenericDataModule(pl.LightningDataModule):
         self.train_datasets_cfg = load_datasets_config(self.train_dataset_names)
         self.val_datasets_cfg = load_datasets_config(self.val_dataset_names)
         self.test_datasets_cfg = load_datasets_config(self.test_dataset_names)
+        self.train_cfg_training = train_cfg_training
         self.model = None
 
         self.train_transform = T.Compose([
             T.Resize(image_size, interpolation=T.InterpolationMode.BILINEAR),
-            # T.RandAugment(num_ops=3, interpolation=T.InterpolationMode.BILINEAR),
+            T.RandAugment(num_ops=3, interpolation=T.InterpolationMode.BILINEAR),
             T.ToTensor(),
             T.Normalize(mean=self.mean_dataset, std=self.std_dataset),
         ])
@@ -120,6 +122,8 @@ class GenericDataModule(pl.LightningDataModule):
                                                 split="train", 
                                                 transform=self.train_transform,
                                                 batch_size=self.batch_size,
+                                                only_top_k=self.train_cfg_training.only_top_k,
+                                                recompute_clusters=self.train_cfg_training.recompute_clusters,
                                                 **self.train_datasets_cfg["mapillary_sls"].training.clique_args))
                 else:
                     self.train_datasets.append(CliqueGenericDataset(
@@ -127,6 +131,8 @@ class GenericDataModule(pl.LightningDataModule):
                                                 split="train", 
                                                 transform=self.train_transform,
                                                 batch_size=self.batch_size,
+                                                only_top_k=self.train_cfg_training.only_top_k,
+                                                recompute_clusters=self.train_cfg_training.recompute_clusters,
                                                 **self.train_datasets_cfg[dataset_name].training.clique_args))
 
             # load validation sets (pitts_val, msls_val, ...etc)
