@@ -46,12 +46,12 @@ def load_city_df(base_path):
         )
         q.insert(0, 'query', True)
 
-        df = pd.concat([db, q])
+        df = pd.concat([db, q], ignore_index=True)
 
         # Remove where pano is True
         df = df[df['pano'] == False]
 
-        city_df[city.name] = df
+        city_df[city.name] = df.reset_index()
         average_count = df.groupby('unique_cluster').size().mean()
         print(f"Average number of samples for each cluster for city {city.name}: {average_count}")
 
