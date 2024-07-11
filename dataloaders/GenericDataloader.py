@@ -10,6 +10,7 @@ from dataloaders.GenericDataset import GenericDataset
 from dataloaders.MapillaryDataset import MapillaryDataset, MapillaryTestDataset
 from dataloaders.CliqueMapillaryDataset import CliqueMapillaryDataset
 from dataloaders.CliqueGenericDataset import CliqueGenericDataset
+from dataloaders.CliqueSFXLDataset import CliqueSFXLDataset
 from utils.load_cfg import load_datasets_config
 import wandb
 
@@ -84,14 +85,14 @@ class GenericDataModule(pl.LightningDataModule):
                 'shuffle': self.train_datasets_cfg["GSV"].training.shuffle_all}
 
         self.valid_loader_config = {
-            'batch_size': self.batch_size,
+            'batch_size': self.batch_size * 4,
             'num_workers': self.num_workers,
             'drop_last': False,
             'pin_memory': True,
             'shuffle': False}
 
         self.test_loader_config = {
-            'batch_size': self.batch_size,
+            'batch_size': self.batch_size * 4,
             'num_workers': self.num_workers,
             'drop_last': False,
             'pin_memory': True,
@@ -125,6 +126,14 @@ class GenericDataModule(pl.LightningDataModule):
                                                 only_top_k=self.train_cfg_training.only_top_k,
                                                 recompute_clusters=self.train_cfg_training.recompute_clusters,
                                                 **self.train_datasets_cfg["mapillary_sls"].training.clique_args))
+                elif dataset_name == "SF_XL":
+                    self.train_datasets.append(CliqueSFXLDataset(
+                                                split="train",
+                                                transform=self.train_transform,
+                                                batch_size=self.batch_size,
+                                                only_top_k=self.train_cfg_training.only_top_k,
+                                                recompute_clusters=self.train_cfg_training.recompute_clusters,
+                                                **self.train_datasets_cfg["SF_XL"].training.clique_args))
                 else:
                     self.train_datasets.append(CliqueGenericDataset(
                                                 dataset_name=dataset_name, 
@@ -202,7 +211,7 @@ class GenericDataModule(pl.LightningDataModule):
         test_dataloaders = []
         for test_dataset in self.test_datasets:
             test_dataloaders.append(DataLoader(
-                dataset=test_dataset, **self.valid_loader_config))
+                dataset=test_dataset, **self.test_loader_config))
         return test_dataloaders
 
     def print_GSV_stats(self, GSV_dataset, GSV_params):
