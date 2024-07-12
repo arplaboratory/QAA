@@ -300,20 +300,20 @@ class CliqueSFXLDataset(Dataset):
 
         city_df = load_city_df()
 
-        cluster_descriptors_path = 'cache/datasets/SF_XL/cluster_descriptors.npy'
+        cluster_descriptors_path = 'cache/datasets/SF_XL/cluster_descriptors.pth'
 
         # Compute cluster descriptors if model is provided
         if model is not None:
             cluster_descriptors_dict = compute_cluster_descriptors(city_df, model)
-            np.save(cluster_descriptors_path, cluster_descriptors_dict)
+            torch.save(cluster_descriptors_dict, cluster_descriptors_path, pickle_protocol=4)
         elif os.path.isfile(cluster_descriptors_path):
-            cluster_descriptors_dict = np.load(cluster_descriptors_path, allow_pickle=True).item()
+            cluster_descriptors_dict = torch.load(cluster_descriptors_path).item()
         else:
             print('Model must be provided to compute cluster descriptors')
             print('- Computing descriptors using torch.hub DINOv2 SALAD')
             model = torch.hub.load("serizba/salad", "dinov2_salad").eval().cuda()
             cluster_descriptors_dict = compute_cluster_descriptors(city_df, model)
-            np.save(cluster_descriptors_path, cluster_descriptors_dict)
+            torch.save(cluster_descriptors_dict, cluster_descriptors_path, pickle_protocol=4)
 
         # Create dataset in parallel
         all_images = []
