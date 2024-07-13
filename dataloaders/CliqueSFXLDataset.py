@@ -8,6 +8,7 @@ import torchvision.transforms as T
 import numpy as np
 import tqdm
 import os
+import faiss
 
 import concurrent.futures
 from scipy.spatial.distance import cdist, pdist, squareform
@@ -90,17 +91,21 @@ def compute_cluster_descriptors(city_df, model, descriptor_size=8192 + 256, batc
             shuffle=False
         )
 
-        cluster_descriptors = torch.zeros((df.unique_cluster.max() + 1, descriptor_size)).cuda()
-
+        cluster_descriptors = torch.zeros((df.unique_cluster.max() + 1, descriptor_size))
+        res = faiss.StandardGpuResources()
+        
         # Compute descriptors for each cluster
         with torch.no_grad():
             for batch in tqdm.tqdm(dataloader):
                 img, clusters = batch
                 img = img.cuda()
                 descriptors = model(img)
-                cluster_descriptors[clusters] = descriptors
-
-        cluster_descriptors_dict[city] = cluster_descriptors.cpu().numpy()
+                cluster_descriptors[clusters] = descriptors.cpu()
+        index = faiss.IndexFlatL2(descriptor_size)
+        index = faiss.index_cpu_to_gpu(res, 0, index)
+        index.add(cluster_descriptors)
+        _, I = index.search(cluster_descriptors, 2048)
+        cluster_descriptors_dict[city] = I
 
     return cluster_descriptors_dict
 
@@ -130,38 +135,27 @@ def create_dataset_part(
         while batch_idx < batch_size:
 
             cities_to_sample = [c for c in cluster_descriptors_dict.keys()]
-            num_clusters = np.array([d.shape[0] for c, d in cluster_descriptors_dict.items()])
 
-            city = np.random.choice(cities_to_sample, p=num_clusters/num_clusters.sum())
+            city = np.random.choice(cities_to_sample)
 
             # Don't sample already done in this batch
             while city in cities_this_batch:
-                city = np.random.choice(cities_to_sample, p=num_clusters/num_clusters.sum())
+                city = np.random.choice(cities_to_sample)
             cities_this_batch.append(city)
 
 
             df = city_df[city]
-            descriptor = cluster_descriptors_dict[city]
+            topk = cluster_descriptors_dict[city]
             
             # Sample a random cluster
             place_id = np.random.choice(df.unique_cluster.unique())
 
-            # Compute similarity between the selected cluster and all the others
-            distances = cdist(descriptor[place_id, None, :], descriptor)[0]
-            # Normalize distances as probabilities (where min distance is max probability)
             if only_top_k:
-                distances = np.delete(distances, place_id)
-                other_places = np.delete(np.arange(df.unique_cluster.max() + 1), place_id)
-                
-                # Sample similar places
-                topk = np.argsort(distances)[:sampled_similar_places]
-                other_places = other_places[topk]
+                topk_subset = np.delete(topk[place_id], 0)
+                other_places = other_places[topk_subset[:sampled_similar_places]]
             else:
-                distances[distances != 0] = distances.max() - distances[distances != 0]
-                distances = distances / distances.sum()
-
-                # Sample similar places
-                other_places = np.random.choice(np.arange(df.unique_cluster.max() + 1), size=sampled_similar_places, p=distances, replace=False)
+                topk_subset = np.delete(topk[place_id], 0)
+                other_places = np.random.choice(topk_subset, size=sampled_similar_places, replace=False)
             other_places = np.concatenate([np.array([place_id]), other_places])
 
             df = df[df['unique_cluster'].isin(other_places)]
@@ -183,7 +177,7 @@ def create_dataset_part(
 
                 # Append place to batch
                 rows = df.iloc[list(clique)]
-                images[i, batch_idx] = np.char.add(np.char.add(np.where(rows['query'].values, f'{city}/query/images/', f'{city}/database/images/').astype('<U100'), rows['key'].values.astype('<U100')), '.jpg')
+                images[i, batch_idx] = rows['key'].values
                 batch_idx += 1
 
                 # Remove selected place and its neighbors from the graph
@@ -300,20 +294,20 @@ class CliqueSFXLDataset(Dataset):
 
         city_df = load_city_df()
 
-        cluster_descriptors_path = 'cache/datasets/SF_XL/cluster_descriptors.pth'
+        cluster_descriptors_path = f'cache/datasets/SF_XL/cluster_descriptors.npy'
 
         # Compute cluster descriptors if model is provided
         if model is not None:
             cluster_descriptors_dict = compute_cluster_descriptors(city_df, model)
-            torch.save(cluster_descriptors_dict, cluster_descriptors_path, pickle_protocol=4)
+            np.save(cluster_descriptors_path, cluster_descriptors_dict)
         elif os.path.isfile(cluster_descriptors_path):
-            cluster_descriptors_dict = torch.load(cluster_descriptors_path).item()
+            cluster_descriptors_dict = np.load(cluster_descriptors_path, allow_pickle=True).item()
         else:
             print('Model must be provided to compute cluster descriptors')
             print('- Computing descriptors using torch.hub DINOv2 SALAD')
             model = torch.hub.load("serizba/salad", "dinov2_salad").eval().cuda()
             cluster_descriptors_dict = compute_cluster_descriptors(city_df, model)
-            torch.save(cluster_descriptors_dict, cluster_descriptors_path, pickle_protocol=4)
+            np.save(cluster_descriptors_path, cluster_descriptors_dict)
 
         # Create dataset in parallel
         all_images = []
