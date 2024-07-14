@@ -3,7 +3,6 @@ from pathlib import Path
 from PIL import Image, ImageFile, UnidentifiedImageError
 ImageFile.LOAD_TRUNCATED_IMAGES = True
 import torch
-import torch.nn.functional as F
 from torch.utils.data import Dataset
 import torchvision.transforms as T
 import numpy as np
@@ -46,7 +45,7 @@ def construct_df(dataset_name, split, same_place_threshold):
     city_df[dataset_name] = df
     return city_df
 
-def compute_cluster_descriptors(city_df, model, dataset_name, same_place_threshold, num_images_per_place, cluster_desc_threshold_percentage, descriptor_size=8192 + 256, batch_size=64):
+def compute_cluster_descriptors(city_df, model, dataset_name, same_place_threshold, cluster_desc_threshold_percentage, descriptor_size=8192 + 256, batch_size=64):
 
     class DenseDataset(torch.utils.data.Dataset):
         def __init__(self, rows, city_path):
@@ -152,7 +151,7 @@ def compute_cluster_descriptors(city_df, model, dataset_name, same_place_thresho
 
         # Compute descriptors for each cluster
         with torch.no_grad():
-            for batch in tqdm.tqdm(dataloader):
+            for batch in dataloader:
                 img, _, clusters = batch
                 img = img.cuda()
                 descriptors = model(img)
@@ -179,7 +178,6 @@ def create_dataset_part(
     np.random.seed((os.getpid() * int(time.time())) % 123456789)
 
     images = np.zeros((num_batches, batch_size, num_images_per_place), dtype=object)
-
     cities_to_sample = [c for c in cluster_descriptors_dict.keys()]
     city = cities_to_sample[0]
     df = city_df[city]
@@ -363,7 +361,7 @@ class CliqueGenericDataset(Dataset):
 
         # Compute cluster descriptors if model is provided
         if model is not None:
-            cluster_descriptors_dict = compute_cluster_descriptors(city_df, model, self.dataset_name, same_place_threshold, num_images_per_place, cluster_desc_threshold_percentage)
+            cluster_descriptors_dict = compute_cluster_descriptors(city_df, model, self.dataset_name, same_place_threshold, cluster_desc_threshold_percentage)
             np.save(cluster_descriptors_path, cluster_descriptors_dict)
         elif os.path.isfile(cluster_descriptors_path):
             cluster_descriptors_dict = np.load(cluster_descriptors_path, allow_pickle=True).item()
@@ -371,7 +369,7 @@ class CliqueGenericDataset(Dataset):
             print('Model must be provided to compute cluster descriptors')
             print('- Computing descriptors using torch.hub DINOv2 SALAD')
             model = torch.hub.load("serizba/salad", "dinov2_salad").eval().cuda()
-            cluster_descriptors_dict = compute_cluster_descriptors(city_df, model, self.dataset_name, same_place_threshold, num_images_per_place, cluster_desc_threshold_percentage)
+            cluster_descriptors_dict = compute_cluster_descriptors(city_df, model, self.dataset_name, same_place_threshold, cluster_desc_threshold_percentage)
             np.save(cluster_descriptors_path, cluster_descriptors_dict)
 
         # Create dataset in parallel

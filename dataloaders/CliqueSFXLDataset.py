@@ -42,7 +42,6 @@ def load_city_df():
     df.insert(1, 'unique_cluster', cluster)
     for city in df['group_id'].unique():
         # Database
-        single_df = df[df['group_id'] == city]
         city_df[city] = df.reset_index()
         average_count = df.groupby('unique_cluster').size().mean()
         print(f"Average number of samples for each cluster for city {city}: {average_count}")
@@ -85,7 +84,7 @@ def compute_cluster_descriptors(city_df, model, descriptor_size=8192 + 256, batc
         dataloader = torch.utils.data.DataLoader(
             dataset=msls, 
             batch_size=batch_size,
-            num_workers=12,
+            num_workers=8,
             drop_last=False,
             pin_memory=True,
             shuffle=False
@@ -104,8 +103,8 @@ def compute_cluster_descriptors(city_df, model, descriptor_size=8192 + 256, batc
         index = faiss.IndexFlatL2(descriptor_size)
         index = faiss.index_cpu_to_gpu(res, 0, index)
         index.add(cluster_descriptors)
-        _, I = index.search(cluster_descriptors, 2048)
-        cluster_descriptors_dict[city] = I
+        D, I = index.search(cluster_descriptors, 2048)
+        cluster_descriptors_dict[city] = (D, I)
 
     return cluster_descriptors_dict
 
@@ -136,7 +135,7 @@ def create_dataset_part(
 
             cities_to_sample = [c for c in cluster_descriptors_dict.keys()]
 
-            city = np.random.choice(cities_to_sample)
+            city = np.random.choice(cities_to_sample) # SF_XL has also the same number of class per group
 
             # Don't sample already done in this batch
             while city in cities_this_batch:
@@ -145,7 +144,7 @@ def create_dataset_part(
 
 
             df = city_df[city]
-            topk = cluster_descriptors_dict[city]
+            distances, topk = cluster_descriptors_dict[city]
             
             # Sample a random cluster
             place_id = np.random.choice(df.unique_cluster.unique())
@@ -155,7 +154,12 @@ def create_dataset_part(
                 other_places = topk_subset[:sampled_similar_places]
             else:
                 topk_subset = np.delete(topk[place_id], 0)
-                other_places = np.random.choice(topk_subset, size=sampled_similar_places, replace=False)
+                distances = np.delete(distances[place_id], 0)
+                distances[distances != 0] = distances.max() - distances[distances != 0]
+                distances = distances / distances.sum()
+
+                # Sample similar places
+                other_places = np.random.choice(topk_subset, size=sampled_similar_places, p=distances, replace=False)
             other_places = np.concatenate([np.array([place_id]), other_places])
 
             df = df[df['unique_cluster'].isin(other_places)]
