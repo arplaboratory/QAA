@@ -18,7 +18,8 @@ if __name__ == '__main__':
     wandb_logger = WandbLogger(name=args.config.split('/')[-1].split('.')[0], project="UniVG")
     datamodule = GenericDataModule(
         batch_size=train_cfg.training.batch_size,
-        image_size=train_cfg.training.image_size,
+        train_image_size=train_cfg.training.train_image_size,
+        test_image_size=train_cfg.training.test_image_size,
         num_workers=train_cfg.training.num_workers,
         dataset_names=train_cfg.datasets,
         train_cfg_training=train_cfg.training,

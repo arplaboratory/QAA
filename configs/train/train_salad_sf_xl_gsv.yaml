@@ -14,8 +14,8 @@ model:
 
 datasets:
   train_datasets: 
-    - mapillary_sls
-    - pitts250k
+    - SF_XL
+    - GSV
   val_datasets: 
     - pitts30k
     - pitts250k
@@ -33,14 +33,13 @@ datasets:
     - nordland_subset
     - amstertime
     - eynsham
-    - SF_XL_v1
-    - SF_XL_v2
-  target_val_dataset: mapillary_sls
+  target_val_dataset: pitts30k
 training:
-  num_epochs: 30
+  num_epochs: 4
   batch_size: 30
-  num_workers: 12
-  image_size: [224, 224]
+  num_workers: 8
+  train_image_size: [224, 224]
+  test_image_size: [322, 322]
   optimizer:
     name: AdamW
     lr: 6e-5
@@ -58,3 +57,5 @@ training:
     name: 'MultiSimilarityMiner'
     margin: 0.1
   faiss_gpu: False
+  only_top_k: False
+  recompute_clusters: False

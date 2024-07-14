@@ -23,7 +23,8 @@ print(f"DEBUG: {DEBUG}")
 class GenericDataModule(pl.LightningDataModule):
     def __init__(self,
                  batch_size=32,
-                 image_size=(480, 640),
+                 train_image_size=(480, 640),
+                 test_image_size=(480, 640),
                  num_workers=4,
                  mean_std=IMAGENET_MEAN_STD,
                  batch_sampler=None,
@@ -32,7 +33,8 @@ class GenericDataModule(pl.LightningDataModule):
                  ):
         super().__init__()
         self.batch_size = batch_size
-        self.image_size = image_size
+        self.train_image_size = train_image_size
+        self.test_image_size = test_image_size
         self.num_workers = num_workers
         self.batch_sampler = batch_sampler
         self.mean_dataset = mean_std['mean']
@@ -47,25 +49,25 @@ class GenericDataModule(pl.LightningDataModule):
         self.model = None
 
         self.train_transform = T.Compose([
-            T.Resize(image_size, interpolation=T.InterpolationMode.BILINEAR),
+            T.Resize(self.train_image_size, interpolation=T.InterpolationMode.BILINEAR),
             T.RandAugment(num_ops=3, interpolation=T.InterpolationMode.BILINEAR),
             T.ToTensor(),
             T.Normalize(mean=self.mean_dataset, std=self.std_dataset),
         ])
 
         self.valid_transform = T.Compose([
-            T.Resize(image_size, interpolation=T.InterpolationMode.BILINEAR),
+            T.Resize(self.test_image_size, interpolation=T.InterpolationMode.BILINEAR),
             T.ToTensor(),
             T.Normalize(mean=self.mean_dataset, std=self.std_dataset)])
         
         self.test_transform = T.Compose([
-            T.Resize(image_size, interpolation=T.InterpolationMode.BILINEAR),
+            T.Resize(self.test_image_size, interpolation=T.InterpolationMode.BILINEAR),
             T.ToTensor(),
             T.Normalize(mean=self.mean_dataset, std=self.std_dataset)])
         
         self.test_grayscale_transform = T.Compose([
             T.Grayscale(num_output_channels=3),
-            T.Resize(image_size, interpolation=T.InterpolationMode.BILINEAR),
+            T.Resize(self.test_image_size, interpolation=T.InterpolationMode.BILINEAR),
             T.ToTensor(),
             T.Normalize(mean=self.mean_dataset, std=self.std_dataset)])
         
@@ -248,5 +250,5 @@ class GenericDataModule(pl.LightningDataModule):
             ["Batch size (PxK)", f"{self.batch_size}x{GSV_params.training.img_per_place}"])
         table.add_row(
             ["# of iterations", f"{GSV_dataset.__len__()//self.batch_size}"])
-        table.add_row(["Image size", f"{self.image_size}"])
+        table.add_row(["Image size", f"{self.train_image_size}"])
         print(table.get_string(title="Training config"))
