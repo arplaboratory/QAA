@@ -268,7 +268,7 @@ class CliqueMapillaryDataset(Dataset):
 
     def __len__(self):
         '''Denotes the total number of places (not images)'''
-        return self.batch_size * self.num_batches
+        return self.batch_size * 2000 # GSV has 2084 batches
 
     @staticmethod
     def image_loader(path):

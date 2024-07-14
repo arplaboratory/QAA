@@ -157,6 +157,7 @@ def create_dataset_part(
                 distances = np.delete(distances[place_id], 0)
                 distances[distances != 0] = distances.max() - distances[distances != 0]
                 distances = distances / distances.sum()
+                distances = np.array(distances)
 
                 # Sample similar places
                 other_places = np.random.choice(topk_subset, size=sampled_similar_places, p=distances, replace=False)
@@ -257,7 +258,7 @@ class CliqueSFXLDataset(Dataset):
 
     def __len__(self):
         '''Denotes the total number of places (not images)'''
-        return self.batch_size * self.num_batches
+        return self.batch_size * 2000 # GSV has 2084 batches
 
     @staticmethod
     def image_loader(path):

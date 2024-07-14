@@ -143,6 +143,7 @@ class GenericDataModule(pl.LightningDataModule):
                                                 only_top_k=self.train_cfg_training.only_top_k,
                                                 recompute_clusters=self.train_cfg_training.recompute_clusters,
                                                 **self.train_datasets_cfg[dataset_name].training.clique_args))
+                print(f'Dataset {dataset_name} loaded: Length = {len(self.train_datasets[-1])}')
 
             # load validation sets (pitts_val, msls_val, ...etc)
             self.val_datasets = []
