@@ -93,7 +93,7 @@ def compute_cluster_descriptors(city_df, model, descriptor_size=8192 + 256, batc
 
         cluster_descriptors = torch.zeros((df.unique_cluster.max() + 1, descriptor_size))
         res = faiss.StandardGpuResources()
-        
+
         # Compute descriptors for each cluster
         with torch.no_grad():
             for batch in tqdm.tqdm(dataloader):
@@ -152,7 +152,7 @@ def create_dataset_part(
 
             if only_top_k:
                 topk_subset = np.delete(topk[place_id], 0)
-                other_places = other_places[topk_subset[:sampled_similar_places]]
+                other_places = topk_subset[:sampled_similar_places]
             else:
                 topk_subset = np.delete(topk[place_id], 0)
                 other_places = np.random.choice(topk_subset, size=sampled_similar_places, replace=False)

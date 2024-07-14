@@ -1,10 +1,10 @@
 #!/bin/bash 
 #SBATCH --nodes=1                        # requests 3 compute servers
 #SBATCH --ntasks-per-node=1              # runs 2 tasks on each server
-#SBATCH --cpus-per-task=12               # uses 1 compute core per task
-#SBATCH --time=6:00:00
+#SBATCH --cpus-per-task=8               # uses 1 compute core per task
+#SBATCH --time=12:00:00
 #SBATCH --gres=gpu:h100:1
-#SBATCH --mem=150GB
+#SBATCH --mem=250GB
 #SBATCH --job-name=train_salad
 #SBATCH --output=train_salad.out
 
@@ -19,6 +19,9 @@ overlay_path_sped="datasets_sqf/sped.sqf"
 overlay_path_tokyo247="datasets_sqf/tokyo247.sqf"
 overlay_path_eynsham="datasets_sqf/eynsham.sqf"
 overlay_path_amstertime="datasets_sqf/amstertime.sqf"
+overlay_path_SF_XL_val="datasets_sqf/SF_XL_val.sqf"
+overlay_path_SF_XL_test="datasets_sqf/SF_XL_test.sqf"
+overlay_path_SF_XL_train="datasets_sqf/SF_XL_train.sqf"
 
 singularity exec --nv \
                 --overlay $overlay_path_gsv:ro \
@@ -32,5 +35,8 @@ singularity exec --nv \
                 --overlay $overlay_path_tokyo247:ro \
                 --overlay $overlay_path_eynsham:ro \
                 --overlay $overlay_path_amstertime:ro \
+                --overlay $overlay_path_SF_XL_val:ro \
+                --overlay $overlay_path_SF_XL_test:ro \
+                --overlay $overlay_path_SF_XL_train:ro \
                  /scratch/work/public/singularity/cuda12.1.1-cudnn8.9.0-devel-ubuntu22.04.2.sif \
-                 /bin/bash -c "source ~/.bashrc; conda activate UniVG; python3 -u main.py --config configs/train/"$CONFIG".yaml"
+                 /bin/bash -c "source ~/.bashrc; conda activate UniVG; python3 -u main.py --config $CONFIG"

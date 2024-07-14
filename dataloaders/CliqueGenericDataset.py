@@ -41,6 +41,8 @@ def construct_df(dataset_name, split, same_place_threshold):
     q.insert(0, 'northing', northing)
     df = pd.concat([db, q], ignore_index=True)
     df.insert(0, 'unique_cluster', -1)
+    if os.path.isfile("cache/datasets/" + dataset_name + "/cluster_id.npy"):
+        df['unique_cluster'] = np.load("cache/datasets/" + dataset_name + "/cluster_id.npy")
     city_df[dataset_name] = df
     return city_df
 
@@ -130,9 +132,7 @@ def compute_cluster_descriptors(city_df, model, dataset_name, same_place_thresho
                 print("Unassigned keys: ", len(available_keys))
             print("Done")
             # Remove clusters with too few samples
-            clusters_freq = df.groupby('unique_cluster').size()
-            clusters_to_remove = clusters_freq[clusters_freq < num_images_per_place].index
-            print(f'Removing {len(clusters_to_remove)} clusters with less than {num_images_per_place} samples')
+            np.save("cache/datasets/" + dataset_name + "/cluster_id.npy", df['unique_cluster'].values)
             average_count = df.groupby('unique_cluster').size().mean()
             cluster_count = len(np.unique(df['unique_cluster']))
             print(f'Creating {cluster_count} unique clusters')
@@ -364,7 +364,7 @@ class CliqueGenericDataset(Dataset):
         # Compute cluster descriptors if model is provided
         if model is not None:
             cluster_descriptors_dict = compute_cluster_descriptors(city_df, model, self.dataset_name, same_place_threshold, num_images_per_place, cluster_desc_threshold_percentage)
-            # np.save(cluster_descriptors_path, cluster_descriptors_dict)
+            np.save(cluster_descriptors_path, cluster_descriptors_dict)
         elif os.path.isfile(cluster_descriptors_path):
             cluster_descriptors_dict = np.load(cluster_descriptors_path, allow_pickle=True).item()
         else:
@@ -372,7 +372,7 @@ class CliqueGenericDataset(Dataset):
             print('- Computing descriptors using torch.hub DINOv2 SALAD')
             model = torch.hub.load("serizba/salad", "dinov2_salad").eval().cuda()
             cluster_descriptors_dict = compute_cluster_descriptors(city_df, model, self.dataset_name, same_place_threshold, num_images_per_place, cluster_desc_threshold_percentage)
-            # np.save(cluster_descriptors_path, cluster_descriptors_dict)
+            np.save(cluster_descriptors_path, cluster_descriptors_dict)
 
         # Create dataset in parallel
         all_images = []
