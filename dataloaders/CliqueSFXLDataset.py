@@ -209,6 +209,7 @@ class CliqueSFXLDataset(Dataset):
             same_place_threshold=20.0,
             only_top_k=False,
             recompute_clusters=False,
+            shuffle_method="global",
     ):
         super(CliqueSFXLDataset, self).__init__()
         self.base_path = base_path
@@ -223,6 +224,7 @@ class CliqueSFXLDataset(Dataset):
         self.same_place_threshold = same_place_threshold
         self.recompute_clusters = recompute_clusters
         self.only_top_k = only_top_k
+        self.shuffle_method = shuffle_method
 
         self.create_dataset(
             num_batches=num_batches,
@@ -281,8 +283,21 @@ class CliqueSFXLDataset(Dataset):
                 same_place_threshold=self.same_place_threshold,
                 only_top_k=self.only_top_k,
             )
-        else:
+        elif self.shuffle_method =="global":
             self.data = self.data[np.random.permutation(self.data.shape[0])]
+        elif self.shuffle_method =="batch":
+            for i in range(self.data.shape[0]):
+                self.data[i] = self.data[i][np.random.permutation(self.data[i].shape[0])]
+            self.data = self.data[np.random.permutation(self.data.shape[0])]
+        elif self.shuffle_method =="image":
+            for i in range(self.data.shape[0]):
+                for j in  range(self.data[i].shape[0]):
+                    self.data[i][j] = self.data[i][j][np.random.permutation(self.data[i][j].shape[0])]
+            for i in range(self.data.shape[0]):
+                self.data[i] = self.data[i][np.random.permutation(self.data[i].shape[0])]
+            self.data = self.data[np.random.permutation(self.data.shape[0])]
+        else:
+            raise ValueError("Invalid shuffle method")
         
 
     def create_dataset(
