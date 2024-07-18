@@ -183,7 +183,7 @@ class VPRModel(pl.LightningModule):
                 denormalized_image = places_single.cpu() * std_tensor + mean_tensor
                 denormalized_image = torch.clamp(denormalized_image, 0, 1)
                 list_images = [img for img in denormalized_image.view(-1, denormalized_image.shape[-3], denormalized_image.shape[-2], denormalized_image.shape[-1])]
-                list_images = list_images[:64]
+                list_images = list_images[:16]
                 self.logger.log_image(f'input_images_{train_dataset_name}', list_images)
             labels_single += prev_label + 1
             prev_label = labels_single.max()

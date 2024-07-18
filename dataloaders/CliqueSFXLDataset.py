@@ -122,7 +122,7 @@ def create_dataset_part(
 
     import os
     import time
-    rng = np.random.default_rng((os.getpid() * int(time.time())) % 123456789)
+    np.random.seed((os.getpid() * int(time.time())) % 123456789)
 
     images = np.zeros((num_batches, batch_size, num_images_per_place), dtype=object)
 
@@ -135,11 +135,11 @@ def create_dataset_part(
 
             cities_to_sample = [c for c in cluster_descriptors_dict.keys()]
 
-            city = rng.choice(cities_to_sample) # SF_XL has also the same number of class per group
+            city = np.random.choice(cities_to_sample) # SF_XL has also the same number of class per group
 
             # Don't sample already done in this batch
             while city in cities_this_batch:
-                city = rng.choice(cities_to_sample)
+                city = np.random.choice(cities_to_sample)
             cities_this_batch.append(city)
 
 
@@ -147,7 +147,7 @@ def create_dataset_part(
             distances, topk = cluster_descriptors_dict[city]
             
             # Sample a random cluster
-            place_id = rng.choice(df.unique_cluster.unique())
+            place_id = np.random.choice(df.unique_cluster.unique())
 
             if only_top_k:
                 topk_subset = np.delete(topk[place_id], 0)
@@ -160,7 +160,7 @@ def create_dataset_part(
                 distances = np.array(distances)
 
                 # Sample similar places
-                other_places = rng.choice(topk_subset, size=sampled_similar_places, p=distances, replace=False)
+                other_places = np.random.choice(topk_subset, size=sampled_similar_places, p=distances, replace=False)
             other_places = np.concatenate([np.array([place_id]), other_places])
 
             df = df[df['unique_cluster'].isin(other_places)]
@@ -173,7 +173,7 @@ def create_dataset_part(
                 # Find a clique of at least num_images_per_place
                 for c in networkx.find_cliques(networkx.Graph(utms)):
                     if len(c) >= num_images_per_place:
-                        clique = rng.choice(c, num_images_per_place, replace=False)
+                        clique = np.random.choice(c, num_images_per_place, replace=False)
                         break
                 else:
                     break
