@@ -58,3 +58,5 @@ training:
   faiss_gpu: False
   only_top_k: False
   recompute_clusters: False
+  shuffle_method: global
+  prefetch_factor: 1

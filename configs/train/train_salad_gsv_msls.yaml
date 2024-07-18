@@ -50,7 +50,7 @@ training:
     args:
       start_factor: 1
       end_factor: 0.2
-      total_iters: 30
+      total_iters: 4000
   loss:
     name: 'MultiSimilarityLoss'
   miner:
@@ -59,3 +59,5 @@ training:
   faiss_gpu: False
   only_top_k: False
   recompute_clusters: False
+  shuffle_method: global
+  prefetch_factor: 1
