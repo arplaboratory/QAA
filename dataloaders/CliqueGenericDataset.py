@@ -175,7 +175,7 @@ def create_dataset_part(
 
     import os
     import time
-    np.random.seed((os.getpid() * int(time.time())) % 123456789)
+    # np.random.seed((os.getpid() * int(time.time())) % 123456789)
 
     images = np.zeros((num_batches, batch_size, num_images_per_place), dtype=object)
     cities_to_sample = [c for c in cluster_descriptors_dict.keys()]

@@ -128,6 +128,7 @@ class GenericDataModule(pl.LightningDataModule):
                                                 only_top_k=self.train_cfg_training.only_top_k,
                                                 recompute_clusters=self.train_cfg_training.recompute_clusters,
                                                 shuffle_method=self.train_cfg_training.shuffle_method,
+                                                prefetch_factor=self.train_cfg_training.prefetch_factor,
                                                 **self.train_datasets_cfg["mapillary_sls"].training.clique_args))
                 elif dataset_name == "SF_XL":
                     self.train_datasets.append(CliqueSFXLDataset(
@@ -137,6 +138,7 @@ class GenericDataModule(pl.LightningDataModule):
                                                 only_top_k=self.train_cfg_training.only_top_k,
                                                 recompute_clusters=self.train_cfg_training.recompute_clusters,
                                                 shuffle_method=self.train_cfg_training.shuffle_method,
+                                                prefetch_factor=self.train_cfg_training.prefetch_factor,
                                                 **self.train_datasets_cfg["SF_XL"].training.clique_args))
                 else:
                     self.train_datasets.append(CliqueGenericDataset(

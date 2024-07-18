@@ -122,7 +122,7 @@ def create_dataset_part(
 
     import os
     import time
-    np.random.seed((os.getpid() * int(time.time())) % 123456789)
+    # np.random.seed((os.getpid() * int(time.time())) % 123456789)
 
     images = np.zeros((num_batches, batch_size, num_images_per_place), dtype=object)
 
@@ -210,6 +210,7 @@ class CliqueSFXLDataset(Dataset):
             only_top_k=False,
             recompute_clusters=False,
             shuffle_method="global",
+            prefetch_factor=1,
     ):
         super(CliqueSFXLDataset, self).__init__()
         self.base_path = base_path
@@ -225,6 +226,7 @@ class CliqueSFXLDataset(Dataset):
         self.recompute_clusters = recompute_clusters
         self.only_top_k = only_top_k
         self.shuffle_method = shuffle_method
+        self.prefetch_factor = prefetch_factor
 
         self.create_dataset(
             num_batches=num_batches,
@@ -338,7 +340,7 @@ class CliqueSFXLDataset(Dataset):
                 city_df,
                 num_batches // num_processes,
                 batch_size,
-                num_images_per_place,
+                num_images_per_place * self.prefetch_factor,
                 sampled_similar_places,
                 same_place_threshold,
                 only_top_k,
