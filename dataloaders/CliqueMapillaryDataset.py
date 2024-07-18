@@ -127,7 +127,7 @@ def create_dataset_part(
 
     import os
     import time
-    # np.random.seed((os.getpid() * int(time.time())) % 123456789)
+    rng = np.random.default_rng((os.getpid() * int(time.time())) % 123456789)
 
     images = np.zeros((num_batches, batch_size, num_images_per_place), dtype=object)
 
@@ -141,11 +141,11 @@ def create_dataset_part(
             cities_to_sample = [c for c in cluster_descriptors_dict.keys()]
             num_clusters = np.array([d.shape[0] for c, d in cluster_descriptors_dict.items()])
 
-            city = np.random.choice(cities_to_sample, p=num_clusters/num_clusters.sum())
+            city = rng.choice(cities_to_sample, p=num_clusters/num_clusters.sum())
 
             # Don't sample already done in this batch
             while city in cities_this_batch:
-                city = np.random.choice(cities_to_sample, p=num_clusters/num_clusters.sum())
+                city = rng.choice(cities_to_sample, p=num_clusters/num_clusters.sum())
             cities_this_batch.append(city)
 
 
@@ -153,7 +153,7 @@ def create_dataset_part(
             descriptor = cluster_descriptors_dict[city]
             
             # Sample a random cluster
-            place_id = np.random.choice(df.unique_cluster.unique())
+            place_id = rng.choice(df.unique_cluster.unique())
 
             # Compute similarity between the selected cluster and all the others
             distances = cdist(descriptor[place_id, None, :], descriptor)[0]
@@ -170,7 +170,7 @@ def create_dataset_part(
                 distances = distances / distances.sum()
 
                 # Sample similar places
-                other_places = np.random.choice(np.arange(df.unique_cluster.max() + 1), size=sampled_similar_places, p=distances, replace=False)
+                other_places = rng.choice(np.arange(df.unique_cluster.max() + 1), size=sampled_similar_places, p=distances, replace=False)
             other_places = np.concatenate([np.array([place_id]), other_places])
 
             df = df[df['unique_cluster'].isin(other_places)]
@@ -183,7 +183,7 @@ def create_dataset_part(
                 # Find a clique of at least num_images_per_place
                 for c in networkx.find_cliques(networkx.Graph(utms)):
                     if len(c) >= num_images_per_place:
-                        clique = np.random.choice(c, num_images_per_place, replace=False)
+                        clique = rng.choice(c, num_images_per_place, replace=False)
                         break
                 else:
                     break
@@ -246,6 +246,7 @@ class CliqueMapillaryDataset(Dataset):
             sampled_similar_places=sampled_similar_places,
             same_place_threshold=same_place_threshold,
             only_top_k=only_top_k,
+            prefetch_factor=prefetch_factor,
         )
         
         
@@ -294,6 +295,7 @@ class CliqueMapillaryDataset(Dataset):
                 sampled_similar_places=self.sampled_similar_places,
                 same_place_threshold=self.same_place_threshold,
                 only_top_k=self.only_top_k,
+                prefetch_factor=self.prefetch_factor,
             )
         elif self.shuffle_method =="global":
             self.data = self.data[np.random.permutation(self.data.shape[0])]
@@ -322,6 +324,7 @@ class CliqueMapillaryDataset(Dataset):
         sampled_similar_places=15,
         same_place_threshold=20.0,
         only_top_k=False,
+        prefetch_factor=1,
     ):
 
         city_df = load_city_df(BASE_PATH)
@@ -350,7 +353,7 @@ class CliqueMapillaryDataset(Dataset):
                 city_df,
                 num_batches // num_processes,
                 batch_size,
-                num_images_per_place * self.prefetch_factor,
+                num_images_per_place * prefetch_factor,
                 sampled_similar_places,
                 same_place_threshold,
                 only_top_k,

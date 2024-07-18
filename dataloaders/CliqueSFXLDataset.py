@@ -122,7 +122,7 @@ def create_dataset_part(
 
     import os
     import time
-    # np.random.seed((os.getpid() * int(time.time())) % 123456789)
+    rng = np.random.default_rng((os.getpid() * int(time.time())) % 123456789)
 
     images = np.zeros((num_batches, batch_size, num_images_per_place), dtype=object)
 
@@ -135,11 +135,11 @@ def create_dataset_part(
 
             cities_to_sample = [c for c in cluster_descriptors_dict.keys()]
 
-            city = np.random.choice(cities_to_sample) # SF_XL has also the same number of class per group
+            city = rng.choice(cities_to_sample) # SF_XL has also the same number of class per group
 
             # Don't sample already done in this batch
             while city in cities_this_batch:
-                city = np.random.choice(cities_to_sample)
+                city = rng.choice(cities_to_sample)
             cities_this_batch.append(city)
 
 
@@ -147,7 +147,7 @@ def create_dataset_part(
             distances, topk = cluster_descriptors_dict[city]
             
             # Sample a random cluster
-            place_id = np.random.choice(df.unique_cluster.unique())
+            place_id = rng.choice(df.unique_cluster.unique())
 
             if only_top_k:
                 topk_subset = np.delete(topk[place_id], 0)
@@ -160,7 +160,7 @@ def create_dataset_part(
                 distances = np.array(distances)
 
                 # Sample similar places
-                other_places = np.random.choice(topk_subset, size=sampled_similar_places, p=distances, replace=False)
+                other_places = rng.choice(topk_subset, size=sampled_similar_places, p=distances, replace=False)
             other_places = np.concatenate([np.array([place_id]), other_places])
 
             df = df[df['unique_cluster'].isin(other_places)]
@@ -173,7 +173,7 @@ def create_dataset_part(
                 # Find a clique of at least num_images_per_place
                 for c in networkx.find_cliques(networkx.Graph(utms)):
                     if len(c) >= num_images_per_place:
-                        clique = np.random.choice(c, num_images_per_place, replace=False)
+                        clique = rng.choice(c, num_images_per_place, replace=False)
                         break
                 else:
                     break
@@ -236,6 +236,7 @@ class CliqueSFXLDataset(Dataset):
             sampled_similar_places=sampled_similar_places,
             same_place_threshold=same_place_threshold,
             only_top_k=only_top_k,
+            prefetch_factor=prefetch_factor,
         )
         
         
@@ -284,6 +285,7 @@ class CliqueSFXLDataset(Dataset):
                 sampled_similar_places=self.sampled_similar_places,
                 same_place_threshold=self.same_place_threshold,
                 only_top_k=self.only_top_k,
+                prefetch_factor=self.prefetch_factor,
             )
         elif self.shuffle_method =="global":
             self.data = self.data[np.random.permutation(self.data.shape[0])]
@@ -312,11 +314,12 @@ class CliqueSFXLDataset(Dataset):
         sampled_similar_places=15,
         same_place_threshold=20.0,
         only_top_k=False,
+        prefetch_factor=1,
     ):
 
         city_df = load_city_df()
 
-        cluster_descriptors_path = f'cache/datasets/SF_XL/cluster_descriptors.npy'
+        cluster_descriptors_path = 'cache/datasets/SF_XL/cluster_descriptors.npy'
 
         # Compute cluster descriptors if model is provided
         if model is not None:
@@ -340,7 +343,7 @@ class CliqueSFXLDataset(Dataset):
                 city_df,
                 num_batches // num_processes,
                 batch_size,
-                num_images_per_place * self.prefetch_factor,
+                num_images_per_place * prefetch_factor,
                 sampled_similar_places,
                 same_place_threshold,
                 only_top_k,

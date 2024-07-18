@@ -175,7 +175,7 @@ def create_dataset_part(
 
     import os
     import time
-    # np.random.seed((os.getpid() * int(time.time())) % 123456789)
+    rng = np.random.default_rng((os.getpid() * int(time.time())) % 123456789)
 
     images = np.zeros((num_batches, batch_size, num_images_per_place), dtype=object)
     cities_to_sample = [c for c in cluster_descriptors_dict.keys()]
@@ -192,15 +192,16 @@ def create_dataset_part(
             # Sample a random cluster
             available_clusters = df['unique_cluster'].unique()[valid == 1]
             available_descriptor = descriptor[available_clusters]
-            place_id_idx = np.random.choice(len(available_clusters))
+            place_id_idx = rng.choice(len(available_clusters))
             place_id = available_clusters[place_id_idx]
 
             # Compute similarity between the selected cluster and all the others
             distances = cdist(available_descriptor[place_id_idx, None, :], available_descriptor)[0]
             # Normalize distances as probabilities (where min distance is max probability)
-            distances = np.delete(distances, place_id_idx)
-            other_places = np.delete(available_clusters, place_id_idx)
             if only_top_k:
+                distances = np.delete(distances, place_id_idx)
+                other_places = np.delete(available_clusters, place_id_idx)
+
                 # Sample similar places
                 topk = np.argsort(distances)[:sampled_similar_places]
                 other_places = other_places[topk]
@@ -209,7 +210,7 @@ def create_dataset_part(
                 distances = distances / distances.sum()
 
                 # Sample similar places
-                sample_idx = np.random.choice(len(available_clusters) - 1, sampled_similar_places, p=distances, replace=False)
+                sample_idx = rng.choice(len(available_clusters) - 1, sampled_similar_places, p=distances, replace=False)
                 other_places = other_places[sample_idx]
             other_places = np.concatenate([np.array([place_id]), other_places])
 
@@ -226,7 +227,7 @@ def create_dataset_part(
                 # Find a clique of at least num_images_per_place
                 for c in networkx.find_cliques(networkx.Graph(utms)):
                     if len(c) >= num_images_per_place:
-                        clique = np.random.choice(c, num_images_per_place, replace=False)
+                        clique = rng.choice(c, num_images_per_place, replace=False)
                         break
                 else:
                     break
@@ -261,8 +262,10 @@ class CliqueGenericDataset(Dataset):
             sampled_similar_places=15,
             same_place_threshold=20.0,
             cluster_desc_threshold_percentage=0.1,
-            recompute_clusters=False,
             only_top_k=False,
+            recompute_clusters=False,
+            shuffle_method="global",
+            prefetch_factor=1,
     ):
         super(CliqueGenericDataset, self).__init__()
         self.dataset_name = dataset_name
@@ -278,6 +281,8 @@ class CliqueGenericDataset(Dataset):
         self.cluster_desc_threshold_percentage = cluster_desc_threshold_percentage
         self.recompute_clusters = recompute_clusters
         self.only_top_k = only_top_k
+        self.shuffle_method = shuffle_method
+        self.prefetch_factor = prefetch_factor
 
         self.create_dataset(
             num_batches=num_batches,
@@ -288,6 +293,7 @@ class CliqueGenericDataset(Dataset):
             same_place_threshold=same_place_threshold,
             cluster_desc_threshold_percentage=cluster_desc_threshold_percentage,
             only_top_k=only_top_k,
+            prefetch_factor=prefetch_factor,
         )
         
         
@@ -337,9 +343,23 @@ class CliqueGenericDataset(Dataset):
                 same_place_threshold=self.same_place_threshold,
                 cluster_desc_threshold_percentage=self.cluster_desc_threshold_percentage,
                 only_top_k=self.only_top_k,
+                prefetch_factor=self.prefetch_factor,
             )
-        else:
+        elif self.shuffle_method =="global":
             self.data = self.data[np.random.permutation(self.data.shape[0])]
+        elif self.shuffle_method =="batch":
+            for i in range(self.data.shape[0]):
+                self.data[i] = self.data[i][np.random.permutation(self.data[i].shape[0])]
+            self.data = self.data[np.random.permutation(self.data.shape[0])]
+        elif self.shuffle_method =="image":
+            for i in range(self.data.shape[0]):
+                for j in  range(self.data[i].shape[0]):
+                    self.data[i][j] = self.data[i][j][np.random.permutation(self.data[i][j].shape[0])]
+            for i in range(self.data.shape[0]):
+                self.data[i] = self.data[i][np.random.permutation(self.data[i].shape[0])]
+            self.data = self.data[np.random.permutation(self.data.shape[0])]
+        else:
+            raise ValueError("Invalid shuffle method")
         
 
     def create_dataset(
