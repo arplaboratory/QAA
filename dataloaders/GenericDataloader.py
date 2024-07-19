@@ -17,12 +17,10 @@ import wandb
 IMAGENET_MEAN_STD = {'mean': [0.485, 0.456, 0.406], 
                      'std': [0.229, 0.224, 0.225]}
 
-DEBUG = False if not "DEBUG" in os.environ else True
-print(f"DEBUG: {DEBUG}")
-
 class GenericDataModule(pl.LightningDataModule):
     def __init__(self,
-                 batch_size=32,
+                 train_batch_size=30,
+                 test_batch_size=256,
                  train_image_size=(480, 640),
                  test_image_size=(480, 640),
                  num_workers=4,
@@ -32,7 +30,8 @@ class GenericDataModule(pl.LightningDataModule):
                  train_cfg_training=None
                  ):
         super().__init__()
-        self.batch_size = batch_size
+        self.train_batch_size = train_batch_size
+        self.test_batch_size = test_batch_size
         self.train_image_size = train_image_size
         self.test_image_size = test_image_size
         self.num_workers = num_workers
@@ -72,7 +71,7 @@ class GenericDataModule(pl.LightningDataModule):
             T.Normalize(mean=self.mean_dataset, std=self.std_dataset)])
         
         self.train_loader_config_general = {
-            'batch_size': self.batch_size,
+            'batch_size': self.train_batch_size,
             'num_workers': self.num_workers,
             'drop_last': False,
             'pin_memory': True,
@@ -80,22 +79,22 @@ class GenericDataModule(pl.LightningDataModule):
     
         if "GSV" in self.train_dataset_names:
             self.train_loader_config_GSV = {
-                'batch_size': self.batch_size,
+                'batch_size': self.train_batch_size,
                 'num_workers': self.num_workers,
                 'drop_last': False,
                 'pin_memory': True,
                 'shuffle': self.train_datasets_cfg["GSV"].training.shuffle_all}
 
         self.valid_loader_config = {
-            'batch_size': self.batch_size * 4,
-            'num_workers': self.num_workers * 2,
+            'batch_size': self.test_batch_size,
+            'num_workers': self.num_workers,
             'drop_last': False,
             'pin_memory': True,
             'shuffle': False}
 
         self.test_loader_config = {
-            'batch_size': self.batch_size * 4,
-            'num_workers': self.num_workers * 2,
+            'batch_size': self.test_batch_size,
+            'num_workers': self.num_workers,
             'drop_last': False,
             'pin_memory': True,
             'shuffle': False}
@@ -124,7 +123,7 @@ class GenericDataModule(pl.LightningDataModule):
                     self.train_datasets.append(CliqueMapillaryDataset(
                                                 split="train", 
                                                 transform=self.train_transform,
-                                                batch_size=self.batch_size,
+                                                batch_size=self.train_batch_size,
                                                 only_top_k=self.train_cfg_training.only_top_k,
                                                 recompute_clusters=self.train_cfg_training.recompute_clusters,
                                                 shuffle_method=self.train_cfg_training.shuffle_method,
@@ -134,7 +133,7 @@ class GenericDataModule(pl.LightningDataModule):
                     self.train_datasets.append(CliqueSFXLDataset(
                                                 split="train",
                                                 transform=self.train_transform,
-                                                batch_size=self.batch_size,
+                                                batch_size=self.train_batch_size,
                                                 only_top_k=self.train_cfg_training.only_top_k,
                                                 recompute_clusters=self.train_cfg_training.recompute_clusters,
                                                 shuffle_method=self.train_cfg_training.shuffle_method,
@@ -145,7 +144,7 @@ class GenericDataModule(pl.LightningDataModule):
                                                 dataset_name=dataset_name, 
                                                 split="train", 
                                                 transform=self.train_transform,
-                                                batch_size=self.batch_size,
+                                                batch_size=self.train_batch_size,
                                                 only_top_k=self.train_cfg_training.only_top_k,
                                                 recompute_clusters=self.train_cfg_training.recompute_clusters,
                                                 **self.train_datasets_cfg[dataset_name].training.clique_args))
@@ -159,15 +158,6 @@ class GenericDataModule(pl.LightningDataModule):
                     self.val_datasets.append(MapillaryDataset(split="val", input_transform=self.valid_transform))
                 else:
                     self.val_datasets.append(GenericDataset(dataset_name=dataset_name, split="val", input_transform=self.valid_transform))
-            # Add the train dataset itself to the validation set for debugging
-            if DEBUG:
-                for dataset_name in self.train_dataset_names:
-                    if dataset_name == "mapillary_sls":
-                        self.val_datasets.append(MapillaryDataset(split="train", input_transform=self.valid_transform))
-                    elif dataset_name == "GSV":
-                        pass
-                    else:
-                        self.val_datasets.append(GenericDataset(dataset_name=dataset_name, split="train", input_transform=self.valid_transform))
 
         elif stage=="test":
             # load test sets (pitts_val, msls_val, ...etc)
@@ -234,25 +224,14 @@ class GenericDataModule(pl.LightningDataModule):
         print(table.get_string(title="Training Dataset"))
         print()
 
-        # table = PrettyTable()
-        # table.field_names = ['Data', 'Value']
-        # table.align['Data'] = "l"
-        # table.align['Value'] = "l"
-        # table.header = False
-        # for i, val_set_name in enumerate(self.val_set_names):
-        #     table.add_row([f"Validation set {i+1}", f"{val_set_name}"])
-        # # table.add_row(["# of places", f'{self.train_dataset.__len__()}'])
-        # print(table.get_string(title="Validation Datasets"))
-        # print()
-
         table = PrettyTable()
         table.field_names = ['Data', 'Value']
         table.align['Data'] = "l"
         table.align['Value'] = "l"
         table.header = False
         table.add_row(
-            ["Batch size (PxK)", f"{self.batch_size}x{GSV_params.training.img_per_place}"])
+            ["Batch size (PxK)", f"{self.train_batch_size}x{GSV_params.training.img_per_place}"])
         table.add_row(
-            ["# of iterations", f"{GSV_dataset.__len__()//self.batch_size}"])
+            ["# of iterations", f"{GSV_dataset.__len__()//self.train_batch_size}"])
         table.add_row(["Image size", f"{self.train_image_size}"])
         print(table.get_string(title="Training config"))

@@ -17,7 +17,8 @@ if __name__ == '__main__':
     train_cfg = load_config(args.config)
     wandb_logger = WandbLogger(name=args.config.split('/')[-1].split('.')[0], project="UniVG")
     datamodule = GenericDataModule(
-        batch_size=train_cfg.training.batch_size,
+        train_batch_size=train_cfg.training.train_batch_size,
+        test_batch_size=train_cfg.training.test_batch_size,
         train_image_size=train_cfg.training.train_image_size,
         test_image_size=train_cfg.training.test_image_size,
         num_workers=train_cfg.training.num_workers,
@@ -80,4 +81,4 @@ if __name__ == '__main__':
 
     # we call the trainer, we give it the model and the datamodule
     trainer.fit(model=model, datamodule=datamodule)
-    trainer.test(model=model, datamodule=datamodule, ckpt_path="last")
+    trainer.test(model=model, datamodule=datamodule, ckpt_path="best")

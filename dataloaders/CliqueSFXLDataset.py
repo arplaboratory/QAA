@@ -135,7 +135,7 @@ def create_dataset_part(
 
             cities_to_sample = [c for c in cluster_descriptors_dict.keys()]
 
-            city = np.random.choice(cities_to_sample) # SF_XL has also the same number of class per group
+            city = np.random.choice(cities_to_sample) # SF_XL has the same number of class per group
 
             # Don't sample already done in this batch
             while city in cities_this_batch:
