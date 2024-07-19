@@ -104,6 +104,7 @@ class GenericDataModule(pl.LightningDataModule):
 
     def setup(self, stage):
         if stage == 'fit':
+            self.first_setup = True
             # load train dataloader (pitts_train, msls_train, ...etc)
             self.train_datasets = []
             for dataset_name in self.train_dataset_names:
@@ -186,7 +187,11 @@ class GenericDataModule(pl.LightningDataModule):
     def train_dataloader(self):
         train_dataloaders = {}
         for index, train_dataset_name in enumerate(self.train_dataset_names):
-            self.reload(train_dataset_name, index) # Following reload routine to shuffle cities
+            if not self.first_setup:
+                print("Reloading to shuffle")
+                self.reload(train_dataset_name, index) # Following reload routine to shuffle cities
+            else:
+                print("First setup: No reloading")
             train_dataset = self.train_datasets[index]
             if train_dataset_name == "GSV":
                 train_dataloaders[train_dataset_name] = DataLoader(
@@ -195,6 +200,7 @@ class GenericDataModule(pl.LightningDataModule):
                 train_dataloaders[train_dataset_name] = DataLoader(
                     dataset=train_dataset, **self.train_loader_config_general)
         print(f"Train dataloaders: {train_dataloaders}")
+        self.first_setup = False
         return train_dataloaders
 
     def val_dataloader(self):
