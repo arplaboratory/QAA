@@ -52,15 +52,26 @@ class DINOv2(nn.Module):
 
         x = self.model.prepare_tokens_with_masks(x)
         
-        # First blocks are frozen
-        with torch.no_grad():
-            for blk in self.model.blocks[:-self.num_trainable_blocks]:
+        if self.num_trainable_blocks < 0:
+            # All blocks are frozen
+            with torch.no_grad():
+                for blk in self.model.blocks:
+                    x = blk(x)
+            x = x.detach()
+        elif self.num_trainable_blocks == 0:
+            # All blocks are trainable
+            for blk in self.model.blocks:
                 x = blk(x)
-        x = x.detach()
+        else:
+            # First blocks are frozen
+            with torch.no_grad():
+                for blk in self.model.blocks[:-self.num_trainable_blocks]:
+                    x = blk(x)
+            x = x.detach()
 
-        # Last blocks are trained
-        for blk in self.model.blocks[-self.num_trainable_blocks:]:
-            x = blk(x)
+            # Last blocks are trained
+            for blk in self.model.blocks[-self.num_trainable_blocks:]:
+                x = blk(x)
 
         if self.norm_layer:
             x = self.model.norm(x)
