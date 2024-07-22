@@ -50,6 +50,7 @@ class SALAD(nn.Module):
             token_dim=256,
             dropout=0.3,
             divide=1,
+            shared_clusters=0,
         ) -> None:
         super().__init__()
 
@@ -58,6 +59,9 @@ class SALAD(nn.Module):
         self.cluster_dim = cluster_dim
         self.token_dim = token_dim
         self.divide = divide
+        if divide > 1:
+            self.shared_clusters = shared_clusters
+            self.specific_clusters = (self.num_clusters - shared_clusters) // divide
         
         if dropout > 0:
             dropout = nn.Dropout(dropout)
@@ -79,12 +83,21 @@ class SALAD(nn.Module):
         )
         # MLP for score matrix S
         if divide > 1:
+            if self.shared_clusters > 0:
+                self.shared_score = nn.Sequential(
+                        nn.Conv2d(self.num_channels, 512, 1),
+                        dropout,
+                        nn.ReLU(),
+                        nn.Conv2d(512, self.shared_clusters, 1),
+                    )
+            else:
+                self.shared_score = None
             self.score_list = nn.ModuleList([
                 nn.Sequential(
                     nn.Conv2d(self.num_channels, 512, 1),
                     dropout,
                     nn.ReLU(),
-                    nn.Conv2d(512, self.num_clusters // divide, 1),
+                    nn.Conv2d(512, self.specific_clusters, 1),
                 ) for _ in range(divide)
             ])
         else:
@@ -113,9 +126,19 @@ class SALAD(nn.Module):
         f = self.cluster_features(x).flatten(2)
         if self.divide > 1:
             if domain_idx is None:
-                p = torch.cat([self.score_list[i](x).flatten(2) for i in range(self.divide)], dim=1)
+                if self.shared_score is not None:
+                    p_shared = self.shared_score(x).flatten(2)
+                    p = torch.cat([self.score_list[i](x).flatten(2) for i in range(self.divide)], dim=1)
+                    p = torch.cat([p_shared, p], dim=1)
+                else:
+                    p = torch.cat([self.score_list[i](x).flatten(2) for i in range(self.divide)], dim=1)
             else:
-                p = torch.cat([self.score_list[i](x[domain_idx == i]).flatten(2) for i in range(self.divide)], dim=0)
+                if self.shared_score is not None:
+                    p_shared = self.shared_score(x).flatten(2)
+                    p = torch.cat([self.score_list[i](x[domain_idx == i]).flatten(2) for i in range(self.divide)], dim=0)
+                    p = torch.cat([p_shared, p], dim=1)
+                else:
+                    p = torch.cat([self.score_list[i](x[domain_idx == i]).flatten(2) for i in range(self.divide)], dim=0)
         else:
             p = self.score(x).flatten(2)
         t = self.token_features(t)
@@ -129,7 +152,7 @@ class SALAD(nn.Module):
 
         p = p.unsqueeze(1).repeat(1, self.cluster_dim, 1, 1)
         if self.divide > 1 and domain_idx is not None:
-            f = f.unsqueeze(2).repeat(1, 1, self.num_clusters // self.divide, 1)
+            f = f.unsqueeze(2).repeat(1, 1, self.shared_clusters + self.specific_clusters, 1)
         else:
             f = f.unsqueeze(2).repeat(1, 1, self.num_clusters, 1)
 
