@@ -1,5 +1,8 @@
 import torch
 import torch.nn as nn
+from torch import Tensor
+from typing import Union
+from ..aggregators.salad import SALAD
 
 DINOV2_ARCHS = {
     'dinov2_vits14': 384,
@@ -7,6 +10,35 @@ DINOV2_ARCHS = {
     'dinov2_vitl14': 1024,
     'dinov2_vitg14': 1536,
 }
+
+class ClusterNorm(nn.Module):
+    def __init__(self, hidden_size):
+        super().__init__()
+        self.norm = nn.LayerNorm(hidden_size, elementwise_affine=False)
+
+    def forward(self, x: Tensor) -> Tensor:
+        return self.norm(x) * self.weight + self.bias
+    
+    def set_weight_bias(self, weight: Tensor, bias: Tensor) -> None:
+        self.weight = weight.unsqueeze(1)
+        self.bias = bias.unsqueeze(1)
+
+class ClusterLayerScale(nn.Module):
+    def __init__(
+        self,
+        dim: int,
+        init_values: Union[float, Tensor] = 1e-5,
+        inplace: bool = False,
+    ) -> None:
+        super().__init__()
+        self.inplace = inplace
+        self.gamma = None
+
+    def forward(self, x: Tensor) -> Tensor:
+        return x.mul_(self.gamma) if self.inplace else x * self.gamma
+
+    def set_gamma(self, gamma: Tensor) -> None:
+        self.gamma = gamma.unsqueeze(1)
 
 class DINOv2(nn.Module):
     """
@@ -24,7 +56,14 @@ class DINOv2(nn.Module):
             model_name='dinov2_vitb14',
             num_trainable_blocks=2,
             norm_layer=False,
-            return_token=False
+            return_token=False,
+            domain_prompt=False,
+            num_clusters=64,
+            cluster_dim=16,
+            token_dim=128,
+            divide=1,
+            shared_clusters=0,
+            decouple=False,
         ):
         super().__init__()
 
@@ -34,9 +73,30 @@ class DINOv2(nn.Module):
         self.num_trainable_blocks = num_trainable_blocks
         self.norm_layer = norm_layer
         self.return_token = return_token
+        self.domain_prompt = domain_prompt
+        if self.domain_prompt:
+            hidden_size = self.model.blocks[0].norm1.weight.shape[0]
+            self.domain_prompt_model = SALAD(num_channels=hidden_size, num_clusters=num_clusters, cluster_dim=cluster_dim, token_dim=token_dim,
+                                             divide=divide, shared_clusters=shared_clusters)
+            self.domain_prompt_mlp_list = nn.ModuleList()
+            for blk in self.model.blocks[-self.num_trainable_blocks: -1]:
+                self.domain_prompt_mlp_list.append(nn.Linear(num_clusters*cluster_dim+token_dim, hidden_size * 6))
+                blk.norm1 = ClusterNorm(hidden_size)
+                blk.norm2 = ClusterNorm(hidden_size)
+                blk.ls1 = ClusterLayerScale(hidden_size)
+                blk.ls2 = ClusterLayerScale(hidden_size)
+            # Zero initialize the domain prompt mlp
+            for domain_prompt_mlp in self.domain_prompt_mlp_list:
+                nn.init.constant_(domain_prompt_mlp.weight, 0)
+                nn.init.constant_(domain_prompt_mlp.bias, 0)
+            self.domain_prompt_mlp_list.append(nn.Linear(num_clusters*cluster_dim+token_dim, hidden_size * 3))
+            self.model.blocks[-1].norm1 = ClusterNorm(hidden_size)
+            self.model.blocks[-1].ls1 = ClusterLayerScale(hidden_size)
+            # Zero the domain prompt mlp
+            assert self.num_trainable_blocks > 0, 'First blocks should be frozen when using domain prompt'
 
 
-    def forward(self, x):
+    def forward(self, x, domain_idx=None):
         """
         The forward method for the DINOv2 class
 
@@ -54,12 +114,14 @@ class DINOv2(nn.Module):
         
         if self.num_trainable_blocks < 0:
             # All blocks are frozen
+            assert domain_idx is None, 'Domain index should not be provided when all blocks are frozen'
             with torch.no_grad():
                 for blk in self.model.blocks:
                     x = blk(x)
             x = x.detach()
         elif self.num_trainable_blocks == 0:
             # All blocks are trainable
+            assert domain_idx is None, 'Domain index should not be provided when all blocks are trainable'
             for blk in self.model.blocks:
                 x = blk(x)
         else:
@@ -68,10 +130,26 @@ class DINOv2(nn.Module):
                 for blk in self.model.blocks[:-self.num_trainable_blocks]:
                     x = blk(x)
             x = x.detach()
-
+            if self.domain_prompt:
+                t = x[:, 0]
+                f = x[:, 1:]
+                # Reshape to (B, C, H, W)
+                f = f.reshape((B, H // 14, W // 14, self.num_channels)).permute(0, 3, 1, 2)
+                domain_prompt_desc = self.domain_prompt_model((f, t), domain_idx)
             # Last blocks are trained
-            for blk in self.model.blocks[-self.num_trainable_blocks:]:
+            for i, blk in enumerate(self.model.blocks[-self.num_trainable_blocks:-1]):
+                if self.domain_prompt:
+                    domain_prompt_output = self.domain_prompt_mlp_list[i](domain_prompt_desc).chunk(6, dim=1)
+                    blk.norm1.set_weight_bias(domain_prompt_output[0], domain_prompt_output[1])
+                    blk.ls1.set_gamma(domain_prompt_output[2])
+                    blk.norm2.set_weight_bias(domain_prompt_output[3], domain_prompt_output[4])
+                    blk.ls2.set_gamma(domain_prompt_output[5])
                 x = blk(x)
+            if self.domain_prompt:
+                domain_prompt_output = self.domain_prompt_mlp_list[-1](domain_prompt_desc).chunk(3, dim=1)
+                self.model.blocks[-1].norm1.set_weight_bias(domain_prompt_output[0], domain_prompt_output[1])
+                self.model.blocks[-1].ls1.set_gamma(domain_prompt_output[2])
+            x = self.model.blocks[-1](x)
 
         if self.norm_layer:
             x = self.model.norm(x)

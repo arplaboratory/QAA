@@ -50,6 +50,7 @@ class SALAD(nn.Module):
             token_dim=256,
             dropout=0.3,
             divide=1,
+            decouple=False,
             shared_clusters=0,
         ) -> None:
         super().__init__()
@@ -59,6 +60,7 @@ class SALAD(nn.Module):
         self.cluster_dim = cluster_dim
         self.token_dim = token_dim
         self.divide = divide
+        self.decouple = decouple
         if divide > 1:
             self.shared_clusters = shared_clusters
             self.specific_clusters = (self.num_clusters - shared_clusters) // divide
@@ -82,7 +84,7 @@ class SALAD(nn.Module):
             nn.Conv2d(512, self.cluster_dim, 1)
         )
         # MLP for score matrix S
-        if divide > 1:
+        if divide > 1 and decouple:
             if self.shared_clusters > 0:
                 self.shared_score = nn.Sequential(
                         nn.Conv2d(self.num_channels, 512, 1),
@@ -124,9 +126,10 @@ class SALAD(nn.Module):
         x, t = x # Extract features and token
 
         f = self.cluster_features(x).flatten(2)
-        if self.divide > 1:
+        if self.divide > 1 and self.decouple:
+            # Use decoupled score network
             if domain_idx is None:
-                if self.shared_score is not None:
+                if self.shared_clusters > 0:
                     p_shared = self.shared_score(x).flatten(2)
                     p = torch.cat([self.score_list[i](x).flatten(2) for i in range(self.divide)], dim=1)
                     p = torch.cat([p_shared, p], dim=1)
@@ -136,9 +139,23 @@ class SALAD(nn.Module):
                 if self.shared_score is not None:
                     p_shared = self.shared_score(x).flatten(2)
                     p = torch.cat([self.score_list[i](x[domain_idx == i]).flatten(2) for i in range(self.divide)], dim=0)
+                    p = self.pad_score(p, domain_idx)
                     p = torch.cat([p_shared, p], dim=1)
                 else:
                     p = torch.cat([self.score_list[i](x[domain_idx == i]).flatten(2) for i in range(self.divide)], dim=0)
+                    p = self.pad_score(p, domain_idx)
+        elif self.divide > 1:
+            # Use coupled score network
+            p = self.score(x).flatten(2)
+            if domain_idx is None:
+                pass
+            else:
+                if self.shared_clusters > 0:
+                    p_shared = p[:, :self.shared_clusters]
+                    p = self.select_score(p[:, self.shared_cluster:], domain_idx, self.shared_clusters)
+                    p = torch.cat([p_shared, p], dim=1)
+                else:
+                    p = self.select_score(p, domain_idx, self.shared_clusters)
         else:
             p = self.score(x).flatten(2)
         t = self.token_features(t)
@@ -149,12 +166,8 @@ class SALAD(nn.Module):
         # Normalize to maintain mass
         p = p[:, :-1, :]
 
-
         p = p.unsqueeze(1).repeat(1, self.cluster_dim, 1, 1)
-        if self.divide > 1 and domain_idx is not None:
-            f = f.unsqueeze(2).repeat(1, 1, self.shared_clusters + self.specific_clusters, 1)
-        else:
-            f = f.unsqueeze(2).repeat(1, 1, self.num_clusters, 1)
+        f = f.unsqueeze(2).repeat(1, 1, self.num_clusters, 1)
 
         f = torch.cat([
             nn.functional.normalize(t, p=2, dim=-1),
@@ -162,3 +175,17 @@ class SALAD(nn.Module):
         ], dim=-1)
 
         return nn.functional.normalize(f, p=2, dim=-1)
+
+    def pad_score(self, p, domain_id):
+        for i, domain_id_single in enumerate(domain_id):
+            pad_left = torch.zeros(p.shape[0], domain_id_single * self.specific_clusters, p.shape[2], device=p.device)
+            pad_right = torch.zeros(p.shape[0], (self.divide - domain_id_single - 1) * self.specific_clusters, p.shape[2], device=p.device)
+            p[i] = torch.cat([pad_left, p[i], pad_right], dim=1)
+        return p
+
+    def select_score(self, p, domain_id, shared_clusters):
+        p_zero = torch.zeros_like(p)
+        for i, domain_id_single in enumerate(domain_id):
+            p_zero[i, shared_clusters + domain_id_single * self.specific_clusters: shared_clusters + (domain_id_single + 1) * self.specific_clusters] = p[i,
+                      shared_clusters + domain_id_single * self.specific_clusters: shared_clusters + (domain_id_single + 1) * self.specific_clusters]
+        return p_zero
