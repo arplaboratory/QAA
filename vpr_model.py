@@ -86,9 +86,9 @@ class VPRModel(pl.LightningModule):
         self.log_img_first_iter = False
         
     # the forward pass of the lightning model
-    def forward(self, x):
+    def forward(self, x, domain_idx=None):
         x = self.backbone(x)
-        x = self.aggregator(x)
+        x = self.aggregator(x, domain_idx=domain_idx)
         return x
     
     # configure the optimizer 
@@ -172,11 +172,14 @@ class VPRModel(pl.LightningModule):
         prev_label = -1
         images = []
         labels = []
+        domain_idx = []
         BS_list = []
         N_list = []
-        for train_dataset_name in batch.keys():
+        for i, train_dataset_name in enumerate(batch.keys()):
             places_single = batch[train_dataset_name][0]
             labels_single = batch[train_dataset_name][1]
+            domain_idx_single = torch.ones(places_single.shape[0] * places_single.shape[1], dtype=torch.long) * i
+            domain_idx_single = domain_idx_single.to(places_single.device).long()
             if not self.log_img_first_iter:
                 mean_tensor = torch.Tensor(IMAGENET_MEAN_STD['mean']).view(1, 1, 3, 1, 1)
                 std_tensor = torch.Tensor(IMAGENET_MEAN_STD['std']).view(1, 1, 3, 1, 1)
@@ -192,13 +195,15 @@ class VPRModel(pl.LightningModule):
             N_list.append(N)
             images.append(places_single.view(-1, ch, h, w))
             labels.append(labels_single.view(-1))
+            domain_idx.append(domain_idx_single.view(-1))
         self.log_img_first_iter = True
 
         images = torch.cat(images, dim=0)
         labels = torch.cat(labels, dim=0)
+        domain_idx = torch.cat(domain_idx, dim=0)
 
         # Feed forward the batch to the model
-        descriptors = self(images) # Here we are calling the method forward that we defined above
+        descriptors = self(images, domain_idx) # Here we are calling the method forward that we defined above
 
         if torch.isnan(descriptors).any():
             raise ValueError('NaNs in descriptors')

@@ -1,6 +1,7 @@
 import pytorch_lightning as pl
 from torch.utils.data.dataloader import DataLoader
 from torchvision import transforms as T
+import torch
 import os
 
 from prettytable import PrettyTable
@@ -159,6 +160,7 @@ class GenericDataModule(pl.LightningDataModule):
                     self.val_datasets.append(MapillaryDataset(split="val", input_transform=self.valid_transform))
                 else:
                     self.val_datasets.append(GenericDataset(dataset_name=dataset_name, split="val", input_transform=self.valid_transform))
+            wandb.config.update({'train_datasets': self.train_datasets_cfg, 'val_datasets': self.val_datasets_cfg, 'test_datasets': self.test_datasets_cfg})
 
         elif stage=="test":
             # load test sets (pitts_val, msls_val, ...etc)
@@ -169,8 +171,16 @@ class GenericDataModule(pl.LightningDataModule):
                     self.test_datasets.append(MapillaryTestDataset(split="test", input_transform=self.test_transform))
                 else:
                     self.test_datasets.append(GenericDataset(dataset_name=dataset_name, split="test", input_transform=self.test_transform, backup_transform=self.test_grayscale_transform))
-    
-        wandb.config.update({'train_datasets': self.train_datasets_cfg, 'val_datasets': self.val_datasets_cfg, 'test_datasets': self.test_datasets_cfg})
+
+        elif stage=="validate":
+            # load test sets (pitts_val, msls_val, ...etc)
+            self.val_datasets = []
+            for dataset_name in self.val_dataset_names:
+                assert self.val_datasets_cfg[dataset_name].validation.available
+                if dataset_name == "mapillary_sls":
+                    self.val_datasets.append(MapillaryDataset(split="val", input_transform=self.valid_transform))
+                else:
+                    self.val_datasets.append(GenericDataset(dataset_name=dataset_name, split="val", input_transform=self.valid_transform))
 
     def reload(self, dataset_name, index):
         if dataset_name == "GSV":
@@ -182,6 +192,7 @@ class GenericDataModule(pl.LightningDataModule):
                                                         random_sample_from_each_place=GSV_params.training.random_sample_from_each_place,
                                                         transform=self.train_transform)
         else:
+            print("Use current model to recompute clusters")
             self.train_datasets[index].reload(model=self.model)
 
     def train_dataloader(self):
