@@ -52,7 +52,7 @@ class SALAD(nn.Module):
             divide=1,
             decouple=False,
             shared_clusters=0,
-            padding=True,
+            padding="detach",
         ) -> None:
         super().__init__()
 
@@ -66,6 +66,7 @@ class SALAD(nn.Module):
             self.shared_clusters = shared_clusters
             self.specific_clusters = (self.num_clusters - shared_clusters) // divide
         self.padding = padding # Ensure the dimension is the same
+        assert self.padding in ["detach", "zero", "none"]
         
         if dropout > 0:
             dropout = nn.Dropout(dropout)
@@ -133,19 +134,15 @@ class SALAD(nn.Module):
             if domain_idx is None:
                 if self.shared_clusters > 0:
                     p_shared = self.shared_score(x).flatten(2)
-                    p = torch.cat([self.score_list[i](x).flatten(2) for i in range(self.divide)], dim=1)
+                p = torch.cat([self.score_list[i](x).flatten(2) for i in range(self.divide)], dim=1) # For each domain
+                if self.shared_clusters > 0:
                     p = torch.cat([p_shared, p], dim=1)
-                else:
-                    p = torch.cat([self.score_list[i](x).flatten(2) for i in range(self.divide)], dim=1)
             else:
-                if self.shared_score is not None:
+                if self.shared_clusters > 0:
                     p_shared = self.shared_score(x).flatten(2)
-                    p = torch.cat([self.score_list[i](x[domain_idx == i]).flatten(2) for i in range(self.divide)], dim=0)
-                    p = self.pad_score(p, domain_idx)
+                p = self.generate_score_from_decoupled_pnet(x, domain_idx)
+                if self.shared_clusters > 0:
                     p = torch.cat([p_shared, p], dim=1)
-                else:
-                    p = torch.cat([self.score_list[i](x[domain_idx == i]).flatten(2) for i in range(self.divide)], dim=0)
-                    p = self.pad_score(p, domain_idx)
         elif self.divide > 1:
             # Use coupled score network
             p = self.score(x).flatten(2)
@@ -154,14 +151,14 @@ class SALAD(nn.Module):
             else:
                 if self.shared_clusters > 0:
                     p_shared = p[:, :self.shared_clusters]
-                    p = self.select_score(p[:, self.shared_clusters:], domain_idx)
+                    p = p[:, self.shared_clusters:]
+                p = self.select_score_from_coupled_pnet(p, domain_idx)
+                if self.shared_clusters > 0:
                     p = torch.cat([p_shared, p], dim=1)
-                else:
-                    p = self.select_score(p, domain_idx)
         else:
             p = self.score(x).flatten(2)
         t = self.token_features(t)
-
+        assert p.shape[1] == self.num_clusters if self.padding in ["zero", "detach"] else self.shared_clusters + self.specific_clusters
         # Sinkhorn algorithm
         p = log_optimal_transport(p, self.dust_bin, 3)
         p = torch.exp(p)
@@ -170,7 +167,7 @@ class SALAD(nn.Module):
 
 
         p = p.unsqueeze(1).repeat(1, self.cluster_dim, 1, 1)
-        if self.padding:
+        if self.padding in ["zero", "detach"] or self.domain_idx is None:
             f = f.unsqueeze(2).repeat(1, 1, self.num_clusters, 1)
         else:
             f = f.unsqueeze(2).repeat(1, 1, self.shared_clusters + self.specific_clusters, 1)
@@ -182,20 +179,42 @@ class SALAD(nn.Module):
 
         return nn.functional.normalize(f, p=2, dim=-1)
 
-    def pad_score(self, p, domain_id):
+    def pad_zero_score(self, p, domain_idx):
         p_zero = torch.zeros((p.shape[0], self.num_clusters, p.shape[2]), device=p.device)
-        for i, domain_id_single in enumerate(domain_id):
+        for i, domain_id_single in enumerate(domain_idx):
             p_zero[i, domain_id_single * self.specific_clusters: (domain_id_single + 1) * self.specific_clusters] = p[i]
         return p_zero
 
-    def select_score(self, p, domain_id):
-        if self.padding:
+    def select_score_from_coupled_pnet(self, p, domain_idx):
+        if self.padding == "zero" or self.padding == "detach":
             p_zero = torch.zeros((p.shape[0], self.num_clusters - self.shared_clusters, p.shape[2]), device=p.device)
-            for i, domain_id_single in enumerate(domain_id):
-                p_zero[i, domain_id_single * self.specific_clusters: (domain_id_single + 1) * self.specific_clusters] = p[i,
-                        domain_id_single * self.specific_clusters: (domain_id_single + 1) * self.specific_clusters]
-        else:
-            p_zero = torch.zeros((p.shape[0], self.specific_clusters, p.shape[2]), device=p.device)
-            for i, domain_id_single in enumerate(domain_id):
+            if self.padding == "zero":
+                for i, domain_id_single in enumerate(domain_idx):
+                    p_zero[i, domain_id_single * self.specific_clusters: (domain_id_single + 1) * self.specific_clusters] = p[i,
+                            domain_id_single * self.specific_clusters: (domain_id_single + 1) * self.specific_clusters]
+            elif self.padding == "detach":
+                for i, domain_id_single in enumerate(domain_idx):
+                    for j in range(self.divide):
+                        if j == domain_id_single:
+                            p_zero[i, j * self.specific_clusters: (j + 1) * self.specific_clusters] = p[i,
+                                    j * self.specific_clusters: (j + 1) * self.specific_clusters]
+                        else:
+                            p_zero[i, j * self.specific_clusters: (j + 1) * self.specific_clusters] = p[i,
+                                    j * self.specific_clusters: (j + 1) * self.specific_clusters].detach()                                                                       
+        elif self.padding == "none":
+            p_zero = torch.zeros((p.shape[0], self.specific_clusters, p.shape[2]), device=p.device) # Only the specific clusters
+            for i, domain_id_single in enumerate(domain_idx):
                 p_zero[i] = p[i, domain_id_single * self.specific_clusters: (domain_id_single + 1) * self.specific_clusters]
         return p_zero
+    
+    def generate_score_from_decoupled_pnet(self, x, domain_idx):
+        if self.padding == "zero" or self.padding == "none":
+            p = torch.cat([self.score_list[i](x[domain_idx == i]).flatten(2) for i in range(self.divide)], dim=0)
+            if self.padding == "zero":
+                p = self.pad_zero_score(p, domain_idx)
+        elif self.padding == "detach":
+            p_list = [self.score_list[i](x).flatten(2) for i in range(self.divide)]
+            for i in range(self.divide): # For each domain
+                p_list[i][domain_idx != i] = p_list[i][domain_idx != i].detach() # detach the other domains
+            p = torch.cat(p_list, dim=1)
+        return p
