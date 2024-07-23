@@ -52,6 +52,7 @@ class SALAD(nn.Module):
             divide=1,
             decouple=False,
             shared_clusters=0,
+            padding=True,
         ) -> None:
         super().__init__()
 
@@ -64,6 +65,7 @@ class SALAD(nn.Module):
         if divide > 1:
             self.shared_clusters = shared_clusters
             self.specific_clusters = (self.num_clusters - shared_clusters) // divide
+        self.padding = padding # Ensure the dimension is the same
         
         if dropout > 0:
             dropout = nn.Dropout(dropout)
@@ -151,7 +153,9 @@ class SALAD(nn.Module):
                 pass
             else:
                 if self.shared_clusters > 0:
-                    p[:, self.shared_clusters:] = self.select_score(p[:, self.shared_clusters:], domain_idx)
+                    p_shared = p[:, :self.shared_clusters]
+                    p = self.select_score(p[:, self.shared_clusters:], domain_idx)
+                    p = torch.cat([p_shared, p], dim=1)
                 else:
                     p = self.select_score(p, domain_idx)
         else:
@@ -164,8 +168,12 @@ class SALAD(nn.Module):
         # Normalize to maintain mass
         p = p[:, :-1, :]
 
+
         p = p.unsqueeze(1).repeat(1, self.cluster_dim, 1, 1)
-        f = f.unsqueeze(2).repeat(1, 1, self.num_clusters, 1)
+        if self.padding:
+            f = f.unsqueeze(2).repeat(1, 1, self.num_clusters, 1)
+        else:
+            f = f.unsqueeze(2).repeat(1, 1, self.shared_clusters + self.specific_clusters, 1)
 
         f = torch.cat([
             nn.functional.normalize(t, p=2, dim=-1),
@@ -181,8 +189,13 @@ class SALAD(nn.Module):
         return p_zero
 
     def select_score(self, p, domain_id):
-        p_zero = torch.zeros((p.shape[0], self.num_clusters - self.shared_clusters, p.shape[2]), device=p.device)
-        for i, domain_id_single in enumerate(domain_id):
-            p_zero[i, domain_id_single * self.specific_clusters: (domain_id_single + 1) * self.specific_clusters] = p[i,
-                      domain_id_single * self.specific_clusters: (domain_id_single + 1) * self.specific_clusters]
+        if self.padding:
+            p_zero = torch.zeros((p.shape[0], self.num_clusters - self.shared_clusters, p.shape[2]), device=p.device)
+            for i, domain_id_single in enumerate(domain_id):
+                p_zero[i, domain_id_single * self.specific_clusters: (domain_id_single + 1) * self.specific_clusters] = p[i,
+                        domain_id_single * self.specific_clusters: (domain_id_single + 1) * self.specific_clusters]
+        else:
+            p_zero = torch.zeros((p.shape[0], self.specific_clusters, p.shape[2]), device=p.device)
+            for i, domain_id_single in enumerate(domain_id):
+                p_zero[i] = p[i, domain_id_single * self.specific_clusters: (domain_id_single + 1) * self.specific_clusters]
         return p_zero
