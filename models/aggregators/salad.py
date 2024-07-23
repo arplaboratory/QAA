@@ -167,7 +167,7 @@ class SALAD(nn.Module):
 
 
         p = p.unsqueeze(1).repeat(1, self.cluster_dim, 1, 1)
-        if self.padding in ["zero", "detach"] or self.domain_idx is None:
+        if self.padding in ["zero", "detach"] or domain_idx is None:
             f = f.unsqueeze(2).repeat(1, 1, self.num_clusters, 1)
         else:
             f = f.unsqueeze(2).repeat(1, 1, self.shared_clusters + self.specific_clusters, 1)
