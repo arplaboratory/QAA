@@ -151,11 +151,9 @@ class SALAD(nn.Module):
                 pass
             else:
                 if self.shared_clusters > 0:
-                    p_shared = p[:, :self.shared_clusters]
-                    p = self.select_score(p[:, self.shared_clusters:], domain_idx, self.shared_clusters)
-                    p = torch.cat([p_shared, p], dim=1)
+                    p[:, self.shared_clusters:] = self.select_score(p[:, self.shared_clusters:], domain_idx)
                 else:
-                    p = self.select_score(p, domain_idx, self.shared_clusters)
+                    p = self.select_score(p, domain_idx)
         else:
             p = self.score(x).flatten(2)
         t = self.token_features(t)
@@ -182,9 +180,9 @@ class SALAD(nn.Module):
             p_zero[i,domain_id_single * self.specific_clusters: (domain_id_single + 1) * self.specific_clusters] = p[i]
         return p_zero
 
-    def select_score(self, p, domain_id, shared_clusters):
+    def select_score(self, p, domain_id):
         p_zero = torch.zeros_like(p, device=p.device)
         for i, domain_id_single in enumerate(domain_id):
-            p_zero[i, shared_clusters + domain_id_single * self.specific_clusters: shared_clusters + (domain_id_single + 1) * self.specific_clusters] = p[i,
-                      shared_clusters + domain_id_single * self.specific_clusters: shared_clusters + (domain_id_single + 1) * self.specific_clusters]
+            p_zero[i, domain_id_single * self.specific_clusters: (domain_id_single + 1) * self.specific_clusters] = p[i,
+                      domain_id_single * self.specific_clusters: (domain_id_single + 1) * self.specific_clusters]
         return p_zero
