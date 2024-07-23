@@ -181,7 +181,7 @@ class SALAD(nn.Module):
         return p_zero
 
     def select_score(self, p, domain_id):
-        p_zero = torch.zeros((p.shape[0], self.num_clusters, p.shape[2]), device=p.device)
+        p_zero = torch.zeros((p.shape[0], self.num_clusters - self.shared_clusters, p.shape[2]), device=p.device)
         for i, domain_id_single in enumerate(domain_id):
             p_zero[i, domain_id_single * self.specific_clusters: (domain_id_single + 1) * self.specific_clusters] = p[i,
                       domain_id_single * self.specific_clusters: (domain_id_single + 1) * self.specific_clusters]
