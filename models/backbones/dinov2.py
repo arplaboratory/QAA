@@ -77,7 +77,7 @@ class DINOv2(nn.Module):
         if self.domain_prompt:
             hidden_size = self.model.blocks[0].norm1.weight.shape[0]
             self.domain_prompt_model = SALAD(num_channels=hidden_size, num_clusters=num_clusters, cluster_dim=cluster_dim, token_dim=token_dim,
-                                             divide=divide, shared_clusters=shared_clusters)
+                                             divide=divide, decouple=decouple, shared_clusters=shared_clusters)
             self.domain_prompt_mlp_list = nn.ModuleList()
             for blk in self.model.blocks[-self.num_trainable_blocks: -1]:
                 self.domain_prompt_mlp_list.append(nn.Linear(num_clusters*cluster_dim+token_dim, hidden_size * 6))
