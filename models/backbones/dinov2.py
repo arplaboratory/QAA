@@ -91,9 +91,6 @@ class DINOv2(nn.Module):
             for domain_prompt_mlp in self.domain_prompt_mlp_list:
                 nn.init.constant_(domain_prompt_mlp.weight, 0)
                 nn.init.constant_(domain_prompt_mlp.bias, 0)
-            self.domain_prompt_mlp_list.append(nn.Linear(num_clusters*cluster_dim+token_dim, hidden_size * 3))
-            self.model.blocks[-1].norm1 = ClusterNorm(hidden_size)
-            self.model.blocks[-1].ls1 = ClusterLayerScale(hidden_size)
             # Zero the domain prompt mlp
             assert self.num_trainable_blocks > 0, 'First blocks should be frozen when using domain prompt'
 
@@ -139,7 +136,7 @@ class DINOv2(nn.Module):
                 f = f.reshape((B, H // 14, W // 14, self.num_channels)).permute(0, 3, 1, 2)
                 domain_prompt_desc = self.domain_prompt_model((f, t), domain_idx)
             # Last blocks are trained
-            for i, blk in enumerate(self.model.blocks[-self.num_trainable_blocks:-1]):
+            for i, blk in enumerate(self.model.blocks[-self.num_trainable_blocks:]):
                 if self.domain_prompt:
                     domain_prompt_output = self.domain_prompt_mlp_list[i](domain_prompt_desc).chunk(6, dim=1)
                     blk.norm1.set_weight_bias(domain_prompt_output[0], domain_prompt_output[1])
@@ -147,11 +144,6 @@ class DINOv2(nn.Module):
                     blk.norm2.set_weight_bias(domain_prompt_output[3], domain_prompt_output[4])
                     blk.ls2.set_gamma(domain_prompt_output[5])
                 x = blk(x)
-            if self.domain_prompt:
-                domain_prompt_output = self.domain_prompt_mlp_list[-1](domain_prompt_desc).chunk(3, dim=1)
-                self.model.blocks[-1].norm1.set_weight_bias(domain_prompt_output[0], domain_prompt_output[1])
-                self.model.blocks[-1].ls1.set_gamma(domain_prompt_output[2])
-            x = self.model.blocks[-1](x)
 
         if self.norm_layer:
             x = self.model.norm(x)
