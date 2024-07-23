@@ -81,7 +81,7 @@ class DINOv2(nn.Module):
                                              token_dim=token_dim, dropout=dropout,
                                              divide=divide, decouple=decouple, shared_clusters=shared_clusters)
             self.domain_prompt_mlp_list = nn.ModuleList()
-            for blk in self.model.blocks[-self.num_trainable_blocks: -1]:
+            for blk in self.model.blocks[-self.num_trainable_blocks]:
                 self.domain_prompt_mlp_list.append(nn.Linear(num_clusters*cluster_dim+token_dim, hidden_size * 6))
                 blk.norm1 = ClusterNorm(hidden_size)
                 blk.norm2 = ClusterNorm(hidden_size)
