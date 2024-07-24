@@ -87,7 +87,7 @@ class VPRModel(pl.LightningModule):
         
     # the forward pass of the lightning model
     def forward(self, x, domain_idx=None):
-        x = self.backbone(x)
+        x = self.backbone(x, domain_idx=domain_idx)
         x = self.aggregator(x, domain_idx=domain_idx)
         return x
     

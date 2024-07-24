@@ -77,11 +77,10 @@ if __name__ == '__main__':
         reload_dataloaders_every_n_epochs=1, # we reload the dataset to shuffle the order
         log_every_n_steps=20,
         logger=wandb_logger,
-        profiler="simple",
     )
 
     # we call the trainer, we give it the model and the datamodule
     pl.seed_everything(0)
     # trainer.validate(model=model, datamodule=datamodule)
     trainer.fit(model=model, datamodule=datamodule)
-    trainer.test(model=model, datamodule=datamodule, ckpt_path="last")
+    trainer.test(model=model, datamodule=datamodule, ckpt_path="best")
