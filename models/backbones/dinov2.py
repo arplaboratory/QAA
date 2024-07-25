@@ -77,6 +77,8 @@ class DINOv2(nn.Module):
             shared_clusters=0,
             decouple=False,
             padding="detach",
+            mlp_nonlinear=False,
+            final_layer_norm=True,
         ):
         super().__init__()
 
@@ -87,29 +89,39 @@ class DINOv2(nn.Module):
         self.norm_layer = norm_layer
         self.return_token = return_token
         self.domain_prompt = domain_prompt
+        self.final_layer_norm = final_layer_norm
         if self.domain_prompt:
             hidden_size = self.model.blocks[0].norm1.weight.shape[0]
             assert padding in ["detach", "zero"], 'Padding should be either detach or zero'
+            assert self.num_trainable_blocks > 0, 'First blocks should be frozen when using domain prompt'
             self.domain_prompt_model = SALAD(num_channels=hidden_size, num_clusters=num_clusters, cluster_dim=cluster_dim,
                                              token_dim=token_dim, dropout=dropout, padding=padding,
                                              divide=divide, decouple=decouple, shared_clusters=shared_clusters)
             self.domain_prompt_mlp_list = nn.ModuleList()
-            for blk in self.model.blocks[-self.num_trainable_blocks:]:
-                self.domain_prompt_mlp_list.append(nn.Linear(num_clusters*cluster_dim+token_dim, hidden_size * 6))
+            for i, blk in enumerate(self.model.blocks[-self.num_trainable_blocks:]):
+                if i == self.num_trainable_blocks - 1 and not self.final_layer_norm:
+                    self.domain_prompt_mlp_list.append(nn.Sequential(nn.SiLU() if mlp_nonlinear else nn.Identity(),
+                                                                nn.Linear(num_clusters*cluster_dim+token_dim, hidden_size * 2)))
+                else:
+                    self.domain_prompt_mlp_list.append(nn.Sequential(nn.SiLU() if mlp_nonlinear else nn.Identity(),
+                                                                nn.Linear(num_clusters*cluster_dim+token_dim, hidden_size * 6)))
                 clusternorm1 = ClusterNorm(hidden_size)
-                clusternorm2 = ClusterNorm(hidden_size)
                 clusternorm1.norm.load_state_dict(blk.norm1.state_dict(), strict=False) # weight and bias
-                clusternorm2.norm.load_state_dict(blk.norm2.state_dict(), strict=False) # weight and bias
                 clusternorm1.set_weight_bias(blk.norm1.weight, blk.norm1.bias)
-                clusternorm2.set_weight_bias(blk.norm2.weight, blk.norm2.bias)
                 blk.norm1 = clusternorm1
-                blk.norm2 = clusternorm2
                 clusterls1 = ClusterLayerScale(hidden_size)
-                clusterls2 = ClusterLayerScale(hidden_size)
                 clusterls1.set_gamma(blk.ls1.gamma)
-                clusterls2.set_gamma(blk.ls2.gamma)
                 blk.ls1 = clusterls1
-                blk.ls2 = clusterls2
+                if i == self.num_trainable_blocks - 1 and not self.final_layer_norm:
+                    pass
+                else:
+                    clusternorm2 = ClusterNorm(hidden_size)
+                    clusternorm2.norm.load_state_dict(blk.norm2.state_dict(), strict=False) # weight and bias
+                    clusternorm2.set_weight_bias(blk.norm2.weight, blk.norm2.bias)
+                    blk.norm2 = clusternorm2
+                    clusterls2 = ClusterLayerScale(hidden_size)
+                    clusterls2.set_gamma(blk.ls2.gamma)
+                    blk.ls2 = clusterls2
             # Zero initialize the domain prompt mlp
             for domain_prompt_mlp in self.domain_prompt_mlp_list:
                 nn.init.constant_(domain_prompt_mlp.weight, 0)
@@ -164,8 +176,11 @@ class DINOv2(nn.Module):
                     domain_prompt_output = self.domain_prompt_mlp_list[i](domain_prompt_desc).chunk(6, dim=1)
                     blk.norm1.set_residual_weight_bias(domain_prompt_output[0], domain_prompt_output[1])
                     blk.ls1.set_residual_gamma(domain_prompt_output[2])
-                    blk.norm2.set_residual_weight_bias(domain_prompt_output[3], domain_prompt_output[4])
-                    blk.ls2.set_residual_gamma(domain_prompt_output[5])
+                    if i == self.num_trainable_blocks - 1 and not self.final_layer_norm:
+                        pass
+                    else:
+                        blk.norm2.set_residual_weight_bias(domain_prompt_output[3], domain_prompt_output[4])
+                        blk.ls2.set_residual_gamma(domain_prompt_output[5])
                 x = blk(x)
 
         if self.norm_layer:
