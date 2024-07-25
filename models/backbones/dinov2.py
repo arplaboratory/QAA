@@ -15,10 +15,21 @@ class ClusterNorm(nn.Module):
     def __init__(self, hidden_size):
         super().__init__()
         self.norm = nn.LayerNorm(hidden_size, elementwise_affine=False)
+        self.weight = None
+        self.bias = None
+        self.residual_weight = None
+        self.residual_bias = None
 
     def forward(self, x: Tensor) -> Tensor:
-        return self.norm(x) * self.weight + self.bias
+        weight = self.weight + self.residual_weight
+        bias = self.bias + self.residual_bias
+        print(self.norm(x).shape)
+        return self.norm(x) * weight + bias
     
+    def set_residual_weight_bias(self, weight: Tensor, bias: Tensor) -> None:
+        self.residual_weight = weight.unsqueeze(1)
+        self.residual_bias = bias.unsqueeze(1)
+        
     def set_weight_bias(self, weight: Tensor, bias: Tensor) -> None:
         self.weight = weight.unsqueeze(1)
         self.bias = bias.unsqueeze(1)
@@ -33,9 +44,14 @@ class ClusterLayerScale(nn.Module):
         super().__init__()
         self.inplace = inplace
         self.gamma = None
+        self.residual_gamma = None
 
     def forward(self, x: Tensor) -> Tensor:
-        return x.mul_(self.gamma) if self.inplace else x * self.gamma
+        gamma = self.gamma + self.residual_gamma
+        return x.mul_(gamma) if self.inplace else x * gamma
+
+    def set_residual_gamma(self, gamma: Tensor) -> None:
+        self.residual_gamma = gamma.unsqueeze(1)
 
     def set_gamma(self, gamma: Tensor) -> None:
         self.gamma = gamma.unsqueeze(1)
@@ -85,10 +101,20 @@ class DINOv2(nn.Module):
             self.domain_prompt_mlp_list = nn.ModuleList()
             for blk in self.model.blocks[-self.num_trainable_blocks:]:
                 self.domain_prompt_mlp_list.append(nn.Linear(num_clusters*cluster_dim+token_dim, hidden_size * 6))
-                blk.norm1 = ClusterNorm(hidden_size)
-                blk.norm2 = ClusterNorm(hidden_size)
-                blk.ls1 = ClusterLayerScale(hidden_size)
-                blk.ls2 = ClusterLayerScale(hidden_size)
+                clusternorm1 = ClusterNorm(hidden_size)
+                clusternorm2 = ClusterNorm(hidden_size)
+                clusternorm1.norm.load_state_dict(blk.norm1.state_dict(), strict=False) # weight and bias
+                clusternorm2.norm.load_state_dict(blk.norm2.state_dict(), strict=False) # weight and bias
+                clusternorm1.set_weight_bias(blk.norm1.weight, blk.norm1.bias)
+                clusternorm2.set_weight_bias(blk.norm2.weight, blk.norm2.bias)
+                blk.norm1 = clusternorm1
+                blk.norm2 = clusternorm2
+                clusterls1 = ClusterLayerScale(hidden_size)
+                clusterls2 = ClusterLayerScale(hidden_size)
+                clusterls1.set_gamma(blk.ls1.gamma)
+                clusterls2.set_gamma(blk.ls2.gamma)
+                blk.ls1 = clusterls1
+                blk.ls2 = clusterls2
             # Zero initialize the domain prompt mlp
             for domain_prompt_mlp in self.domain_prompt_mlp_list:
                 nn.init.constant_(domain_prompt_mlp.weight, 0)
@@ -141,10 +167,10 @@ class DINOv2(nn.Module):
             for i, blk in enumerate(self.model.blocks[-self.num_trainable_blocks:]):
                 if self.domain_prompt:
                     domain_prompt_output = self.domain_prompt_mlp_list[i](domain_prompt_desc).chunk(6, dim=1)
-                    blk.norm1.set_weight_bias(domain_prompt_output[0], domain_prompt_output[1])
-                    blk.ls1.set_gamma(domain_prompt_output[2])
-                    blk.norm2.set_weight_bias(domain_prompt_output[3], domain_prompt_output[4])
-                    blk.ls2.set_gamma(domain_prompt_output[5])
+                    blk.norm1.set_residual_weight_bias(domain_prompt_output[0], domain_prompt_output[1])
+                    blk.ls1.set_residual_gamma(domain_prompt_output[2])
+                    blk.norm2.set_residual_weight_bias(domain_prompt_output[3], domain_prompt_output[4])
+                    blk.ls2.set_residual_gamma(domain_prompt_output[5])
                 x = blk(x)
 
         if self.norm_layer:
