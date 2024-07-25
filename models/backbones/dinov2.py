@@ -124,8 +124,8 @@ class DINOv2(nn.Module):
                     blk.ls2 = clusterls2
             # Zero initialize the domain prompt mlp
             for domain_prompt_mlp in self.domain_prompt_mlp_list:
-                nn.init.constant_(domain_prompt_mlp.weight, 0)
-                nn.init.constant_(domain_prompt_mlp.bias, 0)
+                nn.init.constant_(domain_prompt_mlp[1].weight, 0)
+                nn.init.constant_(domain_prompt_mlp[1].bias, 0)
             # Zero the domain prompt mlp
             assert self.num_trainable_blocks > 0, 'First blocks should be frozen when using domain prompt'
 
