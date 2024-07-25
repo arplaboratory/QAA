@@ -15,46 +15,41 @@ class ClusterNorm(nn.Module):
     def __init__(self, hidden_size):
         super().__init__()
         self.norm = nn.LayerNorm(hidden_size, elementwise_affine=False)
-        self.weight = None
-        self.bias = None
-        self.residual_weight = None
-        self.residual_bias = None
+        self.weight = nn.Parameter(torch.zeros(hidden_size), requires_grad=True)
+        self.bias = nn.Parameter(torch.zeros(hidden_size), requires_grad=True)
 
     def forward(self, x: Tensor) -> Tensor:
         weight = self.weight + self.residual_weight
         bias = self.bias + self.residual_bias
-        print(self.norm(x).shape)
-        return self.norm(x) * weight + bias
+        return self.norm(x) * weight.unsqueeze(1) + bias.unsqueeze(1)
     
     def set_residual_weight_bias(self, weight: Tensor, bias: Tensor) -> None:
-        self.residual_weight = weight.unsqueeze(1)
-        self.residual_bias = bias.unsqueeze(1)
+        self.residual_weight = weight
+        self.residual_bias = bias
         
     def set_weight_bias(self, weight: Tensor, bias: Tensor) -> None:
-        self.weight = weight.unsqueeze(1)
-        self.bias = bias.unsqueeze(1)
+        self.weight = weight
+        self.bias = bias
 
 class ClusterLayerScale(nn.Module):
     def __init__(
         self,
-        dim: int,
-        init_values: Union[float, Tensor] = 1e-5,
+        hidden_size,
         inplace: bool = False,
     ) -> None:
         super().__init__()
         self.inplace = inplace
-        self.gamma = None
-        self.residual_gamma = None
+        self.gamma = nn.Parameter(torch.zeros(hidden_size), requires_grad=True)
 
     def forward(self, x: Tensor) -> Tensor:
         gamma = self.gamma + self.residual_gamma
-        return x.mul_(gamma) if self.inplace else x * gamma
+        return x.mul_(gamma.unsqueeze(1)) if self.inplace else x * gamma.unsqueeze(1)
 
     def set_residual_gamma(self, gamma: Tensor) -> None:
-        self.residual_gamma = gamma.unsqueeze(1)
+        self.residual_gamma = gamma
 
     def set_gamma(self, gamma: Tensor) -> None:
-        self.gamma = gamma.unsqueeze(1)
+        self.gamma = gamma
 
 class DINOv2(nn.Module):
     """
