@@ -83,7 +83,7 @@ class DINOv2(nn.Module):
                                              token_dim=token_dim, dropout=dropout, padding=padding,
                                              divide=divide, decouple=decouple, shared_clusters=shared_clusters)
             self.domain_prompt_mlp_list = nn.ModuleList()
-            for blk in self.model.blocks[-self.num_trainable_blocks]:
+            for blk in self.model.blocks[-self.num_trainable_blocks:]:
                 self.domain_prompt_mlp_list.append(nn.Linear(num_clusters*cluster_dim+token_dim, hidden_size * 6))
                 blk.norm1 = ClusterNorm(hidden_size)
                 blk.norm2 = ClusterNorm(hidden_size)
@@ -122,7 +122,7 @@ class DINOv2(nn.Module):
             x = x.detach()
         elif self.num_trainable_blocks == 0:
             # All blocks are trainable
-            assert domain_idx is None, 'Domain index should not be provided when all blocks are trainable'
+            assert domain_idx is None or self.domain_prompt == False, 'Domain index should not be provided when all blocks are trainable or domain prompt is not used'
             for blk in self.model.blocks:
                 x = blk(x)
         else:
