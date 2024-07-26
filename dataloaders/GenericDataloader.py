@@ -167,6 +167,10 @@ class GenericDataModule(pl.LightningDataModule):
                 assert self.test_datasets_cfg[dataset_name].test.available
                 if dataset_name == "mapillary_sls":
                     self.test_datasets.append(MapillaryTestDataset(split="test", input_transform=self.test_transform))
+                elif dataset_name == "svox":
+                    svox_query_suffix = ["", "_night", "_overcast", "_rain", "_snow", "_sun"]
+                    for query_suffix in svox_query_suffix:
+                        self.test_datasets.append(GenericDataset(dataset_name=dataset_name+query_suffix, split="test", input_transform=self.test_transform, backup_transform=self.test_grayscale_transform))
                 else:
                     self.test_datasets.append(GenericDataset(dataset_name=dataset_name, split="test", input_transform=self.test_transform, backup_transform=self.test_grayscale_transform))
 
