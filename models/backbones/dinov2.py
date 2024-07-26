@@ -101,10 +101,10 @@ class DINOv2(nn.Module):
             for i, blk in enumerate(self.model.blocks[-self.num_trainable_blocks:]):
                 if i == self.num_trainable_blocks - 1 and not self.final_layer_norm:
                     self.domain_prompt_mlp_list.append(nn.Sequential(nn.SiLU() if mlp_nonlinear else nn.Identity(),
-                                                                nn.Linear(num_clusters*cluster_dim+token_dim, hidden_size * 3)))
+                                                                nn.Linear(num_clusters*cluster_dim+token_dim, hidden_size * 6)))
                 else:
                     self.domain_prompt_mlp_list.append(nn.Sequential(nn.SiLU() if mlp_nonlinear else nn.Identity(),
-                                                                nn.Linear(num_clusters*cluster_dim+token_dim, hidden_size * 6)))
+                                                                nn.Linear(num_clusters*cluster_dim+token_dim, hidden_size * 3)))
                 clusternorm1 = ClusterNorm(hidden_size)
                 clusternorm1.norm.load_state_dict(blk.norm1.state_dict(), strict=False) # weight and bias
                 clusternorm1.set_weight_bias(blk.norm1.weight, blk.norm1.bias)
