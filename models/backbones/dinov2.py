@@ -77,7 +77,6 @@ class DINOv2(nn.Module):
             shared_clusters=0,
             decouple=False,
             padding="detach",
-            mlp_nonlinear=False,
             final_layer_norm=True,
         ):
         super().__init__()
@@ -100,10 +99,10 @@ class DINOv2(nn.Module):
             self.domain_prompt_mlp_list = nn.ModuleList()
             for i, blk in enumerate(self.model.blocks[-self.num_trainable_blocks:]):
                 if i == self.num_trainable_blocks - 1 and not self.final_layer_norm:
-                    self.domain_prompt_mlp_list.append(nn.Sequential(nn.SiLU() if mlp_nonlinear else nn.Identity(),
+                    self.domain_prompt_mlp_list.append(nn.Sequential(nn.SiLU(),
                                                                 nn.Linear(num_clusters*cluster_dim+token_dim, hidden_size * 3)))
                 else:
-                    self.domain_prompt_mlp_list.append(nn.Sequential(nn.SiLU() if mlp_nonlinear else nn.Identity(),
+                    self.domain_prompt_mlp_list.append(nn.Sequential(nn.SiLU(),
                                                                 nn.Linear(num_clusters*cluster_dim+token_dim, hidden_size * 6)))
                 clusternorm1 = ClusterNorm(hidden_size)
                 clusternorm1.norm.load_state_dict(blk.norm1.state_dict(), strict=False) # weight and bias
