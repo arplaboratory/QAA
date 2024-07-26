@@ -263,7 +263,6 @@ class CliqueGenericDataset(Dataset):
             same_place_threshold=20.0,
             cluster_desc_threshold_percentage=0.1,
             only_top_k=False,
-            recompute_clusters=False,
             shuffle_method="global",
             prefetch_factor=1,
     ):
@@ -279,7 +278,6 @@ class CliqueGenericDataset(Dataset):
         self.sampled_similar_places = sampled_similar_places
         self.same_place_threshold = same_place_threshold
         self.cluster_desc_threshold_percentage = cluster_desc_threshold_percentage
-        self.recompute_clusters = recompute_clusters
         self.only_top_k = only_top_k
         self.shuffle_method = shuffle_method
         self.prefetch_factor = prefetch_factor
@@ -331,8 +329,8 @@ class CliqueGenericDataset(Dataset):
             return Image.new('RGB', (224, 224))
         
 
-    def reload(self, model=None):
-        if self.recompute_clusters:
+    def reload(self, model=None, recompute=False):
+        if recompute:
             self.create_dataset(
                 model=model,
                 num_batches=self.num_batches,

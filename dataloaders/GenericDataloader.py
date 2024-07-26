@@ -46,6 +46,8 @@ class GenericDataModule(pl.LightningDataModule):
         self.val_datasets_cfg = load_datasets_config(self.val_dataset_names)
         self.test_datasets_cfg = load_datasets_config(self.test_dataset_names)
         self.train_cfg_training = train_cfg_training
+        if self.train_cfg_training.recompute_interval != 0:
+            self.recompute_count = 0
         self.model = None
 
         self.train_transform = T.Compose([
@@ -105,7 +107,6 @@ class GenericDataModule(pl.LightningDataModule):
 
     def setup(self, stage):
         if stage == 'fit':
-            self.first_setup = True
             # load train dataloader (pitts_train, msls_train, ...etc)
             self.train_datasets = []
             for dataset_name in self.train_dataset_names:
@@ -127,7 +128,6 @@ class GenericDataModule(pl.LightningDataModule):
                                                 transform=self.train_transform,
                                                 batch_size=self.train_batch_size,
                                                 only_top_k=self.train_cfg_training.only_top_k,
-                                                recompute_clusters=self.train_cfg_training.recompute_clusters,
                                                 shuffle_method=self.train_cfg_training.shuffle_method,
                                                 prefetch_factor=self.train_cfg_training.prefetch_factor,
                                                 **self.train_datasets_cfg["mapillary_sls"].training.clique_args))
@@ -137,7 +137,6 @@ class GenericDataModule(pl.LightningDataModule):
                                                 transform=self.train_transform,
                                                 batch_size=self.train_batch_size,
                                                 only_top_k=self.train_cfg_training.only_top_k,
-                                                recompute_clusters=self.train_cfg_training.recompute_clusters,
                                                 shuffle_method=self.train_cfg_training.shuffle_method,
                                                 prefetch_factor=self.train_cfg_training.prefetch_factor,
                                                 **self.train_datasets_cfg["SF_XL"].training.clique_args))
@@ -148,7 +147,6 @@ class GenericDataModule(pl.LightningDataModule):
                                                 transform=self.train_transform,
                                                 batch_size=self.train_batch_size,
                                                 only_top_k=self.train_cfg_training.only_top_k,
-                                                recompute_clusters=self.train_cfg_training.recompute_clusters,
                                                 **self.train_datasets_cfg[dataset_name].training.clique_args))
                 print(f'Dataset {dataset_name} loaded: Length = {len(self.train_datasets[-1])}')
 
@@ -192,17 +190,19 @@ class GenericDataModule(pl.LightningDataModule):
                                                         random_sample_from_each_place=GSV_params.training.random_sample_from_each_place,
                                                         transform=self.train_transform)
         else:
-            print("Use current model to recompute clusters")
-            self.train_datasets[index].reload(model=self.model)
+            if self.train_cfg_training.recompute_interval!=0 and recompute_count == self.train_cfg_training.recompute_interval:
+                self.train_datasets[index].reload(model=self.model, recompute=True)
+                self.recompute_count = 0
+            else:
+                self.train_datasets[index].reload(model=self.model, recompute=False)
+                if self.train_cfg_training.recompute_interval!=0:
+                    self.recompute_count += 1
 
     def train_dataloader(self):
         train_dataloaders = {}
         for index, train_dataset_name in enumerate(self.train_dataset_names):
-            if not self.first_setup:
-                print("Reloading to shuffle")
-                self.reload(train_dataset_name, index) # Following reload routine to shuffle cities
-            else:
-                print("First setup: No reloading")
+            print("Reloading to shuffle")
+            self.reload(train_dataset_name, index) # Following reload routine to shuffle cities
             train_dataset = self.train_datasets[index]
             if train_dataset_name == "GSV":
                 train_dataloaders[train_dataset_name] = DataLoader(
@@ -211,7 +211,6 @@ class GenericDataModule(pl.LightningDataModule):
                 train_dataloaders[train_dataset_name] = DataLoader(
                     dataset=train_dataset, **self.train_loader_config_general)
         print(f"Train dataloaders: {train_dataloaders}")
-        self.first_setup = False
         return train_dataloaders
 
     def val_dataloader(self):
