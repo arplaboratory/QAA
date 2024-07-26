@@ -197,7 +197,7 @@ class GenericDataModule(pl.LightningDataModule):
             else:
                 print("SHUFFLE")
                 self.train_datasets[index].reload(model=self.model, recompute=False)
-                if self.train_cfg_training.recompute_clusters and self.train_cfg_training.recompute_interval!=0
+                if self.train_cfg_training.recompute_clusters and self.train_cfg_training.recompute_interval!=0:
                     self.recompute_count += 1
 
     def train_dataloader(self):
