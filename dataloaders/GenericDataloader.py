@@ -46,7 +46,7 @@ class GenericDataModule(pl.LightningDataModule):
         self.val_datasets_cfg = load_datasets_config(self.val_dataset_names)
         self.test_datasets_cfg = load_datasets_config(self.test_dataset_names)
         self.train_cfg_training = train_cfg_training
-        if self.train_cfg_training.recompute_clusters and self.train_cfg_training.recompute_interval!=0
+        if self.train_cfg_training.recompute_clusters and self.train_cfg_training.recompute_interval!=0:
             self.recompute_count = 0
         self.model = None
 
