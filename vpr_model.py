@@ -253,6 +253,7 @@ class VPRModel(pl.LightningModule):
         [R1, R2, ..., Rn, Q1, Q2, ...]
         """
         dm = self.trainer.datamodule
+        self.val_calculate_recall(self.current_dataloader_idx) # For last dataset
         for i, val_dataset in enumerate(dm.val_datasets):
             val_set_name = val_dataset.dataset_name
             pitts_dict = self.results_list[i]
@@ -325,11 +326,12 @@ class VPRModel(pl.LightningModule):
         [R1, R2, ..., Rn, Q1, Q2, ...]
         """
         dm = self.trainer.datamodule
+        self.test_calculate_recall(self.current_dataloader_idx) # For last dataset
         for i, test_dataset in enumerate(dm.test_datasets):
             test_set_name = test_dataset.dataset_name
             pitts_dict = self.results_list[i]
             if pitts_dict == []:
-                pass
+                continue
             self.log(f'{test_set_name}_{test_dataset.split}/R1', pitts_dict[1], prog_bar=False, logger=True)
             self.log(f'{test_set_name}_{test_dataset.split}/R5', pitts_dict[5], prog_bar=False, logger=True)
             self.log(f'{test_set_name}_{test_dataset.split}/R10', pitts_dict[10], prog_bar=False, logger=True)        
