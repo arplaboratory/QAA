@@ -153,14 +153,11 @@ def create_dataset_part(
                 topk_subset = np.delete(topk[place_id], 0)
                 other_places = topk_subset[:sampled_similar_places]
             else:
-                topk_subset = np.delete(topk[place_id], 0)
-                distances = np.delete(distances[place_id], 0)
                 distances[distances != 0] = distances.max() - distances[distances != 0]
                 distances = distances / distances.sum()
-                distances = np.array(distances)
 
                 # Sample similar places
-                other_places = np.random.choice(topk_subset, size=sampled_similar_places, p=distances, replace=False)
+                other_places = np.random.choice(top_k, size=sampled_similar_places, p=distances, replace=False)
             other_places = np.concatenate([np.array([place_id]), other_places])
 
             df = df[df['unique_cluster'].isin(other_places)]
