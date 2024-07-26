@@ -243,6 +243,7 @@ class VPRModel(pl.LightningModule):
     def on_validation_epoch_start(self):
         # reset the outputs list
         self.val_outputs = []
+        self.results_list = []
         self.current_dataloader_idx = 0
     
     def on_validation_epoch_end(self):
@@ -251,8 +252,17 @@ class VPRModel(pl.LightningModule):
         for this project (MSLS val, Pittburg val), it is always references then queries
         [R1, R2, ..., Rn, Q1, Q2, ...]
         """
+        dm = self.trainer.datamodule
+        for i, val_dataset in enumerate(dm.val_datasets):
+            val_set_name = val_dataset.dataset_name
+            pitts_dict = self.results_list[i]
+            self.log(f'{val_set_name}_{val_dataset.split}/R1', pitts_dict[1], prog_bar=False, logger=True)
+            self.log(f'{val_set_name}_{val_dataset.split}/R5', pitts_dict[5], prog_bar=False, logger=True)
+            self.log(f'{val_set_name}_{val_dataset.split}/R10', pitts_dict[10], prog_bar=False, logger=True)        
+        print('\n\n')
         # reset the outputs list
         self.val_outputs = []
+        self.results_list = []
 
         print("Update model for recomputing if recomputing is enabled")
         self.trainer.datamodule.model = self # Not sure if this is correct
@@ -285,10 +295,7 @@ class VPRModel(pl.LightningModule):
             faiss_gpu=self.faiss_gpu
         )
         del r_list, q_list, feats, num_references, positives
-        self.log(f'{val_set_name}_{val_dataset.split}/R1', pitts_dict[1], prog_bar=False, logger=True)
-        self.log(f'{val_set_name}_{val_dataset.split}/R5', pitts_dict[5], prog_bar=False, logger=True)
-        self.log(f'{val_set_name}_{val_dataset.split}/R10', pitts_dict[10], prog_bar=False, logger=True)        
-        print('\n\n')
+        self.results_list.append(pitts_dict)
 
         self.val_outputs = []
 
@@ -308,6 +315,7 @@ class VPRModel(pl.LightningModule):
     def on_test_epoch_start(self):
         # reset the outputs list
         self.test_outputs = []
+        self.results_list = []
         self.current_dataloader_idx = 0
     
     def on_test_epoch_end(self):
@@ -316,9 +324,19 @@ class VPRModel(pl.LightningModule):
         for this project (MSLS val, Pittburg val), it is always references then queries
         [R1, R2, ..., Rn, Q1, Q2, ...]
         """
-
+        dm = self.trainer.datamodule
+        for i, test_dataset in enumerate(dm.test_datasets):
+            test_set_name = test_dataset.dataset_name
+            pitts_dict = self.results_list[i]
+            if pitts_dict == []:
+                pass
+            self.log(f'{test_set_name}_{test_dataset.split}/R1', pitts_dict[1], prog_bar=False, logger=True)
+            self.log(f'{test_set_name}_{test_dataset.split}/R5', pitts_dict[5], prog_bar=False, logger=True)
+            self.log(f'{test_set_name}_{test_dataset.split}/R10', pitts_dict[10], prog_bar=False, logger=True)        
+        print('\n\n')
         # reset the outputs list
         self.test_outputs = []
+        self.results_list = []
 
     def test_calculate_recall(self, dataloader_idx):
         # Clean memory once one dataset finished
@@ -350,6 +368,7 @@ class VPRModel(pl.LightningModule):
             assert test_dataset.split == "test"
             print(f"Save predictions to msls_preds.txt")
             test_dataset.save_predictions(preds, f'UniVG/{self.logger.version}/checkpoints/msls_preds.txt')
+            self.results_list.append([])
         else:
             num_references = test_dataset.num_references
             positives = test_dataset.ground_truth
@@ -368,9 +387,6 @@ class VPRModel(pl.LightningModule):
                 testing=testing,
             )
             del r_list, q_list, feats, num_references, positives
-            self.log(f'{test_set_name}_{test_dataset.split}/R1', pitts_dict[1], prog_bar=False, logger=True)
-            self.log(f'{test_set_name}_{test_dataset.split}/R5', pitts_dict[5], prog_bar=False, logger=True)
-            self.log(f'{test_set_name}_{test_dataset.split}/R10', pitts_dict[10], prog_bar=False, logger=True)        
-        print('\n\n')
+            self.results_list.append(pitts_dict)
 
         self.test_outputs = []
