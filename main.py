@@ -64,7 +64,7 @@ if __name__ == '__main__':
 
     #------------------
     # we instanciate a trainer
-    pl.seed_everything(42, worker=True)
+    pl.seed_everything(42, workers=True)
     trainer = pl.Trainer(
         accelerator='gpu',
         devices=1,
