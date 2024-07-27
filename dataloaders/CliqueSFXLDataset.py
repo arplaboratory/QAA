@@ -132,7 +132,6 @@ def create_dataset_part(
 
         batch_idx = 0
         while batch_idx < batch_size:
-
             cities_to_sample = [c for c in cluster_descriptors_dict.keys()]
 
             city = np.random.choice(cities_to_sample) # SF_XL has the same number of class per group
@@ -148,16 +147,17 @@ def create_dataset_part(
             
             # Sample a random cluster
             place_id = np.random.choice(df.unique_cluster.unique())
-
             if only_top_k:
                 topk_subset = np.delete(topk[place_id], 0)
                 other_places = topk_subset[:sampled_similar_places]
             else:
-                distances[distances != 0] = distances.max() - distances[distances != 0]
-                distances = distances / distances.sum()
-
+                topk_subset = topk[place_id]
+                distances_subset = distances[place_id]
+                distances_subset[distances_subset != 0] = distances_subset.max() - distances_subset[distances_subset != 0]
+                distances_subset = distances_subset / distances_subset.sum()
+                distances_subset = np.array(distances_subset)
                 # Sample similar places
-                other_places = np.random.choice(top_k, size=sampled_similar_places, p=distances, replace=False)
+                other_places = np.random.choice(topk_subset, size=sampled_similar_places, p=distances_subset, replace=False)
             other_places = np.concatenate([np.array([place_id]), other_places])
 
             df = df[df['unique_cluster'].isin(other_places)]

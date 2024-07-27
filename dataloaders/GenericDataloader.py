@@ -186,6 +186,7 @@ class GenericDataModule(pl.LightningDataModule):
 
     def reload(self, dataset_name, index):
         if dataset_name == "GSV":
+            print("SHUFFLE")
             GSV_params = self.train_datasets_cfg["GSV"]
             self.train_datasets[index] = GSVCitiesDataset(split="train",
                                                         cities=GSV_params.training.GSV_TRAIN_CITIES,
