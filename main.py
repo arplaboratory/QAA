@@ -55,7 +55,7 @@ if __name__ == '__main__':
         filename=f'{model.encoder_arch}' + '_{epoch:02d}_R1[{pitts30k_val/R1:.4f}]_R5[{pitts30k_val/R5:.4f}]',
         auto_insert_metric_name=False,
         save_weights_only=True,
-        save_top_k=3,
+        save_top_k=1,
         save_last=True,
         mode='max'
     )
@@ -64,6 +64,7 @@ if __name__ == '__main__':
 
     #------------------
     # we instanciate a trainer
+    pl.seed_everything(42, worker=True)
     trainer = pl.Trainer(
         accelerator='gpu',
         devices=1,
@@ -77,10 +78,10 @@ if __name__ == '__main__':
         reload_dataloaders_every_n_epochs=1, # we reload the dataset to shuffle the order
         log_every_n_steps=20,
         logger=wandb_logger,
+        detministic=True,
     )
 
     # we call the trainer, we give it the model and the datamodule
-    pl.seed_everything(0)
     # trainer.validate(model=model, datamodule=datamodule)
     trainer.fit(model=model, datamodule=datamodule)
     trainer.test(model=model, datamodule=datamodule, ckpt_path="best")
