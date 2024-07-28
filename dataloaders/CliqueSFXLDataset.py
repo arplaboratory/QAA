@@ -42,8 +42,9 @@ def load_city_df():
     df.insert(1, 'unique_cluster', cluster)
     for city in df['group_id'].unique():
         # Database
-        city_df[city] = df.reset_index()
-        average_count = df.groupby('unique_cluster').size().mean()
+        subset_df = df.loc[df['group_id'] == city]
+        city_df[city] = subset_df.reset_index()
+        average_count = subset_df.groupby('unique_cluster').size().mean()
         print(f"Average number of samples for each cluster for city {city}: {average_count}")
 
     return city_df
