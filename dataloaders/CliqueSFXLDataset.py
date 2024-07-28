@@ -29,7 +29,7 @@ if not Path(BASE_PATH).exists():
 def load_city_df():
     # Load cities
     city_df = {}
-    cluster_info = np.load("cache/datasets/SF_XL/clusters.npy", allow_pickle=True).flat[0]
+    cluster_info = np.load("cache/datasets/SF_XL/clusters.npy", allow_pickle=True).flat[0] # From preprocess_dataset_cluster.sh
     data = [(key, cluster) for cluster, keys in cluster_info.items() for key in keys]
     df = pd.DataFrame(data, columns=["key", "class"])
     easting = df["key"].apply(lambda x: float(x.split('/')[-1].split('@')[1]))
@@ -136,9 +136,10 @@ def create_dataset_part(
 
         batch_idx = 0
         while batch_idx < batch_size:
+
             cities_to_sample = [c for c in cluster_descriptors_dict.keys()]
 
-            city = np.random.choice(cities_to_sample) # SF_XL has the same number of class per group
+            city = np.random.choice(cities_to_sample)
 
             # Don't sample already done in this batch
             while city in cities_this_batch:
@@ -326,16 +327,16 @@ class CliqueSFXLDataset(Dataset):
         if model is not None:
             cluster_descriptors_dict = compute_cluster_descriptors(city_df, model)
             if not recompute: # recompute does not save
-                np.save(cluster_descriptors_path, cluster_descriptors_dict)
+                torch.save(cluster_descriptors_dict, cluster_descriptors_path, pickle_protocol=4)
         elif os.path.isfile(cluster_descriptors_path) and not recompute:
-            cluster_descriptors_dict = np.load(cluster_descriptors_path, allow_pickle=True).item()
+            cluster_descriptors_dict = np.load(cluster_descriptors_path).item()
         else:
             print('Model must be provided to compute cluster descriptors')
             print('- Computing descriptors using torch.hub DINOv2 SALAD')
             model = torch.hub.load("serizba/salad", "dinov2_salad").cuda()
             cluster_descriptors_dict = compute_cluster_descriptors(city_df, model)
             if not recompute: # recompute does not save
-                np.save(cluster_descriptors_path, cluster_descriptors_dict)
+                torch.save(cluster_descriptors_dict, cluster_descriptors_path, pickle_protocol=4)
 
         # Create dataset in parallel
         all_images = []
