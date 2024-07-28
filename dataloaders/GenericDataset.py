@@ -31,7 +31,10 @@ class GenericDataset(Dataset):
         
     
     def __getitem__(self, index):
-        img = Image.open(self.images[index])
+        if self.dataset_name == "nordland_subset":
+            img = Image.open("datasets/nordland_subset/" + self.images[index]) # Add prefix
+        else:
+            img = Image.open(self.images[index])
 
         if self.input_transform:
             try:

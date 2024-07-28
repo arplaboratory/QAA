@@ -57,7 +57,7 @@ def load_city_df(base_path):
 
     return city_df
 
-def compute_cluster_descriptors(city_df, model, descriptor_size=8192 + 256, batch_size=64):
+def compute_cluster_descriptors(city_df, model, descriptor_size=8192 + 256, batch_size=256):
 
     class MSLSDataset(torch.utils.data.Dataset):
         def __init__(self, rows, city_path):
@@ -102,6 +102,7 @@ def compute_cluster_descriptors(city_df, model, descriptor_size=8192 + 256, batc
         cluster_descriptors = torch.zeros((df.unique_cluster.max() + 1, descriptor_size)).cuda()
 
         # Compute descriptors for each cluster
+        model.eval()
         with torch.no_grad():
             for batch in dataloader:
                 img, clusters = batch
@@ -110,6 +111,7 @@ def compute_cluster_descriptors(city_df, model, descriptor_size=8192 + 256, batc
                 cluster_descriptors[clusters] = descriptors
 
         cluster_descriptors_dict[city] = cluster_descriptors.cpu().numpy()
+        model.train()
 
     return cluster_descriptors_dict
 
@@ -341,7 +343,7 @@ class CliqueMapillaryDataset(Dataset):
         else:
             print('Model must be provided to compute cluster descriptors')
             print('- Computing descriptors using torch.hub DINOv2 SALAD')
-            model = torch.hub.load("serizba/salad", "dinov2_salad").eval().cuda()
+            model = torch.hub.load("serizba/salad", "dinov2_salad").cuda()
             cluster_descriptors_dict = compute_cluster_descriptors(city_df, model)
             if not recompute: # recompute does not save
                 np.save(cluster_descriptors_path, cluster_descriptors_dict)

@@ -12,6 +12,7 @@ ssl._create_default_https_context = ssl._create_unverified_context # For downloa
 if __name__ == '__main__':
     args = argparse.ArgumentParser()
     args.add_argument('--config', type=str)
+    args.add_argument('--seed', type=int, default=0)
     args = args.parse_args()
     # we load the training configuration
     train_cfg = load_config(args.config)
@@ -55,7 +56,7 @@ if __name__ == '__main__':
         filename=f'{model.encoder_arch}' + '_{epoch:02d}_R1[{pitts30k_val/R1:.4f}]_R5[{pitts30k_val/R5:.4f}]',
         auto_insert_metric_name=False,
         save_weights_only=True,
-        save_top_k=1,
+        save_top_k=3,
         save_last=True,
         mode='max'
     )
@@ -64,7 +65,7 @@ if __name__ == '__main__':
 
     #------------------
     # we instanciate a trainer
-    pl.seed_everything(42, workers=True)
+    pl.seed_everything(0, workers=True)
     trainer = pl.Trainer(
         accelerator='gpu',
         devices=1,
