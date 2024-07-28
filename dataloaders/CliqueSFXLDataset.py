@@ -8,7 +8,6 @@ import torchvision.transforms as T
 import numpy as np
 import tqdm
 import os
-import faiss
 
 import concurrent.futures
 from scipy.spatial.distance import cdist, pdist, squareform
@@ -38,12 +37,13 @@ def load_city_df():
     df.insert(1, 'easting', easting)
     df.insert(1, 'northing', northing)
     df.insert(1, 'group_id', group_id)
-    cluster = df.groupby('class').ngroup()
-    df.insert(1, 'unique_cluster', cluster)
     for city in df['group_id'].unique():
         # Database
         subset_df = df.loc[df['group_id'] == city]
-        city_df[city] = subset_df.reset_index()
+        subset_df = subset_df.reset_index()
+        cluster = subset_df.groupby('class').ngroup()
+        subset_df.insert(1, 'unique_cluster', cluster)
+        city_df[city] = subset_df
         average_count = subset_df.groupby('unique_cluster').size().mean()
         print(f"Average number of samples for each cluster for city {city}: {average_count}")
 
@@ -91,24 +91,19 @@ def compute_cluster_descriptors(city_df, model, descriptor_size=8192 + 256, batc
             shuffle=False
         )
 
-        cluster_descriptors = torch.zeros((df.unique_cluster.max() + 1, descriptor_size))
-        res = faiss.StandardGpuResources()
+        cluster_descriptors = torch.zeros((df.unique_cluster.max() + 1, descriptor_size)).cuda()
 
         # Compute descriptors for each cluster
         model.eval()
         with torch.no_grad():
-            for batch in tqdm.tqdm(dataloader):
+            for batch in dataloader:
                 img, clusters = batch
                 img = img.cuda()
                 descriptors = model(img)
-                cluster_descriptors[clusters] = descriptors.cpu()
-        index = faiss.IndexFlatL2(descriptor_size)
-        index = faiss.index_cpu_to_gpu(res, 0, index)
-        index.add(cluster_descriptors)
-        D, I = index.search(cluster_descriptors, 2048)
-        cluster_descriptors_dict[city] = (D, I)
+                cluster_descriptors[clusters] = descriptors
+
+        cluster_descriptors_dict[city] = cluster_descriptors.cpu().numpy()
         model.train()
-        del cluster_descriptors
 
     return cluster_descriptors_dict
 
@@ -138,7 +133,7 @@ def create_dataset_part(
         while batch_idx < batch_size:
 
             cities_to_sample = [c for c in cluster_descriptors_dict.keys()]
-            num_clusters = np.array([len(cluster_descriptors_dict[c][0]) for c in cities_to_sample])
+            num_clusters = np.array([d.shape[0] for c, d in cluster_descriptors_dict.items()])
 
             city = np.random.choice(cities_to_sample, p=num_clusters/num_clusters.sum())
 
@@ -149,21 +144,27 @@ def create_dataset_part(
 
 
             df = city_df[city]
-            distances, topk = cluster_descriptors_dict[city]
+            descriptor = cluster_descriptors_dict[city]
             
             # Sample a random cluster
             place_id = np.random.choice(df.unique_cluster.unique())
+
+            # Compute similarity between the selected cluster and all the others
+            distances = cdist(descriptor[place_id, None, :], descriptor)[0]
+            # Normalize distances as probabilities (where min distance is max probability)
             if only_top_k:
-                topk_subset = np.delete(topk[place_id], 0)
-                other_places = topk_subset[:sampled_similar_places]
-            else:
-                topk_subset = topk[place_id]
-                distances_subset = distances[place_id]
-                distances_subset[distances_subset != 0] = distances_subset.max() - distances_subset[distances_subset != 0]
-                distances_subset = distances_subset / distances_subset.sum()
-                distances_subset = np.array(distances_subset)
+                distances = np.delete(distances, place_id)
+                other_places = np.delete(np.arange(df.unique_cluster.max() + 1), place_id)
+                
                 # Sample similar places
-                other_places = np.random.choice(topk_subset, size=sampled_similar_places, p=distances_subset, replace=False)
+                topk = np.argsort(distances)[:sampled_similar_places]
+                other_places = other_places[topk]
+            else:
+                distances[distances != 0] = distances.max() - distances[distances != 0]
+                distances = distances / distances.sum()
+
+                # Sample similar places
+                other_places = np.random.choice(np.arange(df.unique_cluster.max() + 1), size=sampled_similar_places, p=distances, replace=False)
             other_places = np.concatenate([np.array([place_id]), other_places])
 
             df = df[df['unique_cluster'].isin(other_places)]
