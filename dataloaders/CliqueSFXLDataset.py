@@ -138,12 +138,13 @@ def create_dataset_part(
         while batch_idx < batch_size:
 
             cities_to_sample = [c for c in cluster_descriptors_dict.keys()]
+            num_clusters = [len(cluster_descriptors_dict[c][0]) for c in cities_to_sample]
 
-            city = np.random.choice(cities_to_sample)
+            city = np.random.choice(cities_to_sample, p=num_clusters/num_clusters.sum())
 
             # Don't sample already done in this batch
             while city in cities_this_batch:
-                city = np.random.choice(cities_to_sample)
+                city = np.random.choice(cities_to_sample, p=num_clusters/num_clusters.sum())
             cities_this_batch.append(city)
 
 
