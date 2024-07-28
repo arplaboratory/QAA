@@ -93,22 +93,31 @@ class VPRModel(pl.LightningModule):
     
     # configure the optimizer 
     def configure_optimizers(self):
+        if self.backbone.freeze_backbone:
+            print("FREEZE BACKBONE")
+            params = [
+                {'params': self.backbone.domain_prompt_model.parameters()},
+                {'params': self.backbone.domain_prompt_mlp_list.parameters()},
+                {'params': self.aggregator.parameters()}
+            ]
+        else:
+            params = self.parameters()
         if self.optimizer.lower() == 'sgd':
             optimizer = torch.optim.SGD(
-                self.parameters(), 
+                params, 
                 lr=self.lr, 
                 weight_decay=self.weight_decay, 
                 momentum=self.momentum
             )
         elif self.optimizer.lower() == 'adamw':
             optimizer = torch.optim.AdamW(
-                self.parameters(), 
+                params, 
                 lr=self.lr, 
                 weight_decay=self.weight_decay
             )
         elif self.optimizer.lower() == 'adam':
             optimizer = torch.optim.AdamW(
-                self.parameters(), 
+                params, 
                 lr=self.lr, 
                 weight_decay=self.weight_decay
             )
@@ -369,7 +378,11 @@ class VPRModel(pl.LightningModule):
             del r_list, q_list, feats, num_references, positives
             assert test_dataset.split == "test"
             print(f"Save predictions to msls_preds.txt")
-            test_dataset.save_predictions(preds, f'UniVG/{self.logger.version}/checkpoints/msls_preds.txt')
+            try:
+                test_dataset.save_predictions(preds, f'UniVG/{self.logger.version}/checkpoints/msls_preds.txt')
+            except Exception:
+                print("MSLS PRED TEXT SAVE IN ROOT FOLDER")
+                test_dataset.save_predictions(preds, f'./msls_preds.txt')
             self.results_list.append([])
         else:
             num_references = test_dataset.num_references
