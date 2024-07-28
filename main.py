@@ -78,7 +78,7 @@ if __name__ == '__main__':
         reload_dataloaders_every_n_epochs=1, # we reload the dataset to shuffle the order
         log_every_n_steps=20,
         logger=wandb_logger,
-        detministic=True,
+        deterministic=True,
     )
 
     # we call the trainer, we give it the model and the datamodule
