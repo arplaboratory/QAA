@@ -107,6 +107,7 @@ def compute_cluster_descriptors(city_df, model, descriptor_size=8192 + 256, batc
         D, I = index.search(cluster_descriptors, 2048)
         cluster_descriptors_dict[city] = (D, I)
         model.train()
+        del cluster_descriptors
 
     return cluster_descriptors_dict
 
