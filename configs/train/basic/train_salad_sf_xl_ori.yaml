@@ -9,7 +9,7 @@ model:
     num_clusters: 64
     cluster_dim: 16
     token_dim: 128
-    dropout: 0.0
+    dropout: 0.3
     padding: "detach"
     divide: 1
     decouple: False
@@ -21,7 +21,7 @@ model:
     num_clusters: 64
     cluster_dim: 128
     token_dim: 256
-    dropout: 0.0
+    dropout: 0.3
     padding: "detach"
     divide: 1
     decouple: False
