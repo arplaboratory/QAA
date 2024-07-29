@@ -12,7 +12,6 @@ ssl._create_default_https_context = ssl._create_unverified_context # For downloa
 if __name__ == '__main__':
     args = argparse.ArgumentParser()
     args.add_argument('--config', type=str)
-    args.add_argument('--seed', type=int, default=0)
     args = args.parse_args()
     # we load the training configuration
     train_cfg = load_config(args.config)
@@ -65,7 +64,6 @@ if __name__ == '__main__':
 
     #------------------
     # we instanciate a trainer
-    pl.seed_everything(args.seed, workers=True)
     trainer = pl.Trainer(
         accelerator='gpu',
         devices=1,
@@ -79,7 +77,6 @@ if __name__ == '__main__':
         reload_dataloaders_every_n_epochs=1, # we reload the dataset to shuffle the order
         log_every_n_steps=20,
         logger=wandb_logger,
-        deterministic=True,
     )
 
     # we call the trainer, we give it the model and the datamodule
