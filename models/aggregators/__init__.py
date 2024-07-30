@@ -3,3 +3,4 @@ from .convap import ConvAP
 from .gem import GeMPool
 from .mixvpr import MixVPR
 from .salad import SALAD
+from .salad_prompt import PromptSALAD

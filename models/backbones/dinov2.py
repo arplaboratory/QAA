@@ -12,11 +12,12 @@ DINOV2_ARCHS = {
 }
 
 class ClusterNorm(nn.Module):
-    def __init__(self, hidden_size):
+    def __init__(self, hidden_size, residual):
         super().__init__()
         self.norm = nn.LayerNorm(hidden_size, elementwise_affine=False)
-        self.weight = nn.Parameter(torch.zeros(hidden_size), requires_grad=True)
-        self.bias = nn.Parameter(torch.zeros(hidden_size), requires_grad=True)
+        if residual:
+            self.weight = nn.Parameter(torch.zeros(hidden_size), requires_grad=True)
+            self.bias = nn.Parameter(torch.zeros(hidden_size), requires_grad=True)
 
     def forward(self, x: Tensor) -> Tensor:
         if hasattr(self, "residual_weight") and hasattr(self, "residual_bias"):
@@ -39,11 +40,13 @@ class ClusterLayerScale(nn.Module):
     def __init__(
         self,
         hidden_size,
+        residual,
         inplace: bool = False,
     ) -> None:
         super().__init__()
         self.inplace = inplace
-        self.gamma = nn.Parameter(torch.zeros(hidden_size), requires_grad=True)
+        if residual:
+            self.gamma = nn.Parameter(torch.zeros(hidden_size), requires_grad=True)
 
     def forward(self, x: Tensor) -> Tensor:
         if hasattr(self, "residual_gamma"):
@@ -110,19 +113,23 @@ class DINOv2(nn.Module):
             for i, blk in enumerate(self.model.blocks[-self.num_trainable_blocks:]):
                 self.domain_prompt_mlp_list.append(nn.Sequential(nn.SiLU(),
                                                                 nn.Linear(num_clusters*cluster_dim+token_dim, hidden_size * 6)))
-                clusternorm1 = ClusterNorm(hidden_size)
-                clusternorm1.norm.load_state_dict(blk.norm1.state_dict(), strict=False) # weight and bias
-                clusternorm1.set_weight_bias(blk.norm1.weight, blk.norm1.bias)
+                clusternorm1 = ClusterNorm(hidden_size, residual)
+                clusternorm1.norm.load_state_dict(blk.norm1.state_dict(), strict=False)
+                if self.residual:
+                    clusternorm1.set_weight_bias(blk.norm1.weight, blk.norm1.bias)
                 blk.norm1 = clusternorm1
-                clusterls1 = ClusterLayerScale(hidden_size)
-                clusterls1.set_gamma(blk.ls1.gamma)
+                clusterls1 = ClusterLayerScale(hidden_size, residual)
+                if self.residual:
+                    clusterls1.set_gamma(blk.ls1.gamma)
                 blk.ls1 = clusterls1
-                clusternorm2 = ClusterNorm(hidden_size)
-                clusternorm2.norm.load_state_dict(blk.norm2.state_dict(), strict=False) # weight and bias
-                clusternorm2.set_weight_bias(blk.norm2.weight, blk.norm2.bias)
+                clusternorm2 = ClusterNorm(hidden_size, residual)
+                clusternorm2.norm.load_state_dict(blk.norm2.state_dict(), strict=False)
+                if self.residual:
+                    clusternorm2.set_weight_bias(blk.norm2.weight, blk.norm2.bias)
                 blk.norm2 = clusternorm2
-                clusterls2 = ClusterLayerScale(hidden_size)
-                clusterls2.set_gamma(blk.ls2.gamma)
+                clusterls2 = ClusterLayerScale(hidden_size, residual)
+                if self.residual:
+                    clusterls2.set_gamma(blk.ls2.gamma)
                 blk.ls2 = clusterls2
             # Zero initialize the domain prompt mlp
             for domain_prompt_mlp in self.domain_prompt_mlp_list:

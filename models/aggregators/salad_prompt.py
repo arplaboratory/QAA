@@ -32,7 +32,39 @@ def log_optimal_transport(scores: torch.Tensor, alpha: torch.Tensor, iters: int)
     return Z
 
 
-class SALAD(nn.Module):
+class BoQBlock(torch.nn.Module):
+    def __init__(self, in_dim, num_queries, output_dim, nheads=8):
+        super(BoQBlock, self).__init__()
+        
+        self.queries = torch.nn.Parameter(torch.randn(1, num_queries, in_dim))
+        
+        # the following two lines are used during training only, you can cache their output in eval.
+        self.self_attn = torch.nn.MultiheadAttention(in_dim, num_heads=nheads, batch_first=True)
+        self.norm_q = torch.nn.LayerNorm(in_dim)
+        #####
+        
+        self.cross_attn = torch.nn.MultiheadAttention(in_dim, num_heads=nheads, batch_first=True)
+        self.norm_out = torch.nn.LayerNorm(in_dim)
+        self.conv = torch.nn.Conv1d(in_dim, output_dim, 1)
+        
+
+    def forward(self, x):
+        B = x.size(0)
+        x_flatten = x.flatten(2).permute(0, 2, 1)
+
+        q = self.queries.repeat(B, 1, 1)
+        # the following two lines are used during training.
+        # for stability purposes 
+        q = q + self.self_attn(q, q, q)[0]
+        q = self.norm_q(q)
+        #######
+        
+        out, attn = self.cross_attn(q, x_flatten, x_flatten)
+        out = self.norm_out(out)
+        out = self.conv(out.permute(0, 2, 1))
+        return out
+
+class PromptSALAD(nn.Module):
     """
     This class represents the Sinkhorn Algorithm for Locally Aggregated Descriptors (SALAD) model.
 
@@ -53,6 +85,7 @@ class SALAD(nn.Module):
             decouple=False,
             shared_clusters=0,
             padding="detach",
+            num_queries=64,
         ) -> None:
         super().__init__()
 
@@ -66,6 +99,7 @@ class SALAD(nn.Module):
             self.shared_clusters = shared_clusters
             self.specific_clusters = (self.num_clusters - shared_clusters) // divide
         self.padding = padding # Ensure the dimension is the same
+        self.num_queries = num_queries
         assert self.padding in ["detach", "zero", "none"]
         
         if dropout > 0:
@@ -79,39 +113,23 @@ class SALAD(nn.Module):
             nn.ReLU(),
             nn.Linear(512, self.token_dim)
         )
-        # MLP for local features f_i
-        self.cluster_features = nn.Sequential(
-            nn.Conv2d(self.num_channels, 512, 1),
-            dropout,
-            nn.ReLU(),
-            nn.Conv2d(512, self.cluster_dim, 1)
-        )
-        # MLP for score matrix S
         if divide > 1 and decouple:
             if self.shared_clusters > 0:
-                self.shared_score = nn.Sequential(
-                        nn.Conv2d(self.num_channels, 512, 1),
-                        dropout,
-                        nn.ReLU(),
-                        nn.Conv2d(512, self.shared_clusters, 1),
-                    )
+                self.shared_cluster_features = BoQBlock(self.num_channels, self.num_queries, self.cluster_dim, nheads=self.num_channels // 64)
+                self.shared_score = BoQBlock(self.num_channels, self.num_queries, self.num_clusters, nheads=self.num_channels // 64)
             else:
                 self.shared_score = None
+            self.feature_list = nn.ModuleList([
+                 BoQBlock(self.num_channels, self.num_queries, self.cluster_dim, nheads=self.num_channels // 64) for _ in range(divide)
+            ])
             self.score_list = nn.ModuleList([
-                nn.Sequential(
-                    nn.Conv2d(self.num_channels, 512, 1),
-                    dropout,
-                    nn.ReLU(),
-                    nn.Conv2d(512, self.specific_clusters, 1),
-                ) for _ in range(divide)
+                 BoQBlock(self.num_channels, self.num_queries, self.num_clusters, nheads=self.num_channels // 64) for _ in range(divide)
             ])
         else:
-            self.score = nn.Sequential(
-                nn.Conv2d(self.num_channels, 512, 1),
-                dropout,
-                nn.ReLU(),
-                nn.Conv2d(512, self.num_clusters, 1),
-            )
+            # MLP for local features f_i
+            self.cluster_features = BoQBlock(self.num_channels, self.num_queries, self.cluster_dim, nheads=self.num_channels // 64)
+            # MLP for score matrix S
+            self.score =  BoQBlock(self.num_channels, self.num_queries, self.num_clusters, nheads=self.num_channels // 64)
         # Dustbin parameter z
         self.dust_bin = nn.Parameter(torch.tensor(1.))
 

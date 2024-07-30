@@ -60,6 +60,13 @@ def get_aggregator(agg_arch='ConvAP', agg_config={}):
         assert 'mix_depth' in agg_config
         return aggregators.MixVPR(**agg_config)
 
+    elif 'promptsalad' in agg_arch.lower():
+        assert 'num_channels' in agg_config
+        assert 'num_clusters' in agg_config
+        assert 'cluster_dim' in agg_config
+        assert 'token_dim' in agg_config
+        return aggregators.PromptSALAD(**agg_config)
+
     elif 'salad' in agg_arch.lower():
         assert 'num_channels' in agg_config
         assert 'num_clusters' in agg_config
