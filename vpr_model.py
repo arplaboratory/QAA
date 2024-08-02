@@ -234,7 +234,7 @@ class VPRModel(pl.LightningModule):
     def on_train_epoch_end(self):
         # we empty the batch_acc list for next epoch
         self.batch_acc = []
-        self.log_img_first_iter = False
+        # self.log_img_first_iter = False
 
     # For validation, we will also iterate step by step over the validation set
     # this is the way Pytorch Lghtning is made. All about modularity, folks.
