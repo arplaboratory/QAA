@@ -32,9 +32,9 @@ def log_optimal_transport(scores: torch.Tensor, alpha: torch.Tensor, iters: int)
     return Z
 
 
-class BoQBlock(torch.nn.Module):
-    def __init__(self, in_dim, num_queries, output_dim, nheads=8):
-        super(BoQBlock, self).__init__()
+class QuerySelfAttn(torch.nn.Module):
+    def __init__(self, in_dim, num_queries, nheads=8):
+        super(QuerySelfAttn, self).__init__()
         
         self.queries = torch.nn.Parameter(torch.randn(1, num_queries, in_dim))
         
@@ -42,27 +42,38 @@ class BoQBlock(torch.nn.Module):
         self.self_attn = torch.nn.MultiheadAttention(in_dim, num_heads=nheads, batch_first=True)
         self.norm_q = torch.nn.LayerNorm(in_dim)
         #####
-        
-        self.cross_attn = torch.nn.MultiheadAttention(in_dim, num_heads=nheads, batch_first=True)
-        self.norm_out = torch.nn.LayerNorm(in_dim)
-        self.conv = torch.nn.Conv1d(in_dim, output_dim, 1)
-        
 
     def forward(self, x):
-        B = x.size(0)
-        x_flatten = x.flatten(2).permute(0, 2, 1)
+        # B = x.size(0)
 
-        q = self.queries.repeat(B, 1, 1)
+        # q = self.queries.repeat(B, 1, 1)
+        q = self.queries
         # the following two lines are used during training.
         # for stability purposes 
         q = q + self.self_attn(q, q, q)[0]
         q = self.norm_q(q)
         #######
         
+        return q
+        
+class QueryCrossAttn(torch.nn.Module):
+    def __init__(self, in_dim, output_dim, nheads=8):
+        super(QueryCrossAttn, self).__init__()
+        
+        self.cross_attn = torch.nn.MultiheadAttention(in_dim, num_heads=nheads, batch_first=True)
+        self.norm_out = torch.nn.LayerNorm(in_dim)
+        self.conv = torch.nn.Conv1d(in_dim, output_dim, 1)
+
+    def forward(self, x, q):
+        B = x.size(0)
+
+        q = q.repeat(B, 1, 1)
+        x_flatten = x.flatten(2).permute(0, 2, 1)
+        
         out, attn = self.cross_attn(q, x_flatten, x_flatten)
         out = self.norm_out(out)
         out = self.conv(out.permute(0, 2, 1))
-        return out
+        return out.flatten(2), attn
 
 class QueriesSALAD(nn.Module):
     """
@@ -114,22 +125,24 @@ class QueriesSALAD(nn.Module):
             nn.Linear(512, self.token_dim)
         )
         if divide > 1 and decouple:
+            self.queries_cluster = QuerySelfAttn(self.num_channels, self.num_queries, nheads=self.num_channels // 64)
+            self.queries_feature = QuerySelfAttn(self.num_channels, self.num_queries, nheads=self.num_channels // 64)
+            # MLP for local features f_i
+            self.cluster_features = QueryCrossAttn(self.num_channels, self.cluster_dim, nheads=self.num_channels // 64)
             if self.shared_clusters > 0:
-                self.shared_cluster_features = BoQBlock(self.num_channels, self.num_queries, self.cluster_dim, nheads=self.num_channels // 64)
-                self.shared_score = BoQBlock(self.num_channels, self.num_queries, self.num_clusters, nheads=self.num_channels // 64)
+                self.shared_score = QueryCrossAttn(self.num_channels, self.shared_clusters, nheads=self.num_channels // 64)
             else:
                 self.shared_score = None
-            self.feature_list = nn.ModuleList([
-                 BoQBlock(self.num_channels, self.num_queries, self.cluster_dim, nheads=self.num_channels // 64) for _ in range(divide)
-            ])
             self.score_list = nn.ModuleList([
-                 BoQBlock(self.num_channels, self.num_queries, self.num_clusters, nheads=self.num_channels // 64) for _ in range(divide)
+                 QueryCrossAttn(self.num_channels, self.specific_clusters, nheads=self.num_channels // 64) for _ in range(divide)
             ])
         else:
+            self.queries_cluster = QuerySelfAttn(self.num_channels, self.num_queries, nheads=self.num_channels // 64)
+            self.queries_feature = QuerySelfAttn(self.num_channels, self.num_queries, nheads=self.num_channels // 64)
             # MLP for local features f_i
-            self.cluster_features = BoQBlock(self.num_channels, self.num_queries, self.cluster_dim, nheads=self.num_channels // 64)
+            self.cluster_features = QueryCrossAttn(self.num_channels, self.cluster_dim, nheads=self.num_channels // 64)
             # MLP for score matrix S
-            self.score =  BoQBlock(self.num_channels, self.num_queries, self.num_clusters, nheads=self.num_channels // 64)
+            self.score =  QueryCrossAttn(self.num_channels, self.num_clusters, nheads=self.num_channels // 64)
         # Dustbin parameter z
         self.dust_bin = nn.Parameter(torch.tensor(1.))
 
@@ -146,24 +159,26 @@ class QueriesSALAD(nn.Module):
         """
         x, t = x # Extract features and token
 
-        f = self.cluster_features(x).flatten(2)
+        q_c = self.queries_cluster(x)
+        q_f = self.queries_feature(x)
+        f, f_attn = self.cluster_features(x, q_f)
         if self.divide > 1 and self.decouple:
             # Use decoupled score network
             if domain_idx is None:
                 if self.shared_clusters > 0:
-                    p_shared = self.shared_score(x).flatten(2)
-                p = torch.cat([self.score_list[i](x).flatten(2) for i in range(self.divide)], dim=1) # For each domain
+                    p_shared = self.shared_score(x, q_c)[0]
+                p = torch.cat([self.score_list[i](x, q_c)[0] for i in range(self.divide)], dim=1) # For each domain
                 if self.shared_clusters > 0:
                     p = torch.cat([p_shared, p], dim=1)
             else:
                 if self.shared_clusters > 0:
-                    p_shared = self.shared_score(x).flatten(2)
-                p = self.generate_score_from_decoupled_pnet(x, domain_idx)
+                    p_shared = self.shared_score(x, q_c)[0]
+                p = self.generate_score_from_decoupled_pnet(x, q_c, domain_idx)
                 if self.shared_clusters > 0:
                     p = torch.cat([p_shared, p], dim=1)
         elif self.divide > 1:
             # Use coupled score network
-            p = self.score(x).flatten(2)
+            p, p_attn = self.score(x, q_c)
             if domain_idx is None:
                 pass
             else:
@@ -174,7 +189,7 @@ class QueriesSALAD(nn.Module):
                 if self.shared_clusters > 0:
                     p = torch.cat([p_shared, p], dim=1)
         else:
-            p = self.score(x).flatten(2)
+            p, p_attn = self.score(x, q_c)
         t = self.token_features(t)
         assert p.shape[1] == self.num_clusters if self.padding in ["zero", "detach"] else self.shared_clusters + self.specific_clusters
         # Sinkhorn algorithm
@@ -182,7 +197,6 @@ class QueriesSALAD(nn.Module):
         p = torch.exp(p)
         # Normalize to maintain mass
         p = p[:, :-1, :]
-
 
         p = p.unsqueeze(1).repeat(1, self.cluster_dim, 1, 1)
         if self.padding in ["zero", "detach"] or domain_idx is None:
@@ -225,13 +239,13 @@ class QueriesSALAD(nn.Module):
                 p_zero[i] = p[i, domain_id_single * self.specific_clusters: (domain_id_single + 1) * self.specific_clusters]
         return p_zero
     
-    def generate_score_from_decoupled_pnet(self, x, domain_idx):
+    def generate_score_from_decoupled_pnet(self, x, q, domain_idx):
         if self.padding == "zero" or self.padding == "none":
-            p = torch.cat([self.score_list[i](x[domain_idx == i]).flatten(2) for i in range(self.divide)], dim=0)
+            p = torch.cat([self.score_list[i](x[domain_idx == i], q)[0] for i in range(self.divide)], dim=0)
             if self.padding == "zero":
                 p = self.pad_zero_score(p, domain_idx)
         elif self.padding == "detach":
-            p_list = [self.score_list[i](x).flatten(2) for i in range(self.divide)]
+            p_list = [self.score_list[i](x, q)[0] for i in range(self.divide)]
             for i in range(self.divide): # For each domain
                 p_list[i][domain_idx != i] = p_list[i][domain_idx != i].detach() # detach the other domains
             p = torch.cat(p_list, dim=1)
