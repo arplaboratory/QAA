@@ -167,7 +167,7 @@ class SharedQueriesSALAD(nn.Module):
             else:
                 if self.shared_clusters > 0:
                     p_shared = self.shared_score(x, q)
-                p, p_attn = self.generate_score_from_decoupled_pnet(x, domain_idx)
+                p, p_attn = self.generate_score_from_decoupled_pnet(x, q, domain_idx)
                 if self.shared_clusters > 0:
                     p = torch.cat([p_shared, p], dim=1)
         elif self.divide > 1:
@@ -233,13 +233,13 @@ class SharedQueriesSALAD(nn.Module):
                 p_zero[i] = p[i, domain_id_single * self.specific_clusters: (domain_id_single + 1) * self.specific_clusters]
         return p_zero
     
-    def generate_score_from_decoupled_pnet(self, x, domain_idx):
+    def generate_score_from_decoupled_pnet(self, x, q, domain_idx):
         if self.padding == "zero" or self.padding == "none":
-            p = torch.cat([self.score_list[i](x[domain_idx == i]) for i in range(self.divide)], dim=0)
+            p = torch.cat([self.score_list[i](x[domain_idx == i], q) for i in range(self.divide)], dim=0)
             if self.padding == "zero":
                 p = self.pad_zero_score(p, domain_idx)
         elif self.padding == "detach":
-            p_list = [self.score_list[i](x) for i in range(self.divide)]
+            p_list = [self.score_list[i](x, q) for i in range(self.divide)]
             for i in range(self.divide): # For each domain
                 p_list[i][domain_idx != i] = p_list[i][domain_idx != i].detach() # detach the other domains
             p = torch.cat(p_list, dim=1)
