@@ -44,9 +44,10 @@ class QuerySelfAttn(torch.nn.Module):
         #####
 
     def forward(self, x):
-        B = x.size(0)
+        # B = x.size(0)
 
-        q = self.queries.repeat(B, 1, 1)
+        # q = self.queries.repeat(B, 1, 1)
+        q = self.queries
         # the following two lines are used during training.
         # for stability purposes 
         q = q + self.self_attn(q, q, q)[0]
@@ -64,6 +65,9 @@ class QueryCrossAttn(torch.nn.Module):
         self.conv = torch.nn.Conv1d(in_dim, output_dim, 1)
 
     def forward(self, x, q):
+        B = x.size(0)
+
+        q = q.repeat(B, 1, 1)
         x_flatten = x.flatten(2).permute(0, 2, 1)
         
         out, attn = self.cross_attn(q, x_flatten, x_flatten)
@@ -160,14 +164,14 @@ class SharedQueriesSALAD(nn.Module):
             # Use decoupled score network
             if domain_idx is None:
                 if self.shared_clusters > 0:
-                    p_shared = self.shared_score(x, q)
-                p, p_attn = torch.cat([self.score_list[i](x) for i in range(self.divide)], dim=1) # For each domain
+                    p_shared = self.shared_score(x, q)[0]
+                p = torch.cat([self.score_list[i](x, q)[0] for i in range(self.divide)], dim=1) # For each domain
                 if self.shared_clusters > 0:
                     p = torch.cat([p_shared, p], dim=1)
             else:
                 if self.shared_clusters > 0:
-                    p_shared = self.shared_score(x, q)
-                p, p_attn = self.generate_score_from_decoupled_pnet(x, q, domain_idx)
+                    p_shared = self.shared_score(x, q)[0]
+                p = self.generate_score_from_decoupled_pnet(x, q, domain_idx)
                 if self.shared_clusters > 0:
                     p = torch.cat([p_shared, p], dim=1)
         elif self.divide > 1:
@@ -235,11 +239,11 @@ class SharedQueriesSALAD(nn.Module):
     
     def generate_score_from_decoupled_pnet(self, x, q, domain_idx):
         if self.padding == "zero" or self.padding == "none":
-            p = torch.cat([self.score_list[i](x[domain_idx == i], q) for i in range(self.divide)], dim=0)
+            p = torch.cat([self.score_list[i](x[domain_idx == i], q)[0] for i in range(self.divide)], dim=0)
             if self.padding == "zero":
                 p = self.pad_zero_score(p, domain_idx)
         elif self.padding == "detach":
-            p_list = [self.score_list[i](x, q) for i in range(self.divide)]
+            p_list = [self.score_list[i](x, q)[0] for i in range(self.divide)]
             for i in range(self.divide): # For each domain
                 p_list[i][domain_idx != i] = p_list[i][domain_idx != i].detach() # detach the other domains
             p = torch.cat(p_list, dim=1)
