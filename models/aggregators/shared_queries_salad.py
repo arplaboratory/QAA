@@ -43,7 +43,7 @@ class QuerySelfAttn(torch.nn.Module):
         self.norm_q = torch.nn.LayerNorm(in_dim)
         #####
 
-    def forward(self, x):
+    def forward(self):
         # B = x.size(0)
 
         # q = self.queries.repeat(B, 1, 1)
@@ -157,7 +157,7 @@ class SharedQueriesSALAD(nn.Module):
         """
         x, t = x # Extract features and token
 
-        q = self.queries(x)
+        q = self.queries()
         f, f_attn = self.cluster_features(x, q)
         if self.divide > 1 and self.decouple:
             # Use decoupled score network
