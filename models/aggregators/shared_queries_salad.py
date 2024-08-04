@@ -96,7 +96,7 @@ class SharedQueriesSALAD(nn.Module):
             decouple=False,
             shared_clusters=0,
             padding="detach",
-            num_queries=64,
+            num_queries=32,
         ) -> None:
         super().__init__()
 

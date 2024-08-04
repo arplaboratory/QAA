@@ -3,6 +3,8 @@ import torch.nn as nn
 from torch import Tensor
 from typing import Union
 from ..aggregators.salad import SALAD
+from ..aggregators.queries_salad import QueriesSALAD
+from ..aggregators.shared_queries_salad import SharedQueriesSALAD
 
 DINOV2_ARCHS = {
     'dinov2_vits14': 384,
@@ -78,7 +80,7 @@ class DINOv2(nn.Module):
             num_trainable_blocks=2,
             norm_layer=False,
             return_token=False,
-            domain_prompt=False,
+            domain_prompt="none",
             num_clusters=64,
             cluster_dim=16,
             token_dim=128,
@@ -88,7 +90,8 @@ class DINOv2(nn.Module):
             decouple=False,
             padding="detach",
             freeze_backbone=False,
-            residual=True
+            residual=True,
+            num_queries=32,
         ):
         super().__init__()
 
@@ -101,14 +104,28 @@ class DINOv2(nn.Module):
         self.domain_prompt = domain_prompt
         self.freeze_backbone = freeze_backbone
         self.residual = residual
+        self.num_queries = num_queries
         
-        if self.domain_prompt:
+        if self.domain_prompt!="none":
             hidden_size = self.model.blocks[0].norm1.weight.shape[0]
             assert padding in ["detach", "zero"], 'Padding should be either detach or zero'
             assert self.num_trainable_blocks > 0, 'First blocks should be frozen when using domain prompt'
-            self.domain_prompt_model = SALAD(num_channels=hidden_size, num_clusters=num_clusters, cluster_dim=cluster_dim,
-                                             token_dim=token_dim, dropout=dropout, padding=padding,
-                                             divide=divide, decouple=decouple, shared_clusters=shared_clusters)
+            if self.domain_prompt == "SALAD":
+                self.domain_prompt_model = SALAD(num_channels=hidden_size, num_clusters=num_clusters, cluster_dim=cluster_dim,
+                                                token_dim=token_dim, dropout=dropout, padding=padding,
+                                                divide=divide, decouple=decouple, shared_clusters=shared_clusters)
+            elif self.domain_prompt == "QueriesSALAD":
+                self.domain_prompt_model = QueriesSALAD(num_channels=hidden_size, num_clusters=num_clusters, cluster_dim=cluster_dim,
+                                                token_dim=token_dim, dropout=dropout, padding=padding,
+                                                divide=divide, decouple=decouple, shared_clusters=shared_clusters,
+                                                num_queries=num_queries)
+            elif self.domain_prompt == "SharedQueriesSALAD":
+                self.domain_prompt_model = SharedQueriesSALAD(num_channels=hidden_size, num_clusters=num_clusters, cluster_dim=cluster_dim,
+                                                token_dim=token_dim, dropout=dropout, padding=padding,
+                                                divide=divide, decouple=decouple, shared_clusters=shared_clusters,
+                                                num_queries=num_queries)
+            else:
+                raise ValueError(f'Unknown domain prompt {self.domain_prompt}')
             self.domain_prompt_mlp_list = nn.ModuleList()
             for i, blk in enumerate(self.model.blocks[-self.num_trainable_blocks:]):
                 self.domain_prompt_mlp_list.append(nn.Sequential(nn.SiLU(),
@@ -164,7 +181,7 @@ class DINOv2(nn.Module):
             x = x.detach()
         elif self.num_trainable_blocks == 0:
             # All blocks are trainable
-            assert domain_idx is None or self.domain_prompt == False, 'Domain index should not be provided when all blocks are trainable or domain prompt is not used'
+            assert domain_idx is None or self.domain_prompt == "none", 'Domain index should not be provided when all blocks are trainable or domain prompt is not used'
             for blk in self.model.blocks:
                 x = blk(x)
         else:
@@ -173,7 +190,7 @@ class DINOv2(nn.Module):
                 for blk in self.model.blocks[:-self.num_trainable_blocks]:
                     x = blk(x)
             x = x.detach()
-            if self.domain_prompt:
+            if self.domain_prompt != "none":
                 t = x[:, 0]
                 f = x[:, 1:]
                 # Reshape to (B, C, H, W)
@@ -181,7 +198,7 @@ class DINOv2(nn.Module):
                 domain_prompt_desc = self.domain_prompt_model((f, t), domain_idx)
             # Last blocks are trained
             for i, blk in enumerate(self.model.blocks[-self.num_trainable_blocks:]):
-                if self.domain_prompt:
+                if self.domain_prompt != "none":
                     domain_prompt_output = self.domain_prompt_mlp_list[i](domain_prompt_desc).chunk(6, dim=1)
                     if self.residual:
                         blk.norm1.set_residual_weight_bias(domain_prompt_output[0], domain_prompt_output[1])
