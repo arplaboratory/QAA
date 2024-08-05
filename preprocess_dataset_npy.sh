@@ -35,7 +35,7 @@ singularity exec --overlay $overlay_path:ro \
                  /scratch/work/public/singularity/cuda12.1.1-cudnn8.9.0-devel-ubuntu22.04.2.sif \
                  /bin/bash -c "source ~/.bashrc; conda activate UniVG; python3 dataloaders/GenerateDatasetNpy.py --dataset_name nordland"
 
-# # We use GT from GSV-cities specific for this dataset
+# # We use GT from GSV-cities specific for this dataset because the dataset has different preprocessing
 # overlay_path="datasets_sqf/nordland_subset.sqf"
 # singularity exec --overlay $overlay_path:ro \
 #                  /scratch/work/public/singularity/cuda12.1.1-cudnn8.9.0-devel-ubuntu22.04.2.sif \
