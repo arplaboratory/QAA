@@ -82,4 +82,4 @@ if __name__ == '__main__':
     # we call the trainer, we give it the model and the datamodule
     # trainer.validate(model=model, datamodule=datamodule)
     trainer.fit(model=model, datamodule=datamodule)
-    trainer.test(model=model, datamodule=datamodule, ckpt_path="best")
+    trainer.test(model=model, datamodule=datamodule, ckpt_path="last")

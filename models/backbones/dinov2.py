@@ -92,7 +92,7 @@ class DINOv2(nn.Module):
             freeze_backbone=False,
             residual=True,
             num_queries=32,
-            train_last=False,
+            multiscale="1",
         ):
         super().__init__()
 
@@ -106,7 +106,7 @@ class DINOv2(nn.Module):
         self.freeze_backbone = freeze_backbone
         self.residual = residual
         self.num_queries = num_queries
-        self.train_last = train_last
+        self.multiscale_layers = [self.num_trainable_blocks - int(x) for x in multiscale.split(",")]
         
         if self.domain_prompt!="none":
             hidden_size = self.model.blocks[0].norm1.weight.shape[0]
@@ -130,8 +130,6 @@ class DINOv2(nn.Module):
                 raise ValueError(f'Unknown domain prompt {self.domain_prompt}')
             self.domain_prompt_mlp_list = nn.ModuleList()
             for i, blk in enumerate(self.model.blocks[-self.num_trainable_blocks:]):
-                if self.train_last and i == self.num_trainable_blocks - 1:
-                    break
                 self.domain_prompt_mlp_list.append(nn.Sequential(nn.SiLU(),
                                                                 nn.Linear(num_clusters*cluster_dim+token_dim, hidden_size * 6)))
                 clusternorm1 = ClusterNorm(hidden_size, residual)
@@ -201,8 +199,9 @@ class DINOv2(nn.Module):
                 f = f.reshape((B, H // 14, W // 14, self.num_channels)).permute(0, 3, 1, 2)
                 domain_prompt_desc = self.domain_prompt_model((f, t), domain_idx)
             # Last blocks are trained
+            feature_list = []
             for i, blk in enumerate(self.model.blocks[-self.num_trainable_blocks:]):
-                if self.domain_prompt != "none" and not (self.train_last and i == self.num_trainable_blocks - 1):
+                if self.domain_prompt != "none":
                     domain_prompt_output = self.domain_prompt_mlp_list[i](domain_prompt_desc).chunk(6, dim=1)
                     if self.residual:
                         blk.norm1.set_residual_weight_bias(domain_prompt_output[0], domain_prompt_output[1])
@@ -215,16 +214,32 @@ class DINOv2(nn.Module):
                         blk.norm2.set_weight_bias(domain_prompt_output[3], domain_prompt_output[4])
                         blk.ls2.set_gamma(domain_prompt_output[5])
                 x = blk(x)
+                if i in self.multiscale_layers:
+                    feature_list.append(x)
 
-        if self.norm_layer:
-            x = self.model.norm(x)
-        
-        t = x[:, 0]
-        f = x[:, 1:]
+        for i in range(len(feature_list)):
+            if i != 0:
+                if self.norm_layer:
+                    x = self.model.norm(feature_list[i])
+                
+                t_out = x[:, 0] # Only use last token
+                # t_out = torch.cat([t_out, t], dim=1) # Use all tokens
+                f = x[:, 1:]
 
-        # Reshape to (B, C, H, W)
-        f = f.reshape((B, H // 14, W // 14, self.num_channels)).permute(0, 3, 1, 2)
+                # Reshape to (B, C, H, W)
+                f_out = torch.cat([f_out, f.reshape((B, H // 14, W // 14, self.num_channels)).permute(0, 3, 1, 2)], dim=2)
+            else:
+                if self.norm_layer:
+                    x = self.model.norm(x)
+                
+                t_out = x[:, 0]
+                f = x[:, 1:]
 
+                # Reshape to (B, C, H, W)
+                f_out = f.reshape((B, H // 14, W // 14, self.num_channels)).permute(0, 3, 1, 2)
+
+        print(f_out.shape)
+        print(t_out.shape)
         if self.return_token:
-            return f, t
-        return f
+            return f_out, t_out
+        return f_out
