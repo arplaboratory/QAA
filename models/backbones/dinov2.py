@@ -238,8 +238,6 @@ class DINOv2(nn.Module):
                 # Reshape to (B, C, H, W)
                 f_out = f.reshape((B, H // 14, W // 14, self.num_channels)).permute(0, 3, 1, 2)
 
-        print(f_out.shape)
-        print(t_out.shape)
         if self.return_token:
             return f_out, t_out
         return f_out
