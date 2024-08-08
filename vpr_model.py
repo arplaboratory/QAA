@@ -100,6 +100,8 @@ class VPRModel(pl.LightningModule):
                 {'params': self.backbone.domain_prompt_mlp_list.parameters()},
                 {'params': self.aggregator.parameters()}
             ]
+            if self.backbone.train_last:
+                params.append({'params': self.backbone.model.blocks[-1].parameters()})
         else:
             params = self.parameters()
         if self.optimizer.lower() == 'sgd':

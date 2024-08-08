@@ -92,6 +92,7 @@ class DINOv2(nn.Module):
             freeze_backbone=False,
             residual=True,
             num_queries=32,
+            train_last=False,
         ):
         super().__init__()
 
@@ -105,6 +106,7 @@ class DINOv2(nn.Module):
         self.freeze_backbone = freeze_backbone
         self.residual = residual
         self.num_queries = num_queries
+        self.train_last = train_last
         
         if self.domain_prompt!="none":
             hidden_size = self.model.blocks[0].norm1.weight.shape[0]
@@ -128,6 +130,8 @@ class DINOv2(nn.Module):
                 raise ValueError(f'Unknown domain prompt {self.domain_prompt}')
             self.domain_prompt_mlp_list = nn.ModuleList()
             for i, blk in enumerate(self.model.blocks[-self.num_trainable_blocks:]):
+                if self.train_last and i == self.num_trainable_blocks - 1:
+                    break
                 self.domain_prompt_mlp_list.append(nn.Sequential(nn.SiLU(),
                                                                 nn.Linear(num_clusters*cluster_dim+token_dim, hidden_size * 6)))
                 clusternorm1 = ClusterNorm(hidden_size, residual)
@@ -198,7 +202,7 @@ class DINOv2(nn.Module):
                 domain_prompt_desc = self.domain_prompt_model((f, t), domain_idx)
             # Last blocks are trained
             for i, blk in enumerate(self.model.blocks[-self.num_trainable_blocks:]):
-                if self.domain_prompt != "none":
+                if self.domain_prompt != "none" and not (self.train_last and i == self.num_trainable_blocks - 1):
                     domain_prompt_output = self.domain_prompt_mlp_list[i](domain_prompt_desc).chunk(6, dim=1)
                     if self.residual:
                         blk.norm1.set_residual_weight_bias(domain_prompt_output[0], domain_prompt_output[1])
