@@ -106,7 +106,7 @@ class DINOv2(nn.Module):
         self.freeze_backbone = freeze_backbone
         self.residual = residual
         self.num_queries = num_queries
-        self.multiscale_layers = [self.num_trainable_blocks - int(x) for x in multiscale.split(",")]
+        self.multiscale_layers = [len(self.model.blocks) - int(x) for x in multiscale.split(",")]
         
         if self.domain_prompt!="none":
             hidden_size = self.model.blocks[0].norm1.weight.shape[0]
@@ -187,10 +187,15 @@ class DINOv2(nn.Module):
             for blk in self.model.blocks:
                 x = blk(x)
         else:
+            feature_list = []
+            layer_count = 0
             # First blocks are frozen
             with torch.no_grad():
                 for blk in self.model.blocks[:-self.num_trainable_blocks]:
                     x = blk(x)
+                    if layer_count in self.multiscale_layers:
+                        feature_list.append(x.detach())
+                    layer_count += 1
             x = x.detach()
             if self.domain_prompt != "none":
                 t = x[:, 0]
@@ -199,7 +204,6 @@ class DINOv2(nn.Module):
                 f = f.reshape((B, H // 14, W // 14, self.num_channels)).permute(0, 3, 1, 2)
                 domain_prompt_desc = self.domain_prompt_model((f, t), domain_idx)
             # Last blocks are trained
-            feature_list = []
             for i, blk in enumerate(self.model.blocks[-self.num_trainable_blocks:]):
                 if self.domain_prompt != "none":
                     domain_prompt_output = self.domain_prompt_mlp_list[i](domain_prompt_desc).chunk(6, dim=1)
@@ -214,8 +218,9 @@ class DINOv2(nn.Module):
                         blk.norm2.set_weight_bias(domain_prompt_output[3], domain_prompt_output[4])
                         blk.ls2.set_gamma(domain_prompt_output[5])
                 x = blk(x)
-                if i in self.multiscale_layers:
+                if layer_count in self.multiscale_layers:
                     feature_list.append(x)
+                layer_count+=1
 
         for i in range(len(feature_list)):
             if i != 0:

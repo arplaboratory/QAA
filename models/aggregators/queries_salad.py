@@ -73,7 +73,7 @@ class QueryCrossAttn(torch.nn.Module):
         out, attn = self.cross_attn(q, x_flatten, x_flatten)
         out = self.norm_out(out)
         out = self.conv(out.permute(0, 2, 1))
-        return out.flatten(2), attn
+        return out, attn
 
 class QueriesSALAD(nn.Module):
     """
