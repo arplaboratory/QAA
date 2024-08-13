@@ -95,11 +95,16 @@ class VPRModel(pl.LightningModule):
     def configure_optimizers(self):
         if self.backbone.freeze_backbone:
             print("FREEZE BACKBONE")
-            params = [
-                {'params': self.backbone.domain_prompt_model.parameters()},
-                {'params': self.backbone.domain_prompt_mlp_list.parameters()},
-                {'params': self.aggregator.parameters()}
-            ]
+            if hasattr(self.backbone, "domain_prompt_model"):
+                params = [
+                    {'params': self.backbone.domain_prompt_model.parameters()},
+                    {'params': self.backbone.domain_prompt_mlp_list.parameters()},
+                    {'params': self.aggregator.parameters()}
+                ]
+            else:
+                params = [
+                    {'params': self.aggregator.parameters()}
+                ]
         else:
             params = self.parameters()
         if self.optimizer.lower() == 'sgd':
