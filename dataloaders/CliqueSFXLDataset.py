@@ -8,7 +8,6 @@ import torchvision.transforms as T
 import numpy as np
 import tqdm
 import os
-import time
 import concurrent.futures
 from scipy.spatial.distance import cdist, pdist, squareform
 import networkx
@@ -93,6 +92,7 @@ def compute_cluster_descriptors(city_df, model, descriptor_size=8192 + 256, batc
         )
 
         cluster_descriptors = torch.zeros((df.unique_cluster.max() + 1, descriptor_size)).cuda()
+        res = faiss.StandardGpuResources()
 
         # Compute descriptors for each cluster
         model.eval()
@@ -102,8 +102,11 @@ def compute_cluster_descriptors(city_df, model, descriptor_size=8192 + 256, batc
                 img = img.cuda()
                 descriptors = model(img)
                 cluster_descriptors[clusters] = descriptors
-
-        cluster_descriptors_dict[city] = cluster_descriptors.cpu().numpy()
+        index = faiss.IndexFlatL2(descriptor_size)
+        index = faiss.index_cpu_to_gpu(res, 0, index)
+        index.add(cluster_descriptors)
+        _, I = index.search(cluster_descriptors, 64)
+        cluster_descriptors_dict[city] = I.cpu()
         model.train()
 
     return cluster_descriptors_dict
@@ -133,34 +136,24 @@ def create_dataset_part(
         while batch_idx < batch_size:
 
             cities_to_sample = [c for c in cluster_descriptors_dict.keys()]
-            num_clusters = np.array([d.shape[0] for c, d in cluster_descriptors_dict.items()])
 
-            city = np.random.choice(cities_to_sample, p=num_clusters/num_clusters.sum())
+            city = np.random.choice(cities_to_sample)
 
             # Don't sample already done in this batch
             while city in cities_this_batch:
-                city = np.random.choice(cities_to_sample, p=num_clusters/num_clusters.sum())
+                city = np.random.choice(cities_to_sample)
             cities_this_batch.append(city)
 
 
             df = city_df[city]
-            descriptor = cluster_descriptors_dict[city]
+            topk = cluster_descriptors_dict[city]
             
             # Sample a random cluster
             place_id = np.random.choice(df.unique_cluster.unique())
 
             # Compute similarity between the selected cluster and all the others
-            t3 = time.time()
-            distances = cdist(descriptor[place_id, None, :], descriptor)[0]
-            t4 = time.time()
-            print(f"Time to compute distances: {t4-t3}")
-            # Normalize distances as probabilities (where min distance is max probability)
-            distances = np.delete(distances, place_id)
-            other_places = np.delete(np.arange(df.unique_cluster.max() + 1), place_id)
-            
-            # Sample similar places
-            topk = np.argsort(distances)[:sampled_similar_places]
-            other_places = other_places[topk]
+            topk_subset = np.delete(topk[place_id], 0)
+            other_places = topk_subset[:sampled_similar_places]
             other_places = np.concatenate([np.array([place_id]), other_places])
 
             df = df[df['unique_cluster'].isin(other_places)]
