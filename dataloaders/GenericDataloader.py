@@ -127,7 +127,6 @@ class GenericDataModule(pl.LightningDataModule):
                                                 split="train", 
                                                 transform=self.train_transform,
                                                 batch_size=self.train_batch_size,
-                                                only_top_k=self.train_cfg_training.only_top_k,
                                                 shuffle_method=self.train_cfg_training.shuffle_method,
                                                 prefetch_factor=self.train_cfg_training.prefetch_factor,
                                                 **self.train_datasets_cfg["mapillary_sls"].training.clique_args))
@@ -136,7 +135,6 @@ class GenericDataModule(pl.LightningDataModule):
                                                 split="train",
                                                 transform=self.train_transform,
                                                 batch_size=self.train_batch_size,
-                                                only_top_k=self.train_cfg_training.only_top_k,
                                                 shuffle_method=self.train_cfg_training.shuffle_method,
                                                 prefetch_factor=self.train_cfg_training.prefetch_factor,
                                                 **self.train_datasets_cfg["SF_XL"].training.clique_args))
@@ -146,7 +144,6 @@ class GenericDataModule(pl.LightningDataModule):
                                                 split="train", 
                                                 transform=self.train_transform,
                                                 batch_size=self.train_batch_size,
-                                                only_top_k=self.train_cfg_training.only_top_k,
                                                 **self.train_datasets_cfg[dataset_name].training.clique_args))
                 print(f'Dataset {dataset_name} loaded: Length = {len(self.train_datasets[-1])}')
 

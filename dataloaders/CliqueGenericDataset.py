@@ -170,7 +170,6 @@ def create_dataset_part(
         num_images_per_place=4,
         sampled_similar_places=15,
         same_place_threshold=20.0,
-        only_top_k=False,
     ):
 
     import os
@@ -198,20 +197,12 @@ def create_dataset_part(
             # Compute similarity between the selected cluster and all the others
             distances = cdist(available_descriptor[place_id_idx, None, :], available_descriptor)[0]
             # Normalize distances as probabilities (where min distance is max probability)
-            if only_top_k:
-                distances = np.delete(distances, place_id_idx)
-                other_places = np.delete(available_clusters, place_id_idx)
+            distances = np.delete(distances, place_id_idx)
+            other_places = np.delete(available_clusters, place_id_idx)
 
-                # Sample similar places
-                topk = np.argsort(distances)[:sampled_similar_places]
-                other_places = other_places[topk]
-            else:
-                distances[distances != 0] = distances.max() - distances[distances != 0]
-                distances = distances / distances.sum()
-
-                # Sample similar places
-                sample_idx = np.random.choice(len(available_clusters) - 1, sampled_similar_places, p=distances, replace=False)
-                other_places = other_places[sample_idx]
+            # Sample similar places
+            topk = np.argsort(distances)[:sampled_similar_places]
+            other_places = other_places[topk]
             other_places = np.concatenate([np.array([place_id]), other_places])
 
             invalid_idx = np.where(np.isin(df['unique_cluster'].unique(), other_places, assume_unique=True))[0]
@@ -262,7 +253,6 @@ class CliqueGenericDataset(Dataset):
             sampled_similar_places=15,
             same_place_threshold=20.0,
             cluster_desc_threshold_percentage=0.1,
-            only_top_k=False,
             shuffle_method="global",
             prefetch_factor=1,
     ):
@@ -278,7 +268,6 @@ class CliqueGenericDataset(Dataset):
         self.sampled_similar_places = sampled_similar_places
         self.same_place_threshold = same_place_threshold
         self.cluster_desc_threshold_percentage = cluster_desc_threshold_percentage
-        self.only_top_k = only_top_k
         self.shuffle_method = shuffle_method
         self.prefetch_factor = prefetch_factor
 
@@ -290,7 +279,6 @@ class CliqueGenericDataset(Dataset):
             sampled_similar_places=sampled_similar_places,
             same_place_threshold=same_place_threshold,
             cluster_desc_threshold_percentage=cluster_desc_threshold_percentage,
-            only_top_k=only_top_k,
             prefetch_factor=prefetch_factor,
         )
         
@@ -340,7 +328,6 @@ class CliqueGenericDataset(Dataset):
                 sampled_similar_places=self.sampled_similar_places,
                 same_place_threshold=self.same_place_threshold,
                 cluster_desc_threshold_percentage=self.cluster_desc_threshold_percentage,
-                only_top_k=self.only_top_k,
                 prefetch_factor=self.prefetch_factor,
             )
         elif self.shuffle_method =="global":
@@ -370,7 +357,6 @@ class CliqueGenericDataset(Dataset):
         sampled_similar_places=15,
         same_place_threshold=20.0,
         cluster_desc_threshold_percentage=0.1,
-        only_top_k=False,
     ):
 
         city_df = construct_df(self.dataset_name, self.split, same_place_threshold)
@@ -402,7 +388,6 @@ class CliqueGenericDataset(Dataset):
                 num_images_per_place,
                 sampled_similar_places,
                 same_place_threshold,
-                only_top_k,
             ) for _ in range(num_processes)]
             
             # Collect results in all_images
