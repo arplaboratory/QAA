@@ -13,6 +13,7 @@ from sklearn.neighbors import NearestNeighbors
 import concurrent.futures
 from scipy.spatial.distance import cdist, pdist, squareform
 import networkx
+import faiss
 
 default_transform = T.Compose([
     T.ToTensor(),
@@ -148,16 +149,22 @@ def compute_cluster_descriptors(city_df, model, dataset_name, same_place_thresho
         )
 
         cluster_descriptors = torch.zeros((df.unique_cluster.max() + 1, descriptor_size)).cuda()
+        res = faiss.StandardGpuResources()
 
         # Compute descriptors for each cluster
+        model.eval()
         with torch.no_grad():
             for batch in dataloader:
-                img, _, clusters = batch
+                img, clusters = batch
                 img = img.cuda()
                 descriptors = model(img)
                 cluster_descriptors[clusters] = descriptors
-
-        cluster_descriptors_dict[city] = cluster_descriptors.cpu().numpy()
+        index = faiss.IndexFlatL2(descriptor_size)
+        index = faiss.index_cpu_to_gpu(res, 0, index)
+        index.add(cluster_descriptors)
+        _, I = index.search(cluster_descriptors, 64)
+        cluster_descriptors_dict[city] = I.cpu()
+        model.train()
 
     return cluster_descriptors_dict
 
@@ -357,6 +364,8 @@ class CliqueGenericDataset(Dataset):
         sampled_similar_places=15,
         same_place_threshold=20.0,
         cluster_desc_threshold_percentage=0.1,
+        prefetch_factor=1,
+        recompute=False,
     ):
 
         city_df = construct_df(self.dataset_name, self.split, same_place_threshold)
@@ -366,15 +375,17 @@ class CliqueGenericDataset(Dataset):
         # Compute cluster descriptors if model is provided
         if model is not None:
             cluster_descriptors_dict = compute_cluster_descriptors(city_df, model, self.dataset_name, same_place_threshold, cluster_desc_threshold_percentage)
-            np.save(cluster_descriptors_path, cluster_descriptors_dict)
-        elif os.path.isfile(cluster_descriptors_path):
+            if not recompute: # recompute does not save
+                np.save(cluster_descriptors_path, cluster_descriptors_dict)
+        elif os.path.isfile(cluster_descriptors_path) and not recompute:
             cluster_descriptors_dict = np.load(cluster_descriptors_path, allow_pickle=True).item()
         else:
             print('Model must be provided to compute cluster descriptors')
             print('- Computing descriptors using torch.hub DINOv2 SALAD')
-            model = torch.hub.load("serizba/salad", "dinov2_salad").eval().cuda()
+            model = torch.hub.load("serizba/salad", "dinov2_salad").cuda()
             cluster_descriptors_dict = compute_cluster_descriptors(city_df, model, self.dataset_name, same_place_threshold, cluster_desc_threshold_percentage)
-            np.save(cluster_descriptors_path, cluster_descriptors_dict)
+            if not recompute: # recompute does not save
+                np.save(cluster_descriptors_path, cluster_descriptors_dict)
 
         # Create dataset in parallel
         all_images = []
@@ -385,7 +396,7 @@ class CliqueGenericDataset(Dataset):
                 city_df,
                 num_batches // num_processes,
                 batch_size,
-                num_images_per_place,
+                num_images_per_place * prefetch_factor,
                 sampled_similar_places,
                 same_place_threshold,
             ) for _ in range(num_processes)]
