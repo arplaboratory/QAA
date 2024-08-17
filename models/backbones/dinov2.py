@@ -110,7 +110,7 @@ class DINOv2(nn.Module):
         
         if self.domain_prompt!="none":
             hidden_size = self.model.blocks[0].norm1.weight.shape[0]
-            assert padding in ["detach", "zero"], 'Padding should be either detach or zero'
+            assert padding in ["detach"], 'Padding should be either detach'
             assert self.num_trainable_blocks > 0, 'First blocks should be frozen when using domain prompt'
             if self.domain_prompt == "SALAD":
                 self.domain_prompt_model = SALAD(num_channels=hidden_size, num_clusters=num_clusters, cluster_dim=cluster_dim,
