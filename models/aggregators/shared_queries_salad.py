@@ -93,7 +93,6 @@ class SharedQueriesSALAD(nn.Module):
             token_dim=256,
             dropout=0.3,
             divide=1,
-            decouple=False,
             shared_clusters=0,
             padding="detach",
             num_queries=32,
@@ -105,7 +104,6 @@ class SharedQueriesSALAD(nn.Module):
         self.cluster_dim = cluster_dim
         self.token_dim = token_dim
         self.divide = divide
-        self.decouple = decouple
         if divide > 1:
             self.shared_clusters = shared_clusters
             self.specific_clusters = (self.num_clusters - shared_clusters) // divide
@@ -124,7 +122,7 @@ class SharedQueriesSALAD(nn.Module):
             nn.ReLU(),
             nn.Linear(512, self.token_dim)
         )
-        if divide > 1 and decouple:
+        if divide > 1:
             self.queries = QuerySelfAttn(self.num_channels, self.num_queries, nheads=self.num_channels // 64)
             # MLP for local features f_i
             self.cluster_features = QueryCrossAttn(self.num_channels, self.cluster_dim, nheads=self.num_channels // 64)
@@ -159,7 +157,7 @@ class SharedQueriesSALAD(nn.Module):
 
         q = self.queries()
         f, f_attn = self.cluster_features(x, q)
-        if self.divide > 1 and self.decouple:
+        if self.divide > 1:
             # Use decoupled score network
             if domain_idx is None:
                 if self.shared_clusters > 0:
@@ -173,18 +171,6 @@ class SharedQueriesSALAD(nn.Module):
                 p = self.generate_score_from_decoupled_pnet(x, q, domain_idx)
                 if self.shared_clusters > 0:
                     p = torch.cat([p_shared, p], dim=1)
-        elif self.divide > 1:
-            # Use coupled score network
-            p, p_attn = self.score(x, q)
-            if domain_idx is None:
-                pass
-            else:
-                if self.shared_clusters > 0:
-                    p_shared = p[:, :self.shared_clusters]
-                    p = p[:, self.shared_clusters:]
-                p = self.select_score_from_coupled_pnet(p, domain_idx)
-                if self.shared_clusters > 0:
-                    p = torch.cat([p_shared, p], dim=1)
         else:
             p, p_attn = self.score(x, q)
         t = self.token_features(t)
@@ -194,6 +180,7 @@ class SharedQueriesSALAD(nn.Module):
         p = torch.exp(p)
         # Normalize to maintain mass
         p = p[:, :-1, :]
+
 
         p = p.unsqueeze(1).repeat(1, self.cluster_dim, 1, 1)
         if self.padding in ["detach"] or domain_idx is None:

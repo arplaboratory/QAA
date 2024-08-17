@@ -50,7 +50,6 @@ class SALAD(nn.Module):
             token_dim=256,
             dropout=0.3,
             divide=1,
-            decouple=False,
             shared_clusters=0,
             padding="detach",
         ) -> None:
@@ -61,7 +60,6 @@ class SALAD(nn.Module):
         self.cluster_dim = cluster_dim
         self.token_dim = token_dim
         self.divide = divide
-        self.decouple = decouple
         if divide > 1:
             self.shared_clusters = shared_clusters
             self.specific_clusters = (self.num_clusters - shared_clusters) // divide
@@ -87,7 +85,7 @@ class SALAD(nn.Module):
             nn.Conv2d(512, self.cluster_dim, 1)
         )
         # MLP for score matrix S
-        if divide > 1 and decouple:
+        if divide > 1:
             if self.shared_clusters > 0:
                 self.shared_score = nn.Sequential(
                         nn.Conv2d(self.num_channels, 512, 1),
@@ -129,7 +127,7 @@ class SALAD(nn.Module):
         x, t = x # Extract features and token
 
         f = self.cluster_features(x).flatten(2)
-        if self.divide > 1 and self.decouple:
+        if self.divide > 1:
             # Use decoupled score network
             if domain_idx is None:
                 if self.shared_clusters > 0:
@@ -141,18 +139,6 @@ class SALAD(nn.Module):
                 if self.shared_clusters > 0:
                     p_shared = self.shared_score(x).flatten(2)
                 p = self.generate_score_from_decoupled_pnet(x, domain_idx)
-                if self.shared_clusters > 0:
-                    p = torch.cat([p_shared, p], dim=1)
-        elif self.divide > 1:
-            # Use coupled score network
-            p = self.score(x).flatten(2)
-            if domain_idx is None:
-                pass
-            else:
-                if self.shared_clusters > 0:
-                    p_shared = p[:, :self.shared_clusters]
-                    p = p[:, self.shared_clusters:]
-                p = self.select_score_from_coupled_pnet(p, domain_idx)
                 if self.shared_clusters > 0:
                     p = torch.cat([p_shared, p], dim=1)
         else:
@@ -183,24 +169,6 @@ class SALAD(nn.Module):
         p_zero = torch.zeros((p.shape[0], self.num_clusters, p.shape[2]), device=p.device)
         for i, domain_id_single in enumerate(domain_idx):
             p_zero[i, domain_id_single * self.specific_clusters: (domain_id_single + 1) * self.specific_clusters] = p[i]
-        return p_zero
-
-    def select_score_from_coupled_pnet(self, p, domain_idx):
-        if self.padding == "detach":
-            p_zero = torch.zeros((p.shape[0], self.num_clusters - self.shared_clusters, p.shape[2]), device=p.device)
-            if self.padding == "detach":
-                for i, domain_id_single in enumerate(domain_idx):
-                    for j in range(self.divide):
-                        if j == domain_id_single:
-                            p_zero[i, j * self.specific_clusters: (j + 1) * self.specific_clusters] = p[i,
-                                    j * self.specific_clusters: (j + 1) * self.specific_clusters]
-                        else:
-                            p_zero[i, j * self.specific_clusters: (j + 1) * self.specific_clusters] = p[i,
-                                    j * self.specific_clusters: (j + 1) * self.specific_clusters].detach()                                                                       
-        elif self.padding == "none":
-            p_zero = torch.zeros((p.shape[0], self.specific_clusters, p.shape[2]), device=p.device) # Only the specific clusters
-            for i, domain_id_single in enumerate(domain_idx):
-                p_zero[i] = p[i, domain_id_single * self.specific_clusters: (domain_id_single + 1) * self.specific_clusters]
         return p_zero
     
     def generate_score_from_decoupled_pnet(self, x, domain_idx):

@@ -87,7 +87,6 @@ class DINOv2(nn.Module):
             dropout=0.0,
             divide=1,
             shared_clusters=0,
-            decouple=False,
             padding="detach",
             freeze_backbone=False,
             residual=True,
@@ -115,16 +114,16 @@ class DINOv2(nn.Module):
             if self.domain_prompt == "SALAD":
                 self.domain_prompt_model = SALAD(num_channels=hidden_size, num_clusters=num_clusters, cluster_dim=cluster_dim,
                                                 token_dim=token_dim, dropout=dropout, padding=padding,
-                                                divide=divide, decouple=decouple, shared_clusters=shared_clusters)
+                                                divide=divide, shared_clusters=shared_clusters)
             elif self.domain_prompt == "QueriesSALAD":
                 self.domain_prompt_model = QueriesSALAD(num_channels=hidden_size, num_clusters=num_clusters, cluster_dim=cluster_dim,
                                                 token_dim=token_dim, dropout=dropout, padding=padding,
-                                                divide=divide, decouple=decouple, shared_clusters=shared_clusters,
+                                                divide=divide, shared_clusters=shared_clusters,
                                                 num_queries=num_queries)
             elif self.domain_prompt == "SharedQueriesSALAD":
                 self.domain_prompt_model = SharedQueriesSALAD(num_channels=hidden_size, num_clusters=num_clusters, cluster_dim=cluster_dim,
                                                 token_dim=token_dim, dropout=dropout, padding=padding,
-                                                divide=divide, decouple=decouple, shared_clusters=shared_clusters,
+                                                divide=dividee, shared_clusters=shared_clusters,
                                                 num_queries=num_queries)
             else:
                 raise ValueError(f'Unknown domain prompt {self.domain_prompt}')
