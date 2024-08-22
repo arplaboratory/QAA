@@ -25,6 +25,11 @@ if not Path(BASE_PATH).exists():
     raise FileNotFoundError(
         'BASE_PATH is hardcoded, please adjust to point to gsv_cities')
 
+def init_pool(cluster_descriptors_dict_input, city_df_input):
+    global cluster_descriptors_dict, city_df
+    cluster_descriptors_dict = cluster_descriptors_dict_input
+    city_df = city_df_input
+
 def load_city_df(base_path):
     # Load cities
     city_df = {}
@@ -121,8 +126,6 @@ def compute_cluster_descriptors(city_df, model, descriptor_size=8192 + 256, batc
 
 
 def create_dataset_part(
-        cluster_descriptors_dict,
-        city_df,
         num_batches=100,
         batch_size=60,
         num_images_per_place=4,
@@ -334,11 +337,9 @@ class CliqueMapillaryDataset(Dataset):
 
         # Create dataset in parallel
         all_images = []
-        with concurrent.futures.ProcessPoolExecutor(max_workers=num_processes) as executor:
+        with concurrent.futures.ProcessPoolExecutor(max_workers=num_processes, initializer=init_pool, initargs=(cluster_descriptors_dict, city_df)) as executor:
             tasks = [executor.submit(
                 create_dataset_part,
-                cluster_descriptors_dict,
-                city_df,
                 num_batches // num_processes,
                 batch_size,
                 num_images_per_place * prefetch_factor,
