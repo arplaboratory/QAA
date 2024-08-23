@@ -98,7 +98,7 @@ def compute_cluster_descriptors(city_df, model, descriptor_size=8192 + 256, batc
         dataloader = torch.utils.data.DataLoader(
             dataset=msls, 
             batch_size=batch_size,
-            num_workers=8,
+            num_workers=16,
             drop_last=False,
             pin_memory=True,
             shuffle=False
@@ -109,17 +109,20 @@ def compute_cluster_descriptors(city_df, model, descriptor_size=8192 + 256, batc
 
         # Compute descriptors for each cluster
         model.eval()
+        print("Computing descriptors for city", city)
         with torch.no_grad():
             for batch in dataloader:
                 img, clusters = batch
                 img = img.cuda()
                 descriptors = model(img)
                 cluster_descriptors[clusters] = descriptors
+        print("Sorting cluster indices for city", city)
         index = faiss.IndexFlatL2(descriptor_size)
         index = faiss.index_cpu_to_gpu(res, 0, index)
         index.add(cluster_descriptors)
         _, I = index.search(cluster_descriptors, 64)
-        cluster_descriptors_dict[city] = I.cpu()
+        cluster_descriptors_dict[city] = I.cpu().numpy()
+        print("Finish for city", city)
         model.train()
 
     return cluster_descriptors_dict
@@ -211,7 +214,6 @@ class CliqueMapillaryDataset(Dataset):
             num_images_per_place=4,
             sampled_similar_places=15,
             same_place_threshold=20.0,
-            shuffle_method="global",
             prefetch_factor=1,
     ):
         super(CliqueMapillaryDataset, self).__init__()
@@ -225,7 +227,6 @@ class CliqueMapillaryDataset(Dataset):
         self.num_images_per_place = num_images_per_place
         self.sampled_similar_places = sampled_similar_places
         self.same_place_threshold = same_place_threshold
-        self.shuffle_method = shuffle_method
         self.prefetch_factor = prefetch_factor
 
         self.create_dataset(
@@ -286,21 +287,8 @@ class CliqueMapillaryDataset(Dataset):
                 prefetch_factor=self.prefetch_factor,
                 recompute=recompute,
             )
-        elif self.shuffle_method =="global":
-            self.data = self.data[np.random.permutation(self.data.shape[0])]
-        elif self.shuffle_method =="batch":
-            for i in range(self.data.shape[0]):
-                self.data[i] = self.data[i][np.random.permutation(self.data[i].shape[0])]
-            self.data = self.data[np.random.permutation(self.data.shape[0])]
-        elif self.shuffle_method =="image":
-            for i in range(self.data.shape[0]):
-                for j in  range(self.data[i].shape[0]):
-                    self.data[i][j] = self.data[i][j][np.random.permutation(self.data[i][j].shape[0])]
-            for i in range(self.data.shape[0]):
-                self.data[i] = self.data[i][np.random.permutation(self.data[i].shape[0])]
-            self.data = self.data[np.random.permutation(self.data.shape[0])]
         else:
-            raise ValueError("Invalid shuffle method")
+            self.data = self.data[np.random.permutation(self.data.shape[0])]
         
 
     def create_dataset(

@@ -5,10 +5,8 @@ import torchvision
 
 import utils
 from models import helper
+from dataloaders.GenericDataloader import IMAGENET_MEAN_STD
 
-
-IMAGENET_MEAN_STD = {'mean': [0.485, 0.456, 0.406], 
-                     'std': [0.229, 0.224, 0.225]}
 
 class VPRModel(pl.LightningModule):
     """This is the main model for Visual Place Recognition
@@ -43,7 +41,8 @@ class VPRModel(pl.LightningModule):
         loss_name='MultiSimilarityLoss', 
         miner_name='MultiSimilarityMiner', 
         miner_margin=0.1,
-        faiss_gpu=False
+        faiss_gpu=False,
+        cross_loss=False,
     ):
         super().__init__()
 
@@ -75,6 +74,7 @@ class VPRModel(pl.LightningModule):
         self.batch_acc = [] # we will keep track of the % of trivial pairs/triplets at the loss level 
 
         self.faiss_gpu = faiss_gpu
+        self.cross_loss = cross_loss
         
         # ----------------------------------
         # get the backbone and the aggregator
@@ -223,15 +223,18 @@ class VPRModel(pl.LightningModule):
             raise ValueError('NaNs in descriptors')
 
         loss = 0
-        for i in range(len(BS_list)):
-            BS = BS_list[i]
-            N = N_list[i]
-            if i == 0:
-                loss += self.loss_function(descriptors[:BS*N], labels[:BS*N])
-                prev_BS_N = BS*N
-            else:
-                loss += self.loss_function(descriptors[prev_BS_N:prev_BS_N+BS*N], labels[prev_BS_N:prev_BS_N+BS*N])
-                prev_BS_N += BS*N
+        if self.cross_loss:
+            loss += self.loss_function(descriptors, labels)
+        else:
+            for i in range(len(BS_list)):
+                BS = BS_list[i]
+                N = N_list[i]
+                if i == 0:
+                    loss += self.loss_function(descriptors[:BS*N], labels[:BS*N])
+                    prev_BS_N = BS*N
+                else:
+                    loss += self.loss_function(descriptors[prev_BS_N:prev_BS_N+BS*N], labels[prev_BS_N:prev_BS_N+BS*N])
+                    prev_BS_N += BS*N
         
         self.log('loss', loss.item(), logger=True, prog_bar=True)
         return {'loss': loss}

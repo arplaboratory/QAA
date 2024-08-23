@@ -9,7 +9,6 @@ import numpy as np
 import tqdm
 import os
 from sklearn.neighbors import NearestNeighbors
-
 import concurrent.futures
 from scipy.spatial.distance import cdist, pdist, squareform
 import networkx
@@ -22,6 +21,11 @@ default_transform = T.Compose([
 
 # NOTE: Hard coded path to dataset folder 
 NPY_ROOT = 'cache/datasets/'
+
+def init_pool(cluster_descriptors_dict_input, city_df_input):
+    global cluster_descriptors_dict, city_df
+    cluster_descriptors_dict = cluster_descriptors_dict_input
+    city_df = city_df_input
 
 def construct_df(dataset_name, split, same_place_threshold):
     city_df = {}
@@ -170,8 +174,6 @@ def compute_cluster_descriptors(city_df, model, dataset_name, same_place_thresho
 
 
 def create_dataset_part(
-        cluster_descriptors_dict,
-        city_df,
         num_batches=100,
         batch_size=60,
         num_images_per_place=4,
@@ -184,41 +186,31 @@ def create_dataset_part(
     np.random.seed((os.getpid() * int(time.time())) % 123456789)
 
     images = np.zeros((num_batches, batch_size, num_images_per_place), dtype=object)
-    cities_to_sample = [c for c in cluster_descriptors_dict.keys()]
-    city = cities_to_sample[0]
-    df = city_df[city]
-    descriptor = cluster_descriptors_dict[city]
 
     for i in tqdm.tqdm(range(num_batches)):
 
         batch_idx = 0
-        valid = np.ones(len(df['unique_cluster'].unique()))
         while batch_idx < batch_size:
+
+            cities_to_sample = [c for c in cluster_descriptors_dict.keys()]
+
+
+
+            df = city_df
+            topk = cluster_descriptors_dict
             
             # Sample a random cluster
-            available_clusters = df['unique_cluster'].unique()[valid == 1]
-            available_descriptor = descriptor[available_clusters]
-            place_id_idx = np.random.choice(len(available_clusters))
-            place_id = available_clusters[place_id_idx]
+            place_id = np.random.choice(df.unique_cluster.unique())
 
             # Compute similarity between the selected cluster and all the others
-            distances = cdist(available_descriptor[place_id_idx, None, :], available_descriptor)[0]
-            # Normalize distances as probabilities (where min distance is max probability)
-            distances = np.delete(distances, place_id_idx)
-            other_places = np.delete(available_clusters, place_id_idx)
-
-            # Sample similar places
-            topk = np.argsort(distances)[:sampled_similar_places]
-            other_places = other_places[topk]
+            topk_subset = np.delete(topk[place_id], 0)
+            other_places = topk_subset[:sampled_similar_places]
             other_places = np.concatenate([np.array([place_id]), other_places])
 
-            invalid_idx = np.where(np.isin(df['unique_cluster'].unique(), other_places, assume_unique=True))[0]
-            valid[invalid_idx] = 0
-
-            current_df = df[df['unique_cluster'].isin(other_places)]
+            df = df[df['unique_cluster'].isin(other_places)]
 
             # Create adjacency matrix from UTM coordinates (two places are connected if they are closer than same_place_threshold)
-            utms = squareform(pdist(current_df[['easting', 'northing']].values)) < same_place_threshold
+            utms = squareform(pdist(df[['easting', 'northing']].values)) < same_place_threshold
 
             while batch_idx < batch_size:
 
@@ -260,7 +252,6 @@ class CliqueGenericDataset(Dataset):
             sampled_similar_places=15,
             same_place_threshold=20.0,
             cluster_desc_threshold_percentage=0.1,
-            shuffle_method="global",
             prefetch_factor=1,
     ):
         super(CliqueGenericDataset, self).__init__()
@@ -275,7 +266,6 @@ class CliqueGenericDataset(Dataset):
         self.sampled_similar_places = sampled_similar_places
         self.same_place_threshold = same_place_threshold
         self.cluster_desc_threshold_percentage = cluster_desc_threshold_percentage
-        self.shuffle_method = shuffle_method
         self.prefetch_factor = prefetch_factor
 
         self.create_dataset(
@@ -336,22 +326,10 @@ class CliqueGenericDataset(Dataset):
                 same_place_threshold=self.same_place_threshold,
                 cluster_desc_threshold_percentage=self.cluster_desc_threshold_percentage,
                 prefetch_factor=self.prefetch_factor,
+                recompute=recompute,
             )
-        elif self.shuffle_method =="global":
-            self.data = self.data[np.random.permutation(self.data.shape[0])]
-        elif self.shuffle_method =="batch":
-            for i in range(self.data.shape[0]):
-                self.data[i] = self.data[i][np.random.permutation(self.data[i].shape[0])]
-            self.data = self.data[np.random.permutation(self.data.shape[0])]
-        elif self.shuffle_method =="image":
-            for i in range(self.data.shape[0]):
-                for j in  range(self.data[i].shape[0]):
-                    self.data[i][j] = self.data[i][j][np.random.permutation(self.data[i][j].shape[0])]
-            for i in range(self.data.shape[0]):
-                self.data[i] = self.data[i][np.random.permutation(self.data[i].shape[0])]
-            self.data = self.data[np.random.permutation(self.data.shape[0])]
         else:
-            raise ValueError("Invalid shuffle method")
+            self.data = self.data[np.random.permutation(self.data.shape[0])]
         
 
     def create_dataset(
@@ -389,11 +367,9 @@ class CliqueGenericDataset(Dataset):
 
         # Create dataset in parallel
         all_images = []
-        with concurrent.futures.ProcessPoolExecutor(max_workers=num_processes) as executor:
+        with concurrent.futures.ProcessPoolExecutor(max_workers=num_processes, initializer=init_pool, initargs=(cluster_descriptors_dict, city_df)) as executor:
             tasks = [executor.submit(
                 create_dataset_part,
-                cluster_descriptors_dict,
-                city_df,
                 num_batches // num_processes,
                 batch_size,
                 num_images_per_place * prefetch_factor,

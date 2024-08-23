@@ -90,14 +90,14 @@ class GenericDataModule(pl.LightningDataModule):
 
         self.valid_loader_config = {
             'batch_size': self.test_batch_size,
-            'num_workers': self.num_workers,
+            'num_workers': self.num_workers * 2,
             'drop_last': False,
             'pin_memory': True,
             'shuffle': False}
 
         self.test_loader_config = {
             'batch_size': self.test_batch_size,
-            'num_workers': self.num_workers,
+            'num_workers': self.num_workers * 2,
             'drop_last': False,
             'pin_memory': True,
             'shuffle': False}
@@ -127,7 +127,6 @@ class GenericDataModule(pl.LightningDataModule):
                                                 split="train", 
                                                 transform=self.train_transform,
                                                 batch_size=self.train_batch_size,
-                                                shuffle_method=self.train_cfg_training.shuffle_method,
                                                 prefetch_factor=self.train_cfg_training.prefetch_factor,
                                                 **self.train_datasets_cfg["mapillary_sls"].training.clique_args))
                 elif dataset_name == "SF_XL":
@@ -135,7 +134,6 @@ class GenericDataModule(pl.LightningDataModule):
                                                 split="train",
                                                 transform=self.train_transform,
                                                 batch_size=self.train_batch_size,
-                                                shuffle_method=self.train_cfg_training.shuffle_method,
                                                 prefetch_factor=self.train_cfg_training.prefetch_factor,
                                                 **self.train_datasets_cfg["SF_XL"].training.clique_args))
                 else:
@@ -195,12 +193,9 @@ class GenericDataModule(pl.LightningDataModule):
             if self.train_cfg_training.recompute_clusters and self.train_cfg_training.recompute_interval!=0 and self.recompute_count == self.train_cfg_training.recompute_interval:
                 print("RECOMPUTE")
                 self.train_datasets[index].reload(model=self.model, recompute=True)
-                self.recompute_count = 0
             else:
                 print("SHUFFLE")
                 self.train_datasets[index].reload(model=self.model, recompute=False)
-                if self.train_cfg_training.recompute_clusters and self.train_cfg_training.recompute_interval!=0:
-                    self.recompute_count += 1
 
     def train_dataloader(self):
         train_dataloaders = {}
@@ -214,6 +209,10 @@ class GenericDataModule(pl.LightningDataModule):
             else:
                 train_dataloaders[train_dataset_name] = DataLoader(
                     dataset=train_dataset, **self.train_loader_config_general)
+        if self.train_cfg_training.recompute_clusters and self.train_cfg_training.recompute_interval!=0 and self.recompute_count == self.train_cfg_training.recompute_interval:
+            self.recompute_count = 1
+        elif self.train_cfg_training.recompute_clusters and self.train_cfg_training.recompute_interval!=0:
+            self.recompute_count += 1
         print(f"Train dataloaders: {train_dataloaders}")
         return train_dataloaders
 

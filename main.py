@@ -45,7 +45,8 @@ if __name__ == '__main__':
         loss_name=train_cfg.training.loss["name"],
         miner_name=train_cfg.training.miner["name"], # example: TripletMarginMiner, MultiSimilarityMiner, PairMarginMiner
         miner_margin=train_cfg.training.miner["margin"],
-        faiss_gpu=train_cfg.training.faiss_gpu
+        faiss_gpu=train_cfg.training.faiss_gpu,
+        cross_loss=train_cfg.training.cross_loss,
     )
 
     # model params saving using Pytorch Lightning
@@ -82,4 +83,4 @@ if __name__ == '__main__':
     # we call the trainer, we give it the model and the datamodule
     # trainer.validate(model=model, datamodule=datamodule)
     trainer.fit(model=model, datamodule=datamodule)
-    trainer.test(model=model, datamodule=datamodule, ckpt_path="last")
+    trainer.test(model=model, datamodule=datamodule, ckpt_path="best")
