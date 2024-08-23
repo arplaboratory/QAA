@@ -81,16 +81,17 @@ class DINOv2(nn.Module):
             norm_layer=False,
             return_token=False,
             domain_prompt="none",
-            num_clusters=64,
+            injection_method="norm",
+            num_clusters=16,
             cluster_dim=16,
-            token_dim=128,
+            token_dim=256,
             dropout=0.0,
             divide=1,
             shared_clusters=0,
             padding="detach",
             freeze_backbone=False,
             residual=True,
-            num_queries=32,
+            num_queries=64,
             multiscale="1",
         ):
         super().__init__()
@@ -102,6 +103,7 @@ class DINOv2(nn.Module):
         self.norm_layer = norm_layer
         self.return_token = return_token
         self.domain_prompt = domain_prompt
+        self.injection_method = injection_method
         self.freeze_backbone = freeze_backbone
         self.residual = residual
         self.num_queries = num_queries
@@ -123,38 +125,65 @@ class DINOv2(nn.Module):
             elif self.domain_prompt == "SharedQueriesSALAD":
                 self.domain_prompt_model = SharedQueriesSALAD(num_channels=hidden_size, num_clusters=num_clusters, cluster_dim=cluster_dim,
                                                 token_dim=token_dim, dropout=dropout, padding=padding,
-                                                divide=dividee, shared_clusters=shared_clusters,
+                                                divide=divide, shared_clusters=shared_clusters,
                                                 num_queries=num_queries)
             else:
                 raise ValueError(f'Unknown domain prompt {self.domain_prompt}')
-            self.domain_prompt_mlp_list = nn.ModuleList()
-            for i, blk in enumerate(self.model.blocks[-self.num_trainable_blocks:]):
-                self.domain_prompt_mlp_list.append(nn.Sequential(nn.SiLU(),
-                                                                nn.Linear(num_clusters*cluster_dim+token_dim, hidden_size * 6)))
-                clusternorm1 = ClusterNorm(hidden_size, residual)
-                clusternorm1.norm.load_state_dict(blk.norm1.state_dict(), strict=False)
-                if self.residual:
-                    clusternorm1.set_weight_bias(blk.norm1.weight, blk.norm1.bias)
-                blk.norm1 = clusternorm1
-                clusterls1 = ClusterLayerScale(hidden_size, residual)
-                if self.residual:
-                    clusterls1.set_gamma(blk.ls1.gamma)
-                blk.ls1 = clusterls1
-                clusternorm2 = ClusterNorm(hidden_size, residual)
-                clusternorm2.norm.load_state_dict(blk.norm2.state_dict(), strict=False)
-                if self.residual:
-                    clusternorm2.set_weight_bias(blk.norm2.weight, blk.norm2.bias)
-                blk.norm2 = clusternorm2
-                clusterls2 = ClusterLayerScale(hidden_size, residual)
-                if self.residual:
-                    clusterls2.set_gamma(blk.ls2.gamma)
-                blk.ls2 = clusterls2
-            # Zero initialize the domain prompt mlp
-            for domain_prompt_mlp in self.domain_prompt_mlp_list:
-                nn.init.constant_(domain_prompt_mlp[1].weight, 0)
-                nn.init.constant_(domain_prompt_mlp[1].bias, 0)
-            # Zero the domain prompt mlp
-            assert self.num_trainable_blocks > 0, 'First blocks should be frozen when using domain prompt'
+            if self.injection_method == "norm":
+                self.domain_prompt_mlp_list = nn.ModuleList()
+                for i, blk in enumerate(self.model.blocks[-self.num_trainable_blocks:]):
+                    self.domain_prompt_mlp_list.append(nn.Sequential(nn.Linear(num_clusters*cluster_dim+token_dim, hidden_size * 6),
+                                                                    nn.SiLU(),
+                                                                    nn.Linear(hidden_size * 6, hidden_size * 6)))
+                    clusternorm1 = ClusterNorm(hidden_size, residual)
+                    clusternorm1.norm.load_state_dict(blk.norm1.state_dict(), strict=False)
+                    if self.residual:
+                        clusternorm1.set_weight_bias(blk.norm1.weight, blk.norm1.bias)
+                    blk.norm1 = clusternorm1
+                    clusterls1 = ClusterLayerScale(hidden_size, residual)
+                    if self.residual:
+                        clusterls1.set_gamma(blk.ls1.gamma)
+                    blk.ls1 = clusterls1
+                    clusternorm2 = ClusterNorm(hidden_size, residual)
+                    clusternorm2.norm.load_state_dict(blk.norm2.state_dict(), strict=False)
+                    if self.residual:
+                        clusternorm2.set_weight_bias(blk.norm2.weight, blk.norm2.bias)
+                    blk.norm2 = clusternorm2
+                    clusterls2 = ClusterLayerScale(hidden_size, residual)
+                    if self.residual:
+                        clusterls2.set_gamma(blk.ls2.gamma)
+                    blk.ls2 = clusterls2
+                # Zero initialize the domain prompt mlp
+                for domain_prompt_mlp in self.domain_prompt_mlp_list:
+                    nn.init.constant_(domain_prompt_mlp[1].weight, 0)
+                    nn.init.constant_(domain_prompt_mlp[1].bias, 0)
+            elif self.injection_method == "add":
+                self.domain_prompt_mlp_list = nn.ModuleList()
+                for i, blk in enumerate(self.model.blocks[-self.num_trainable_blocks:]):
+                    self.domain_prompt_mlp_list.append(nn.Sequential(nn.Linear(num_clusters*cluster_dim+token_dim, hidden_size),
+                                                                    nn.SiLU(),
+                                                                    nn.Linear(hidden_size, hidden_size)))
+                # Zero initialize the domain prompt mlp
+                for domain_prompt_mlp in self.domain_prompt_mlp_list:
+                    nn.init.constant_(domain_prompt_mlp[1].weight, 0)
+                    nn.init.constant_(domain_prompt_mlp[1].bias, 0)
+            elif self.injection_method == "adapter":
+                self.shared_prompt_mlp = nn.Sequential(nn.Linear(num_clusters*cluster_dim+token_dim, hidden_size),
+                                                                nn.SiLU(),
+                                                                nn.Linear(hidden_size, hidden_size))
+                self.domain_prompt_mlp_list = nn.ModuleList()
+                for i, blk in enumerate(self.model.blocks[-self.num_trainable_blocks:]):
+                    self.domain_prompt_mlp_list.append(nn.Sequential(nn.Linear(hidden_size, hidden_size // 4),
+                                                                    nn.SiLU(),
+                                                                    nn.Linear(hidden_size // 4, hidden_size))) # Adapter
+                # Zero initialize the domain prompt mlp
+                nn.init.constant_(self.shared_prompt_mlp[1].weight, 0)
+                nn.init.constant_(self.shared_prompt_mlp[1].bias, 0)
+                for domain_prompt_mlp in self.domain_prompt_mlp_list:
+                    nn.init.constant_(domain_prompt_mlp[1].weight, 0)
+                    nn.init.constant_(domain_prompt_mlp[1].bias, 0)
+            else:
+                raise ValueError(f'Unknown injection method {self.injection_method}')
 
 
     def forward(self, x, domain_idx=None):
@@ -205,21 +234,32 @@ class DINOv2(nn.Module):
             # Last blocks are trained
             for i, blk in enumerate(self.model.blocks[-self.num_trainable_blocks:]):
                 if self.domain_prompt != "none":
-                    domain_prompt_output = self.domain_prompt_mlp_list[i](domain_prompt_desc).chunk(6, dim=1)
-                    if self.residual:
-                        blk.norm1.set_residual_weight_bias(domain_prompt_output[0], domain_prompt_output[1])
-                        blk.ls1.set_residual_gamma(domain_prompt_output[2])
-                        blk.norm2.set_residual_weight_bias(domain_prompt_output[3], domain_prompt_output[4])
-                        blk.ls2.set_residual_gamma(domain_prompt_output[5])
+                    if self.injection_method == "norm":
+                        domain_prompt_output = self.domain_prompt_mlp_list[i](domain_prompt_desc).chunk(6, dim=1)
+                        if self.residual:
+                            blk.norm1.set_residual_weight_bias(domain_prompt_output[0], domain_prompt_output[1])
+                            blk.ls1.set_residual_gamma(domain_prompt_output[2])
+                            blk.norm2.set_residual_weight_bias(domain_prompt_output[3], domain_prompt_output[4])
+                            blk.ls2.set_residual_gamma(domain_prompt_output[5])
+                        else:
+                            blk.norm1.set_weight_bias(domain_prompt_output[0], domain_prompt_output[1])
+                            blk.ls1.set_gamma(domain_prompt_output[2])
+                            blk.norm2.set_weight_bias(domain_prompt_output[3], domain_prompt_output[4])
+                            blk.ls2.set_gamma(domain_prompt_output[5])
+                    elif self.injection_method == "add":
+                        domain_prompt_output = self.domain_prompt_mlp_list[i](domain_prompt_desc)
+                        x = blk(x + domain_prompt_output)
+                    elif self.injection_method == "adapter":
+                        domain_prompt_output = self.shared_prompt_mlp(domain_prompt_desc)
+                        x = blk(x + self.domain_prompt_mlp_list[i](domain_prompt_output))
                     else:
-                        blk.norm1.set_weight_bias(domain_prompt_output[0], domain_prompt_output[1])
-                        blk.ls1.set_gamma(domain_prompt_output[2])
-                        blk.norm2.set_weight_bias(domain_prompt_output[3], domain_prompt_output[4])
-                        blk.ls2.set_gamma(domain_prompt_output[5])
+                        raise ValueError(f'Unknown injection method {self.injection_method}')
                 x = blk(x)
                 if layer_count in self.multiscale_layers:
                     feature_list.append(x)
                 layer_count+=1
+                if layer_count > self.multiscale_layers[0]: # Break if we have all the multiscale layers
+                    break
 
         for i in range(len(feature_list)):
             if i != 0:
