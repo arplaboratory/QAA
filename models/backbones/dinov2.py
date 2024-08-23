@@ -155,8 +155,10 @@ class DINOv2(nn.Module):
                     blk.ls2 = clusterls2
                 # Zero initialize the domain prompt mlp
                 for domain_prompt_mlp in self.domain_prompt_mlp_list:
-                    nn.init.constant_(domain_prompt_mlp[1].weight, 0)
-                    nn.init.constant_(domain_prompt_mlp[1].bias, 0)
+                    nn.init.constant_(domain_prompt_mlp[0].weight, 0)
+                    nn.init.constant_(domain_prompt_mlp[0].bias, 0)
+                    nn.init.constant_(domain_prompt_mlp[2].weight, 0)
+                    nn.init.constant_(domain_prompt_mlp[2].bias, 0)
             elif self.injection_method == "add":
                 self.domain_prompt_mlp_list = nn.ModuleList()
                 for i, blk in enumerate(self.model.blocks[-self.num_trainable_blocks:]):
@@ -165,9 +167,11 @@ class DINOv2(nn.Module):
                                                                     nn.Linear(hidden_size, hidden_size)))
                 # Zero initialize the domain prompt mlp
                 for domain_prompt_mlp in self.domain_prompt_mlp_list:
-                    nn.init.constant_(domain_prompt_mlp[1].weight, 0)
-                    nn.init.constant_(domain_prompt_mlp[1].bias, 0)
-            elif self.injection_method == "adapter":
+                    nn.init.constant_(domain_prompt_mlp[0].weight, 0)
+                    nn.init.constant_(domain_prompt_mlp[0].bias, 0)
+                    nn.init.constant_(domain_prompt_mlp[2].weight, 0)
+                    nn.init.constant_(domain_prompt_mlp[2].bias, 0)
+            elif self.injection_method == "add_adapter":
                 self.shared_prompt_mlp = nn.Sequential(nn.Linear(num_clusters*cluster_dim+token_dim, hidden_size),
                                                                 nn.SiLU(),
                                                                 nn.Linear(hidden_size, hidden_size))
@@ -177,11 +181,31 @@ class DINOv2(nn.Module):
                                                                     nn.SiLU(),
                                                                     nn.Linear(hidden_size // 4, hidden_size))) # Adapter
                 # Zero initialize the domain prompt mlp
-                nn.init.constant_(self.shared_prompt_mlp[1].weight, 0)
-                nn.init.constant_(self.shared_prompt_mlp[1].bias, 0)
+                nn.init.constant_(self.shared_prompt_mlp[0].weight, 0)
+                nn.init.constant_(self.shared_prompt_mlp[0].bias, 0)
+                nn.init.constant_(self.shared_prompt_mlp[2].weight, 0)
+                nn.init.constant_(self.shared_prompt_mlp[2].bias, 0)
                 for domain_prompt_mlp in self.domain_prompt_mlp_list:
-                    nn.init.constant_(domain_prompt_mlp[1].weight, 0)
-                    nn.init.constant_(domain_prompt_mlp[1].bias, 0)
+                    nn.init.constant_(domain_prompt_mlp[0].weight, 0)
+                    nn.init.constant_(domain_prompt_mlp[0].bias, 0)
+                    nn.init.constant_(domain_prompt_mlp[2].weight, 0)
+                    nn.init.constant_(domain_prompt_mlp[2].bias, 0)
+            elif self.injection_method == "add_attention":
+                self.shared_prompt_mlp = nn.Sequential(nn.Linear(num_clusters*cluster_dim+token_dim, hidden_size),
+                                                                nn.SiLU(),
+                                                                nn.Linear(hidden_size, hidden_size))
+                self.domain_prompt_mlp_list = nn.ModuleList()
+                for i, blk in enumerate(self.model.blocks[-self.num_trainable_blocks:]):
+                    self.domain_prompt_mlp_list.append(nn.Sequential(nn.LayerNorm(hidden_size),
+                                                                     nn.MultiheadAttention(hidden_size, hidden_size, num_heads=hidden_size // 64)))
+                # Zero initialize the domain prompt mlp
+                nn.init.constant_(self.shared_prompt_mlp[0].weight, 0)
+                nn.init.constant_(self.shared_prompt_mlp[0].bias, 0)
+                nn.init.constant_(self.shared_prompt_mlp[2].weight, 0)
+                nn.init.constant_(self.shared_prompt_mlp[2].bias, 0)
+                for domain_prompt_mlp in self.domain_prompt_mlp_list:
+                    nn.init.constant_(domain_prompt_mlp[1].parameters(), 0)
+                    nn.init.constant_(domain_prompt_mlp[1].parameters(), 0)
             else:
                 raise ValueError(f'Unknown injection method {self.injection_method}')
 
@@ -248,10 +272,13 @@ class DINOv2(nn.Module):
                             blk.ls2.set_gamma(domain_prompt_output[5])
                     elif self.injection_method == "add":
                         domain_prompt_output = self.domain_prompt_mlp_list[i](domain_prompt_desc)
-                        x = blk(x + domain_prompt_output)
-                    elif self.injection_method == "adapter":
+                        x = blk(x + domain_prompt_output.unsqueeze(-1)) # domain_prompt_output broadcasting
+                    elif self.injection_method == "add_adapter":
                         domain_prompt_output = self.shared_prompt_mlp(domain_prompt_desc)
-                        x = blk(x + self.domain_prompt_mlp_list[i](domain_prompt_output))
+                        x = blk(x + self.domain_prompt_mlp_list[i](domain_prompt_output).unsqueeze(-1)) # domain_prompt_output broadcasting
+                    elif self.injection_method == "add_attention":
+                        domain_prompt_output = self.shared_prompt_mlp(domain_prompt_desc)
+                        x = blk(x + self.domain_prompt_mlp_list[i](x + domain_prompt_output.unsqueeze(-1), x, x)[0]) # domain_prompt_output broadcasting
                     else:
                         raise ValueError(f'Unknown injection method {self.injection_method}')
                 x = blk(x)
