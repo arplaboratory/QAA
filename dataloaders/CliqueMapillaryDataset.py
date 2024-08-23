@@ -62,7 +62,7 @@ def load_city_df(base_path):
 
     return city_df
 
-def compute_cluster_descriptors(city_df, model, descriptor_size=8192 + 256, batch_size=256):
+def compute_cluster_descriptors(city_df, model, descriptor_size=8192 + 256, batch_size=64):
 
     class MSLSDataset(torch.utils.data.Dataset):
         def __init__(self, rows, city_path):
@@ -98,7 +98,7 @@ def compute_cluster_descriptors(city_df, model, descriptor_size=8192 + 256, batc
         dataloader = torch.utils.data.DataLoader(
             dataset=msls, 
             batch_size=batch_size,
-            num_workers=16,
+            num_workers=4,
             drop_last=False,
             pin_memory=True,
             shuffle=False
