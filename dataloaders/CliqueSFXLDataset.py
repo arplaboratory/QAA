@@ -96,18 +96,18 @@ def compute_cluster_descriptors(city_df, model, descriptor_size=8192 + 256, batc
             shuffle=False
         )
 
-        cluster_descriptors = torch.zeros((df.unique_cluster.max() + 1, descriptor_size)).cuda()
+        cluster_descriptors = torch.zeros((df.unique_cluster.max() + 1, descriptor_size))
         res = faiss.StandardGpuResources()
 
         # Compute descriptors for each cluster
         model.eval()
         print("Computing descriptors for city", city)
         with torch.no_grad():
-            for batch in dataloader:
+            for batch in tqdm.tqdm(dataloader):
                 img, clusters = batch
                 img = img.cuda()
                 descriptors = model(img)
-                cluster_descriptors[clusters] = descriptors
+                cluster_descriptors[clusters] = descriptors.cpu()
         print("Sorting cluster indices for city", city)
         index = faiss.IndexFlatL2(descriptor_size)
         index = faiss.index_cpu_to_gpu(res, 0, index)
