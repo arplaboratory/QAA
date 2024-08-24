@@ -13,6 +13,18 @@ DINOV2_ARCHS = {
     'dinov2_vitg14': 1536,
 }
 
+class QueryCrossAttnPrompt(torch.nn.Module):
+    def __init__(self, in_dim, nheads=8):
+        super(QueryCrossAttnPrompt, self).__init__()
+        
+        self.cross_attn = torch.nn.MultiheadAttention(in_dim, num_heads=nheads, batch_first=True)
+        self.norm_in = torch.nn.LayerNorm(in_dim)
+
+    def forward(self, x, q):
+        out = self.norm_in(q)
+        out, _ = self.cross_attn(q, x, x)
+        return out
+    
 class ClusterNorm(nn.Module):
     def __init__(self, hidden_size, residual):
         super().__init__()
@@ -82,6 +94,7 @@ class DINOv2(nn.Module):
             return_token=False,
             domain_prompt="none",
             injection_method="norm",
+            injection_layer=0,
             num_clusters=16,
             cluster_dim=16,
             token_dim=256,
@@ -104,12 +117,14 @@ class DINOv2(nn.Module):
         self.return_token = return_token
         self.domain_prompt = domain_prompt
         self.injection_method = injection_method
+        self.injection_layer = len(self.model.blocks) - injection_layer
         self.freeze_backbone = freeze_backbone
         self.residual = residual
         self.num_queries = num_queries
         self.multiscale_layers = [len(self.model.blocks) - int(x) for x in multiscale.split(",")]
         
         if self.domain_prompt!="none":
+            assert injection_layer > 0, 'Injection layer should be greater than 0'
             hidden_size = self.model.blocks[0].norm1.weight.shape[0]
             assert padding in ["detach"], 'Padding should be either detach'
             assert self.num_trainable_blocks > 0, 'First blocks should be frozen when using domain prompt'
@@ -131,7 +146,7 @@ class DINOv2(nn.Module):
                 raise ValueError(f'Unknown domain prompt {self.domain_prompt}')
             if self.injection_method == "norm":
                 self.domain_prompt_mlp_list = nn.ModuleList()
-                for i, blk in enumerate(self.model.blocks[-self.num_trainable_blocks:]):
+                for i, blk in enumerate(self.model.blocks[self.injection_layer:]):
                     self.domain_prompt_mlp_list.append(nn.Sequential(nn.Linear(num_clusters*cluster_dim+token_dim, hidden_size * 6),
                                                                     nn.SiLU(),
                                                                     nn.Linear(hidden_size * 6, hidden_size * 6)))
@@ -161,11 +176,11 @@ class DINOv2(nn.Module):
                     nn.init.constant_(domain_prompt_mlp[2].bias, 0)
             elif self.injection_method == "add":
                 self.domain_prompt_mlp_list = nn.ModuleList()
-                for i, blk in enumerate(self.model.blocks[-self.num_trainable_blocks:]):
+                for i, blk in enumerate(self.model.blocks[self.injection_layer:]):
                     self.domain_prompt_mlp_list.append(nn.Sequential(nn.Linear(num_clusters*cluster_dim+token_dim, hidden_size),
                                                                     nn.SiLU(),
                                                                     nn.Linear(hidden_size, hidden_size)))
-                # Zero initialize the domain prompt mlp
+                # Zero initialize the domain Fprompt mlp
                 for domain_prompt_mlp in self.domain_prompt_mlp_list:
                     nn.init.constant_(domain_prompt_mlp[0].weight, 0)
                     nn.init.constant_(domain_prompt_mlp[0].bias, 0)
@@ -176,7 +191,7 @@ class DINOv2(nn.Module):
                                                                 nn.SiLU(),
                                                                 nn.Linear(hidden_size, hidden_size))
                 self.domain_prompt_mlp_list = nn.ModuleList()
-                for i, blk in enumerate(self.model.blocks[-self.num_trainable_blocks:]):
+                for i, blk in enumerate(self.model.blocks[self.injection_layer:]):
                     self.domain_prompt_mlp_list.append(nn.Sequential(nn.Linear(hidden_size, hidden_size // 4),
                                                                     nn.SiLU(),
                                                                     nn.Linear(hidden_size // 4, hidden_size))) # Adapter
@@ -195,17 +210,13 @@ class DINOv2(nn.Module):
                                                                 nn.SiLU(),
                                                                 nn.Linear(hidden_size, hidden_size))
                 self.domain_prompt_mlp_list = nn.ModuleList()
-                for i, blk in enumerate(self.model.blocks[-self.num_trainable_blocks:]):
-                    self.domain_prompt_mlp_list.append(nn.Sequential(nn.LayerNorm(hidden_size),
-                                                                     nn.MultiheadAttention(hidden_size, hidden_size, num_heads=hidden_size // 64)))
+                for i, blk in enumerate(self.model.blocks[self.injection_layer:]):
+                    self.domain_prompt_mlp_list.append(QueryCrossAttnPrompt(hidden_size, nheads=hidden_size // 64))
                 # Zero initialize the domain prompt mlp
                 nn.init.constant_(self.shared_prompt_mlp[0].weight, 0)
                 nn.init.constant_(self.shared_prompt_mlp[0].bias, 0)
                 nn.init.constant_(self.shared_prompt_mlp[2].weight, 0)
                 nn.init.constant_(self.shared_prompt_mlp[2].bias, 0)
-                for domain_prompt_mlp in self.domain_prompt_mlp_list:
-                    nn.init.constant_(domain_prompt_mlp[1].parameters(), 0)
-                    nn.init.constant_(domain_prompt_mlp[1].parameters(), 0)
             else:
                 raise ValueError(f'Unknown injection method {self.injection_method}')
 
@@ -226,67 +237,48 @@ class DINOv2(nn.Module):
 
         x = self.model.prepare_tokens_with_masks(x)
         
-        if self.num_trainable_blocks < 0:
-            # All blocks are frozen
-            assert domain_idx is None, 'Domain index should not be provided when all blocks are frozen'
-            with torch.no_grad():
-                for blk in self.model.blocks:
-                    x = blk(x)
-            x = x.detach()
-        elif self.num_trainable_blocks == 0:
-            # All blocks are trainable
-            assert domain_idx is None or self.domain_prompt == "none", 'Domain index should not be provided when all blocks are trainable or domain prompt is not used'
-            for blk in self.model.blocks:
-                x = blk(x)
-        else:
-            feature_list = []
-            layer_count = 0
-            # First blocks are frozen
-            with torch.no_grad():
-                for blk in self.model.blocks[:-self.num_trainable_blocks]:
-                    x = blk(x)
-                    if layer_count in self.multiscale_layers:
-                        feature_list.append(x.detach())
-                    layer_count += 1
-            x = x.detach()
-            if self.domain_prompt != "none":
+        feature_list = []
+        layer_count = 0
+        domain_prompt_desc = None
+        # First blocks are frozen
+        for i, blk in enumerate(self.model.blocks):
+            if self.domain_prompt != "none" and layer_count == self.injection_layer:
                 t = x[:, 0]
                 f = x[:, 1:]
                 # Reshape to (B, C, H, W)
                 f = f.reshape((B, H // 14, W // 14, self.num_channels)).permute(0, 3, 1, 2)
                 domain_prompt_desc = self.domain_prompt_model((f, t), domain_idx)
-            # Last blocks are trained
-            for i, blk in enumerate(self.model.blocks[-self.num_trainable_blocks:]):
-                if self.domain_prompt != "none":
-                    if self.injection_method == "norm":
-                        domain_prompt_output = self.domain_prompt_mlp_list[i](domain_prompt_desc).chunk(6, dim=1)
-                        if self.residual:
-                            blk.norm1.set_residual_weight_bias(domain_prompt_output[0], domain_prompt_output[1])
-                            blk.ls1.set_residual_gamma(domain_prompt_output[2])
-                            blk.norm2.set_residual_weight_bias(domain_prompt_output[3], domain_prompt_output[4])
-                            blk.ls2.set_residual_gamma(domain_prompt_output[5])
-                        else:
-                            blk.norm1.set_weight_bias(domain_prompt_output[0], domain_prompt_output[1])
-                            blk.ls1.set_gamma(domain_prompt_output[2])
-                            blk.norm2.set_weight_bias(domain_prompt_output[3], domain_prompt_output[4])
-                            blk.ls2.set_gamma(domain_prompt_output[5])
-                    elif self.injection_method == "add":
-                        domain_prompt_output = self.domain_prompt_mlp_list[i](domain_prompt_desc)
-                        x = blk(x + domain_prompt_output.unsqueeze(-1)) # domain_prompt_output broadcasting
-                    elif self.injection_method == "add_adapter":
-                        domain_prompt_output = self.shared_prompt_mlp(domain_prompt_desc)
-                        x = blk(x + self.domain_prompt_mlp_list[i](domain_prompt_output).unsqueeze(-1)) # domain_prompt_output broadcasting
-                    elif self.injection_method == "add_attention":
-                        domain_prompt_output = self.shared_prompt_mlp(domain_prompt_desc)
-                        x = blk(x + self.domain_prompt_mlp_list[i](x + domain_prompt_output.unsqueeze(-1), x, x)[0]) # domain_prompt_output broadcasting
+            if domain_prompt_desc is not None:
+                if self.injection_method == "norm":
+                    domain_prompt_output = self.domain_prompt_mlp_list[i - self.injection_layer](domain_prompt_desc).chunk(6, dim=1)
+                    if self.residual:
+                        blk.norm1.set_residual_weight_bias(domain_prompt_output[0], domain_prompt_output[1])
+                        blk.ls1.set_residual_gamma(domain_prompt_output[2])
+                        blk.norm2.set_residual_weight_bias(domain_prompt_output[3], domain_prompt_output[4])
+                        blk.ls2.set_residual_gamma(domain_prompt_output[5])
                     else:
-                        raise ValueError(f'Unknown injection method {self.injection_method}')
+                        blk.norm1.set_weight_bias(domain_prompt_output[0], domain_prompt_output[1])
+                        blk.ls1.set_gamma(domain_prompt_output[2])
+                        blk.norm2.set_weight_bias(domain_prompt_output[3], domain_prompt_output[4])
+                        blk.ls2.set_gamma(domain_prompt_output[5])
+                elif self.injection_method == "add":
+                    domain_prompt_output = self.domain_prompt_mlp_list[i - self.injection_layer](domain_prompt_desc)
+                    x = blk(x + domain_prompt_output.unsqueeze(1)) # domain_prompt_output broadcasting
+                elif self.injection_method == "add_adapter":
+                    domain_prompt_output = self.shared_prompt_mlp(domain_prompt_desc)
+                    x = blk(x + self.domain_prompt_mlp_list[i - self.injection_layer](domain_prompt_output).unsqueeze(1)) # domain_prompt_output broadcasting
+                elif self.injection_method == "add_attention":
+                    domain_prompt_output = self.shared_prompt_mlp(domain_prompt_desc)
+                    x = blk(x + self.domain_prompt_mlp_list[i - self.injection_layer](x, x + domain_prompt_output.unsqueeze(1))[0]) # domain_prompt_output broadcasting
+                else:
+                    raise ValueError(f'Unknown injection method {self.injection_method}')
+            else:
                 x = blk(x)
-                if layer_count in self.multiscale_layers:
-                    feature_list.append(x)
-                layer_count+=1
-                if layer_count > self.multiscale_layers[0]: # Break if we have all the multiscale layers
-                    break
+            if layer_count in self.multiscale_layers:
+                feature_list.append(x)
+            layer_count+=1
+            if layer_count > self.multiscale_layers[0]: # Break if we have all the multiscale layers
+                break
 
         for i in range(len(feature_list)):
             if i != 0:

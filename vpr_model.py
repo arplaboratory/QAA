@@ -93,20 +93,18 @@ class VPRModel(pl.LightningModule):
     
     # configure the optimizer 
     def configure_optimizers(self):
-        if self.backbone.freeze_backbone:
-            print("FREEZE BACKBONE")
-            if hasattr(self.backbone, "domain_prompt_model"):
-                params = [
-                    {'params': self.backbone.domain_prompt_model.parameters()},
-                    {'params': self.backbone.domain_prompt_mlp_list.parameters()},
-                    {'params': self.aggregator.parameters()}
-                ]
-            else:
-                params = [
-                    {'params': self.aggregator.parameters()}
-                ]
+        if hasattr(self.backbone, "domain_prompt_model"):
+            params = [
+                {'params': self.backbone.domain_prompt_model.parameters()},
+                {'params': self.backbone.domain_prompt_mlp_list.parameters()},
+                {'params': self.aggregator.parameters()}
+            ]
         else:
-            params = self.parameters()
+            params = [
+                {'params': self.aggregator.parameters()}
+            ]
+        for blk in self.backbone.model.blocks[:-self.backbone_config['num_trainable_blocks']]:
+            params.append({'params': blk.parameters()})
         if self.optimizer.lower() == 'sgd':
             optimizer = torch.optim.SGD(
                 params, 
