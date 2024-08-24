@@ -103,7 +103,7 @@ class VPRModel(pl.LightningModule):
             params = [
                 {'params': self.aggregator.parameters()}
             ]
-        for blk in self.backbone.model.blocks[:-self.backbone_config['num_trainable_blocks']]:
+        for blk in self.backbone.model.blocks[-self.backbone_config['num_trainable_blocks']:]:
             params.append({'params': blk.parameters()})
         if self.optimizer.lower() == 'sgd':
             optimizer = torch.optim.SGD(
