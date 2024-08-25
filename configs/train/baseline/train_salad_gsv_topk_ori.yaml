@@ -5,16 +5,16 @@ model:
     num_trainable_blocks: 4
     return_token: True
     norm_layer: True
-    domain_prompt: False
-    num_clusters: 64
+    domain_prompt: "none"
+    num_clusters: 16
     cluster_dim: 16
     token_dim: 256
     dropout: 0.3
     padding: "detach"
     divide: 1
-    decouple: False
     shared_clusters: 0
     freeze_backbone: False
+    multiscale: "1"
   agg_arch: SALAD
   agg_config:
     num_channels: 768
@@ -24,8 +24,8 @@ model:
     dropout: 0.3
     padding: "detach"
     divide: 1
-    decouple: False
     shared_clusters: 0
+    num_queries: 64
 
 datasets:
   train_datasets: 
@@ -52,7 +52,7 @@ training:
   num_epochs: 64
   train_batch_size: 30
   test_batch_size: 256
-  num_workers: 8
+  num_workers: 4
   train_image_size: [224, 224]
   test_image_size: [322, 322]
   optimizer:
@@ -72,8 +72,7 @@ training:
     name: 'MultiSimilarityMiner'
     margin: 0.1
   faiss_gpu: False
-  only_top_k: True
   recompute_clusters: False
   recompute_interval: 4
-  shuffle_method: global
   prefetch_factor: 1
+  cross_loss: False
