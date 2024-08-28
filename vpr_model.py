@@ -93,18 +93,20 @@ class VPRModel(pl.LightningModule):
     
     # configure the optimizer 
     def configure_optimizers(self):
+        params = [{'params': self.aggregator.parameters()}]
+        print(f"Add params: aggregator")
         if hasattr(self.backbone, "domain_prompt_model"):
-            params = [
-                {'params': self.backbone.domain_prompt_model.parameters()},
-                {'params': self.backbone.domain_prompt_mlp_list.parameters()},
-                {'params': self.aggregator.parameters()}
-            ]
-        else:
-            params = [
-                {'params': self.aggregator.parameters()}
-            ]
-        for blk in self.backbone.model.blocks[-self.backbone_config['num_trainable_blocks']:]:
+            params.append({'params': self.backbone.domain_prompt_model.parameters()})
+            print(f"Add params: domain_prompt_model")
+        if hasattr(self.backbone, "domain_prompt_mlp_list"):
+            params.append({'params': self.backbone.domain_prompt_mlp_list.parameters()})
+            print(f"Add params: domain_prompt_mlp_list")
+        if hasattr(self.backbone, "shared_prompt_mlp"):
+            params.append({'params': self.backbone.shared_prompt_mlp.parameters()})
+            print(f"Add params: shared_prompt_mlp")
+        for i, blk in enumerate(self.backbone.model.blocks[-self.backbone_config['num_trainable_blocks']:]):
             params.append({'params': blk.parameters()})
+            print (f"Add params: Trainable block {len(self.backbone.model.blocks) - self.backbone_config['num_trainable_blocks'] + i}")
         if self.optimizer.lower() == 'sgd':
             optimizer = torch.optim.SGD(
                 params, 

@@ -106,6 +106,7 @@ class DINOv2(nn.Module):
             residual=True,
             num_queries=64,
             multiscale="1",
+            single_mlp=False,
         ):
         super().__init__()
 
@@ -147,9 +148,15 @@ class DINOv2(nn.Module):
             if self.injection_method == "norm":
                 self.domain_prompt_mlp_list = nn.ModuleList()
                 for i, blk in enumerate(self.model.blocks[self.injection_layer:]):
-                    self.domain_prompt_mlp_list.append(nn.Sequential(nn.Linear(num_clusters*cluster_dim+token_dim, hidden_size * 6),
-                                                                    nn.SiLU(),
-                                                                    nn.Linear(hidden_size * 6, hidden_size * 6)))
+                    if not single_mlp:
+                        self.domain_prompt_mlp_list.append(nn.Sequential(nn.Linear(num_clusters*cluster_dim+token_dim, hidden_size * 6),
+                                                                        nn.SiLU(),
+                                                                        nn.Linear(hidden_size * 6, hidden_size * 6)
+                                                                        ))
+                    else:
+                        self.domain_prompt_mlp_list.append(nn.Sequential(nn.SiLU(),
+                                                                        nn.Linear(num_clusters*cluster_dim+token_dim, hidden_size * 6)
+                                                                        ))
                     clusternorm1 = ClusterNorm(hidden_size, residual)
                     clusternorm1.norm.load_state_dict(blk.norm1.state_dict(), strict=False)
                     if self.residual:
@@ -170,53 +177,84 @@ class DINOv2(nn.Module):
                     blk.ls2 = clusterls2
                 # Zero initialize the domain prompt mlp
                 for domain_prompt_mlp in self.domain_prompt_mlp_list:
-                    nn.init.constant_(domain_prompt_mlp[0].weight, 0)
-                    nn.init.constant_(domain_prompt_mlp[0].bias, 0)
-                    nn.init.constant_(domain_prompt_mlp[2].weight, 0)
-                    nn.init.constant_(domain_prompt_mlp[2].bias, 0)
+                    if not single_mlp:
+                        nn.init.constant_(domain_prompt_mlp[0].weight, 0)
+                        nn.init.constant_(domain_prompt_mlp[0].bias, 0)
+                        nn.init.constant_(domain_prompt_mlp[2].weight, 0)
+                        nn.init.constant_(domain_prompt_mlp[2].bias, 0)
+                    else:
+                        nn.init.constant_(domain_prompt_mlp[1].weight, 0)
+                        nn.init.constant_(domain_prompt_mlp[1].bias, 0)
             elif self.injection_method == "add":
                 self.domain_prompt_mlp_list = nn.ModuleList()
                 for i, blk in enumerate(self.model.blocks[self.injection_layer:]):
-                    self.domain_prompt_mlp_list.append(nn.Sequential(nn.Linear(num_clusters*cluster_dim+token_dim, hidden_size),
-                                                                    nn.SiLU(),
-                                                                    nn.Linear(hidden_size, hidden_size)))
+                    if not single_mlp:
+                        self.domain_prompt_mlp_list.append(nn.Sequential(nn.Linear(num_clusters*cluster_dim+token_dim, hidden_size),
+                                                                        nn.SiLU(),
+                                                                        nn.Linear(hidden_size, hidden_size)
+                                                                        ))
+                    else:
+                        self.domain_prompt_mlp_list.append(nn.Sequential(nn.SiLU(),
+                                                                        nn.Linear(num_clusters*cluster_dim+token_dim, hidden_size)
+                                                                        ))
                 # Zero initialize the domain Fprompt mlp
                 for domain_prompt_mlp in self.domain_prompt_mlp_list:
-                    nn.init.constant_(domain_prompt_mlp[0].weight, 0)
-                    nn.init.constant_(domain_prompt_mlp[0].bias, 0)
-                    nn.init.constant_(domain_prompt_mlp[2].weight, 0)
-                    nn.init.constant_(domain_prompt_mlp[2].bias, 0)
+                    if not single_mlp:
+                        nn.init.constant_(domain_prompt_mlp[0].weight, 0)
+                        nn.init.constant_(domain_prompt_mlp[0].bias, 0)
+                        nn.init.constant_(domain_prompt_mlp[2].weight, 0)
+                        nn.init.constant_(domain_prompt_mlp[2].bias, 0)
+                    else:
+                        nn.init.constant_(domain_prompt_mlp[1].weight, 0)
+                        nn.init.constant_(domain_prompt_mlp[1].bias, 0)
             elif self.injection_method == "add_adapter":
-                self.shared_prompt_mlp = nn.Sequential(nn.Linear(num_clusters*cluster_dim+token_dim, hidden_size),
-                                                                nn.SiLU(),
-                                                                nn.Linear(hidden_size, hidden_size))
+                if not single_mlp:
+                    self.shared_prompt_mlp = nn.Sequential(nn.Linear(num_clusters*cluster_dim+token_dim, hidden_size),
+                                                            nn.SiLU(),
+                                                            nn.Linear(hidden_size, hidden_size))
+                else:
+                    self.shared_prompt_mlp = nn.Sequential(nn.SiLU(),
+                                                            nn.Linear(num_clusters*cluster_dim+token_dim, hidden_size))
                 self.domain_prompt_mlp_list = nn.ModuleList()
                 for i, blk in enumerate(self.model.blocks[self.injection_layer:]):
                     self.domain_prompt_mlp_list.append(nn.Sequential(nn.Linear(hidden_size, hidden_size // 4),
                                                                     nn.SiLU(),
-                                                                    nn.Linear(hidden_size // 4, hidden_size))) # Adapter
+                                                                    nn.Linear(hidden_size // 4, hidden_size)
+                                                                    )) # Adapter
                 # Zero initialize the domain prompt mlp
-                nn.init.constant_(self.shared_prompt_mlp[0].weight, 0)
-                nn.init.constant_(self.shared_prompt_mlp[0].bias, 0)
-                nn.init.constant_(self.shared_prompt_mlp[2].weight, 0)
-                nn.init.constant_(self.shared_prompt_mlp[2].bias, 0)
+                if not single_mlp:
+                    nn.init.constant_(self.shared_prompt_mlp[0].weight, 0)
+                    nn.init.constant_(self.shared_prompt_mlp[0].bias, 0)
+                    nn.init.constant_(self.shared_prompt_mlp[2].weight, 0)
+                    nn.init.constant_(self.shared_prompt_mlp[2].bias, 0)
+                else:
+                    nn.init.constant_(self.shared_prompt_mlp[1].weight, 0)
+                    nn.init.constant_(self.shared_prompt_mlp[1].bias, 0)
                 for domain_prompt_mlp in self.domain_prompt_mlp_list:
                     nn.init.constant_(domain_prompt_mlp[0].weight, 0)
                     nn.init.constant_(domain_prompt_mlp[0].bias, 0)
                     nn.init.constant_(domain_prompt_mlp[2].weight, 0)
                     nn.init.constant_(domain_prompt_mlp[2].bias, 0)
             elif self.injection_method == "add_attention":
-                self.shared_prompt_mlp = nn.Sequential(nn.Linear(num_clusters*cluster_dim+token_dim, hidden_size),
-                                                                nn.SiLU(),
-                                                                nn.Linear(hidden_size, hidden_size))
+                if not single_mlp:
+                    self.shared_prompt_mlp = nn.Sequential(nn.Linear(num_clusters*cluster_dim+token_dim, hidden_size),
+                                                            nn.SiLU(),
+                                                            nn.Linear(hidden_size, hidden_size))
+                else:
+                    self.shared_prompt_mlp = nn.Sequential(nn.SiLU(),
+                                                            nn.Linear(num_clusters*cluster_dim+token_dim, hidden_size))
                 self.domain_prompt_mlp_list = nn.ModuleList()
                 for i, blk in enumerate(self.model.blocks[self.injection_layer:]):
                     self.domain_prompt_mlp_list.append(QueryCrossAttnPrompt(hidden_size, nheads=hidden_size // 64))
                 # Zero initialize the domain prompt mlp
-                nn.init.constant_(self.shared_prompt_mlp[0].weight, 0)
-                nn.init.constant_(self.shared_prompt_mlp[0].bias, 0)
-                nn.init.constant_(self.shared_prompt_mlp[2].weight, 0)
-                nn.init.constant_(self.shared_prompt_mlp[2].bias, 0)
+                if not single_mlp:
+                    nn.init.constant_(self.shared_prompt_mlp[0].weight, 0)
+                    nn.init.constant_(self.shared_prompt_mlp[0].bias, 0)
+                    nn.init.constant_(self.shared_prompt_mlp[2].weight, 0)
+                    nn.init.constant_(self.shared_prompt_mlp[2].bias, 0)
+                else:
+                    nn.init.constant_(self.shared_prompt_mlp[1].weight, 0)
+                    nn.init.constant_(self.shared_prompt_mlp[1].bias, 0)
             else:
                 raise ValueError(f'Unknown injection method {self.injection_method}')
 
@@ -242,13 +280,16 @@ class DINOv2(nn.Module):
         domain_prompt_desc = None
         # First blocks are frozen
         for i, blk in enumerate(self.model.blocks):
+            # print(f"Before {i} block")
             if self.domain_prompt != "none" and layer_count == self.injection_layer:
                 t = x[:, 0]
                 f = x[:, 1:]
                 # Reshape to (B, C, H, W)
                 f = f.reshape((B, H // 14, W // 14, self.num_channels)).permute(0, 3, 1, 2)
                 domain_prompt_desc = self.domain_prompt_model((f, t), domain_idx)
+                # print(f"Use feature after block {i-1} to output domain prompt desc")
             if domain_prompt_desc is not None:
+                # print(f"Use domain prompt desc and domain mlp {i-self.injection_layer} for block {i}")
                 if self.injection_method == "norm":
                     domain_prompt_output = self.domain_prompt_mlp_list[i - self.injection_layer](domain_prompt_desc).chunk(6, dim=1)
                     if self.residual:
@@ -261,6 +302,7 @@ class DINOv2(nn.Module):
                         blk.ls1.set_gamma(domain_prompt_output[2])
                         blk.norm2.set_weight_bias(domain_prompt_output[3], domain_prompt_output[4])
                         blk.ls2.set_gamma(domain_prompt_output[5])
+                    x = blk(x)
                 elif self.injection_method == "add":
                     domain_prompt_output = self.domain_prompt_mlp_list[i - self.injection_layer](domain_prompt_desc)
                     x = blk(x + domain_prompt_output.unsqueeze(1)) # domain_prompt_output broadcasting
@@ -272,9 +314,12 @@ class DINOv2(nn.Module):
                     x = blk(x + self.domain_prompt_mlp_list[i - self.injection_layer](x, x + domain_prompt_output.unsqueeze(1))[0]) # domain_prompt_output broadcasting
                 else:
                     raise ValueError(f'Unknown injection method {self.injection_method}')
+                # print(f"After {i} block")
             else:
                 x = blk(x)
+                # print(f"After {i} block")
             if layer_count in self.multiscale_layers:
+                # print(f"Featured {i} add")
                 feature_list.append(x)
             layer_count+=1
             if layer_count > self.multiscale_layers[0]: # Break if we have all the multiscale layers
