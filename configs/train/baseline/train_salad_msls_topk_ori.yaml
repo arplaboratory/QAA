@@ -47,7 +47,7 @@ datasets:
     - nordland_subset
     - amstertime
     - eynsham
-  target_val_dataset: pitts30k
+  target_val_dataset: mapillary_sls
 training:
   num_epochs: 64
   train_batch_size: 30

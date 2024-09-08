@@ -29,6 +29,7 @@ model:
 
 datasets:
   train_datasets: 
+    - SF_XL
     - GSV
     - mapillary_sls
   val_datasets: 
@@ -73,7 +74,7 @@ training:
     name: 'MultiSimilarityMiner'
     margin: 0.1
   faiss_gpu: False
-  recompute_clusters: False
+  recompute_clusters: True
   recompute_interval: 4
   prefetch_factor: 1
   cross_loss: False
