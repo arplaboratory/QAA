@@ -5,3 +5,4 @@ from .mixvpr import MixVPR
 from .salad import SALAD
 from .queries_salad import QueriesSALAD
 from .shared_queries_salad import SharedQueriesSALAD
+from .domain_queries_salad import DomainQueriesSALAD

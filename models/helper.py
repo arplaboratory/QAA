@@ -60,6 +60,15 @@ def get_aggregator(agg_arch='ConvAP', agg_config={}):
         assert 'mix_depth' in agg_config
         return aggregators.MixVPR(**agg_config)
 
+    elif 'domainqueriessalad' in agg_arch.lower():
+        assert 'num_channels' in agg_config
+        assert 'num_clusters' in agg_config
+        assert 'cluster_dim' in agg_config
+        assert 'token_dim' in agg_config
+        assert 'num_queries' in agg_config
+        assert agg_config['num_queries'] >= agg_config['num_clusters'], 'Number of queries must be greater than or equal to number of clusters'
+        return aggregators.DomainQueriesSALAD(**agg_config)
+    
     elif 'sharedqueriessalad' in agg_arch.lower():
         assert 'num_channels' in agg_config
         assert 'num_clusters' in agg_config
@@ -83,4 +92,6 @@ def get_aggregator(agg_arch='ConvAP', agg_config={}):
         assert 'num_clusters' in agg_config
         assert 'cluster_dim' in agg_config
         assert 'token_dim' in agg_config
+        if 'num_queries' in agg_config:
+            del agg_config['num_queries']
         return aggregators.SALAD(**agg_config)

@@ -12,7 +12,6 @@ import concurrent.futures
 from scipy.spatial.distance import cdist, pdist, squareform
 import networkx
 import faiss
-import time
 
 default_transform = T.Compose([
     T.ToTensor(),
@@ -55,7 +54,7 @@ def load_city_df():
 
     return city_df
 
-def compute_cluster_descriptors(city_df, model, descriptor_size=8192 + 256, batch_size=64):
+def compute_cluster_descriptors(city_df, model, batch_size=64):
 
     class SFXLDataset(torch.utils.data.Dataset):
         def __init__(self, rows, city_path):
@@ -97,7 +96,7 @@ def compute_cluster_descriptors(city_df, model, descriptor_size=8192 + 256, batc
             shuffle=False
         )
 
-        cluster_descriptors = torch.zeros((df.unique_cluster.max() + 1, descriptor_size))
+        descriptor_size = None
         res = faiss.StandardGpuResources()
 
         # Compute descriptors for each cluster
@@ -108,6 +107,9 @@ def compute_cluster_descriptors(city_df, model, descriptor_size=8192 + 256, batc
                 img, clusters = batch
                 img = img.cuda()
                 descriptors = model(img)
+                if descriptor_size is None:
+                    descriptor_size = descriptors.shape[1]
+                    cluster_descriptors = torch.zeros((df.unique_cluster.max() + 1, descriptor_size))
                 cluster_descriptors[clusters] = descriptors.cpu()
         print("Sorting cluster indices for city", city)
         index = faiss.IndexFlatL2(descriptor_size)
