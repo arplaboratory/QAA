@@ -96,6 +96,7 @@ class QueriesSALAD(nn.Module):
             shared_clusters=0,
             padding="detach",
             num_queries=32,
+            num_queries_feature=None,
         ) -> None:
         super().__init__()
 
@@ -109,6 +110,10 @@ class QueriesSALAD(nn.Module):
             self.specific_clusters = (self.num_clusters - shared_clusters) // divide
         self.padding = padding # Ensure the dimension is the same
         self.num_queries = num_queries
+        if num_queries_feature is None:
+            self.num_queries_feature = num_queries
+        else:
+            self.num_queries_feature = num_queries_feature
         assert self.padding in ["detach", "none"]
         
         if dropout > 0:
@@ -124,7 +129,7 @@ class QueriesSALAD(nn.Module):
         )
         if divide > 1:
             self.queries_cluster = QuerySelfAttn(self.num_channels, self.num_queries, nheads=self.num_channels // 64)
-            self.queries_feature = QuerySelfAttn(self.num_channels, self.num_queries, nheads=self.num_channels // 64)
+            self.queries_feature = QuerySelfAttn(self.num_channels, self.num_queries_feature, nheads=self.num_channels // 64)
             # MLP for local features f_i
             self.cluster_features = QueryCrossAttn(self.num_channels, self.cluster_dim, nheads=self.num_channels // 64)
             if self.shared_clusters > 0:
@@ -136,7 +141,7 @@ class QueriesSALAD(nn.Module):
             ])
         else:
             self.queries_cluster = QuerySelfAttn(self.num_channels, self.num_queries, nheads=self.num_channels // 64)
-            self.queries_feature = QuerySelfAttn(self.num_channels, self.num_queries, nheads=self.num_channels // 64)
+            self.queries_feature = QuerySelfAttn(self.num_channels, self.num_queries_feature, nheads=self.num_channels // 64)
             # MLP for local features f_i
             self.cluster_features = QueryCrossAttn(self.num_channels, self.cluster_dim, nheads=self.num_channels // 64)
             # MLP for score matrix S
