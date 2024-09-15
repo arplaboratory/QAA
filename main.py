@@ -47,6 +47,7 @@ if __name__ == '__main__':
         miner_margin=train_cfg.training.miner["margin"],
         faiss_gpu=train_cfg.training.faiss_gpu,
         cross_loss=train_cfg.training.cross_loss,
+        cross_loss_weight=train_cfg.training.cross_loss_weight,
     )
 
     # model params saving using Pytorch Lightning

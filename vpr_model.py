@@ -2,6 +2,7 @@ import pytorch_lightning as pl
 import torch
 from torch.optim import lr_scheduler, optimizer
 import torchvision
+import torch.nn.functional as F
 
 import utils
 from models import helper
@@ -43,6 +44,7 @@ class VPRModel(pl.LightningModule):
         miner_margin=0.1,
         faiss_gpu=False,
         cross_loss=False,
+        cross_loss_weight=1.0,
     ):
         super().__init__()
 
@@ -75,6 +77,7 @@ class VPRModel(pl.LightningModule):
 
         self.faiss_gpu = faiss_gpu
         self.cross_loss = cross_loss
+        self.cross_loss_weight = cross_loss_weight
         
         # ----------------------------------
         # get the backbone and the aggregator
@@ -223,18 +226,23 @@ class VPRModel(pl.LightningModule):
             raise ValueError('NaNs in descriptors')
 
         loss = 0
-        if self.cross_loss:
-            loss += self.loss_function(descriptors, labels)
-        else:
-            for i in range(len(BS_list)):
-                BS = BS_list[i]
-                N = N_list[i]
-                if i == 0:
-                    loss += self.loss_function(descriptors[:BS*N], labels[:BS*N])
-                    prev_BS_N = BS*N
-                else:
-                    loss += self.loss_function(descriptors[prev_BS_N:prev_BS_N+BS*N], labels[prev_BS_N:prev_BS_N+BS*N])
-                    prev_BS_N += BS*N
+        for i in range(len(BS_list)):
+            BS = BS_list[i]
+            N = N_list[i]
+            if i == 0:
+                desc = descriptors[:BS*N]
+                lab = labels[:BS*N]
+            else:
+                desc = descriptors[prev_BS_N:prev_BS_N+BS*N]
+                lab = labels[prev_BS_N:prev_BS_N+BS*N]
+            loss += self.loss_function(desc, lab)
+            if self.cross_loss:
+                std_x = torch.sqrt(desc.var(dim=0) + 0.0001)
+                loss += self.cross_loss_weight * torch.mean(F.relu(1 - std_x))
+            if i == 0:
+                prev_BS_N = BS*N
+            else:
+                prev_BS_N += BS*N
         
         self.log('loss', loss.item(), logger=True, prog_bar=True)
         return {'loss': loss}
