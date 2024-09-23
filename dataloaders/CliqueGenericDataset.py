@@ -3,9 +3,10 @@ from pathlib import Path
 from PIL import Image, ImageFile, UnidentifiedImageError
 ImageFile.LOAD_TRUNCATED_IMAGES = True
 import torch
-import torchvision
 from torch.utils.data import Dataset
-import torchvision.transforms as T
+import torchvision
+from torchvision import transforms as T
+from torchvision.transforms import v2
 import numpy as np
 import tqdm
 import os
@@ -15,9 +16,10 @@ from scipy.spatial.distance import cdist, pdist, squareform
 import networkx
 import faiss
 
-default_transform = T.Compose([
-    T.ToTensor(),
-    T.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+default_transform = v2.Compose([
+    v2.ToImage(),
+    v2.ToDtype(torch.float32, scale=True),
+    v2.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
 ])
 
 # NOTE: Hard coded path to dataset folder 

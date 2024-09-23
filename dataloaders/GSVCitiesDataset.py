@@ -6,11 +6,15 @@ from PIL import Image, ImageFile, UnidentifiedImageError
 ImageFile.LOAD_TRUNCATED_IMAGES = True
 import torch
 from torch.utils.data import Dataset
-import torchvision.transforms as T
+import torchvision
+from torchvision import transforms as T
+from torchvision.transforms import v2
+import numpy as np
 
-default_transform = T.Compose([
-    T.ToTensor(),
-    T.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+default_transform = v2.Compose([
+    v2.ToImage(),
+    v2.ToDtype(torch.float32, scale=True),
+    v2.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
 ])
 
 # NOTE: Hard coded path to dataset folder 
@@ -123,7 +127,7 @@ class GSVCitiesDataset(Dataset):
     @staticmethod
     def image_loader(path):
         try:
-            return Image.open(path).convert('RGB')
+            return torchvision.io.read_image(path, mode=torchvision.io.image.ImageReadMode.RGB)
         except UnidentifiedImageError:
             print(f'Image {path} could not be loaded')
             return Image.new('RGB', (224, 224))
