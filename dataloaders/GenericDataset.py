@@ -2,6 +2,7 @@ from pathlib import Path
 import numpy as np
 from PIL import Image
 from torch.utils.data import Dataset
+import torchvision
 
 # NOTE: Only for validation purposes
 NPY_ROOT = 'cache/datasets/'
@@ -32,9 +33,9 @@ class GenericDataset(Dataset):
     
     def __getitem__(self, index):
         if self.dataset_name == "nordland_subset":
-            img = Image.open("datasets/nordland_subset/" + self.images[index]) # Add prefix
+            img = torchvision.io.read_image("datasets/nordland_subset/" + self.images[index]) # Add prefix
         else:
-            img = Image.open(self.images[index])
+            img = torchvision.io.read_image(self.images[index])
 
         if self.input_transform:
             try:

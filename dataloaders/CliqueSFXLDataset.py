@@ -280,7 +280,7 @@ class CliqueSFXLDataset(Dataset):
     @staticmethod
     def image_loader(path):
         try:
-            return Image.open(path).convert('RGB')
+            return torchvision.io.read_image(path, mode=torchvision.io.image.ImageReadMode.RGB)
         except UnidentifiedImageError:
             print(f'Image {path} could not be loaded')
             return Image.new('RGB', (224, 224))

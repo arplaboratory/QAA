@@ -3,6 +3,7 @@ from pathlib import Path
 from PIL import Image, ImageFile, UnidentifiedImageError
 ImageFile.LOAD_TRUNCATED_IMAGES = True
 import torch
+import torchvision
 from torch.utils.data import Dataset
 import torchvision.transforms as T
 import numpy as np
@@ -70,7 +71,7 @@ def compute_cluster_descriptors(city_df, model, dataset_name, same_place_thresho
             row = self.rows.iloc[idx]
             path = f'{row["key"]}'
             try:
-                img = Image.open(path)
+                img = torchvision.io.read_image(path, mode=torchvision.io.image.ImageReadMode.RGB)
             except:
                 print(f'Image {path} could not be loaded')
                 img = Image.new('RGB', (322, 322))
@@ -308,7 +309,7 @@ class CliqueGenericDataset(Dataset):
     @staticmethod
     def image_loader(path):
         try:
-            return Image.open(path).convert('RGB')
+            return torchvision.io.read_image(path).convert('RGB')
         except UnidentifiedImageError:
             print(f'Image {path} could not be loaded')
             return Image.new('RGB', (224, 224))
