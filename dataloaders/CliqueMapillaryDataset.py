@@ -4,7 +4,9 @@ from PIL import Image, ImageFile, UnidentifiedImageError
 ImageFile.LOAD_TRUNCATED_IMAGES = True
 import torch
 from torch.utils.data import Dataset
-import torchvision.transforms as T
+import torchvision
+from torchvision import transforms as T
+from torchvision.transforms import v2
 import numpy as np
 import tqdm
 import os
@@ -13,9 +15,10 @@ from scipy.spatial.distance import cdist, pdist, squareform
 import networkx
 import faiss
 
-default_transform = T.Compose([
-    T.ToTensor(),
-    T.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+default_transform = v2.Compose([
+    v2.ToImage(),
+    v2.ToDtype(torch.float32, scale=True),
+    v2.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
 ])
 
 # NOTE: Hard coded path to dataset folder 
@@ -62,17 +65,18 @@ def load_city_df(base_path):
 
     return city_df
 
-def compute_cluster_descriptors(city_df, model, batch_size=64):
+def compute_cluster_descriptors(city_df, model, batch_size=32):
 
     class MSLSDataset(torch.utils.data.Dataset):
         def __init__(self, rows, city_path):
             self.rows = rows
             self.city_path = city_path
 
-            self.valid_transform = T.Compose([
-                T.Resize((322, 322), interpolation=T.InterpolationMode.BILINEAR),
-                T.ToTensor(),
-                T.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+            self.valid_transform = v2.Compose([
+                v2.ToImage(),
+                v2.Resize((322, 322), interpolation=T.InterpolationMode.BILINEAR),
+                v2.ToDtype(torch.float32, scale=True),
+                v2.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
             ])
 
         def __len__(self):
@@ -82,7 +86,7 @@ def compute_cluster_descriptors(city_df, model, batch_size=64):
             row = self.rows.iloc[idx]
             path = Path(BASE_PATH) / self.city_path / ('query' if row['query'] else 'database') / 'images' / f'{row["key"]}.jpg'
             try:
-                img = Image.open(path)
+                img = torchvision.io.read_image(str(path))
             except:
                 print(f'Image {path} could not be loaded')
                 img = Image.new('RGB', (322, 322))
@@ -91,6 +95,7 @@ def compute_cluster_descriptors(city_df, model, batch_size=64):
 
     
     cluster_descriptors_dict = {}
+    model.eval()
     for city, df in tqdm.tqdm(city_df.items(), desc='Computing cluster descriptors'):
 
         # Create dataloader with one sample per cluster
@@ -98,7 +103,7 @@ def compute_cluster_descriptors(city_df, model, batch_size=64):
         dataloader = torch.utils.data.DataLoader(
             dataset=msls, 
             batch_size=batch_size,
-            num_workers=4,
+            num_workers=8,
             drop_last=False,
             pin_memory=True,
             shuffle=False
@@ -108,25 +113,34 @@ def compute_cluster_descriptors(city_df, model, batch_size=64):
         res = faiss.StandardGpuResources()
 
         # Compute descriptors for each cluster
-        model.eval()
+        invalid_clusters = []
         print("Computing descriptors for city", city)
         with torch.no_grad():
             for batch in tqdm.tqdm(dataloader):
                 img, clusters = batch
                 img = img.cuda()
-                descriptors = model(img)
+                with torch.autocast(device_type="cuda", dtype=torch.float16):
+                    descriptors = model(img)
                 if descriptor_size is None:
                     descriptor_size = descriptors.shape[1]
-                    cluster_descriptors = torch.zeros((df.unique_cluster.max() + 1, descriptor_size))
-                cluster_descriptors[clusters] = descriptors.cpu()
+                    cluster_descriptors = [[] for _ in range(df.unique_cluster.max() + 1)]
+                for i in range(len(descriptors)):
+                    cluster_descriptors[clusters[i]] = descriptors[i].cpu()
+            for i in range(len(cluster_descriptors)):
+                if cluster_descriptors[i] == []:
+                    cluster_descriptors[i] = torch.ones(descriptor_size) * 1e6
+                    invalid_clusters.append(i)
+            cluster_descriptors = torch.stack(cluster_descriptors, dim=0)
         print("Sorting cluster indices for city", city)
         index = faiss.IndexFlatL2(descriptor_size)
         index = faiss.index_cpu_to_gpu(res, 0, index)
         index.add(cluster_descriptors)
         _, I = index.search(cluster_descriptors, 64)
+        for i in invalid_clusters:
+            I[i] = torch.ones_like(I[i]) * -1
         cluster_descriptors_dict[city] = I.cpu().numpy()
         print("Finish for city", city)
-        model.train()
+    model.train()
 
     return cluster_descriptors_dict
 
@@ -167,9 +181,12 @@ def create_dataset_part(
             
             # Sample a random cluster
             place_id = np.random.choice(df.unique_cluster.unique())
+            while topk[place_id][0] == -1:
+                place_id = np.random.choice(df.unique_cluster.unique())
 
             # Compute similarity between the selected cluster and all the others
             topk_subset = np.delete(topk[place_id], 0)
+            other_places = topk_subset[topk_subset != -1]
             other_places = topk_subset[:sampled_similar_places]
             other_places = np.concatenate([np.array([place_id]), other_places])
 

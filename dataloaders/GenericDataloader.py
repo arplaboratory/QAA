@@ -1,6 +1,7 @@
 import pytorch_lightning as pl
 from torch.utils.data.dataloader import DataLoader
 from torchvision import transforms as T
+from torchvision.transforms import v2
 import torch
 import os
 
@@ -50,28 +51,31 @@ class GenericDataModule(pl.LightningDataModule):
             self.recompute_count = 0
         self.model = None
 
-        self.train_transform = T.Compose([
-            T.Resize(self.train_image_size, interpolation=T.InterpolationMode.BILINEAR),
-            T.RandAugment(num_ops=3, interpolation=T.InterpolationMode.BILINEAR),
-            T.ToTensor(),
-            T.Normalize(mean=self.mean_dataset, std=self.std_dataset),
-        ])
+        self.train_transform = v2.Compose([
+            v2.ToImage(),
+            v2.Resize(self.train_image_size, interpolation=T.InterpolationMode.BILINEAR),
+            v2.RandAugment(num_ops=3, interpolation=T.InterpolationMode.BILINEAR),
+            v2.ToDtype(torch.float32, scale=True),
+            v2.Normalize(mean=self.mean_dataset, std=self.std_dataset)])
 
-        self.valid_transform = T.Compose([
-            T.Resize(self.test_image_size, interpolation=T.InterpolationMode.BILINEAR),
-            T.ToTensor(),
-            T.Normalize(mean=self.mean_dataset, std=self.std_dataset)])
+        self.valid_transform = v2.Compose([
+            v2.ToImage(),
+            v2.Resize(self.test_image_size, interpolation=T.InterpolationMode.BILINEAR),
+            v2.ToDtype(torch.float32, scale=True),
+            v2.Normalize(mean=self.mean_dataset, std=self.std_dataset)])
         
-        self.test_transform = T.Compose([
-            T.Resize(self.test_image_size, interpolation=T.InterpolationMode.BILINEAR),
-            T.ToTensor(),
-            T.Normalize(mean=self.mean_dataset, std=self.std_dataset)])
+        self.test_transform = v2.Compose([
+            v2.ToImage(),
+            v2.Resize(self.test_image_size, interpolation=T.InterpolationMode.BILINEAR),
+            v2.ToDtype(torch.float32, scale=True),
+            v2.Normalize(mean=self.mean_dataset, std=self.std_dataset)])
         
-        self.test_grayscale_transform = T.Compose([
-            T.Grayscale(num_output_channels=3),
-            T.Resize(self.test_image_size, interpolation=T.InterpolationMode.BILINEAR),
-            T.ToTensor(),
-            T.Normalize(mean=self.mean_dataset, std=self.std_dataset)])
+        self.test_grayscale_transform = v2.Compose([
+            v2.ToImage(),
+            v2.Grayscale(num_output_channels=3),
+            v2.Resize(self.test_image_size, interpolation=T.InterpolationMode.BILINEAR),
+            v2.ToDtype(torch.float32, scale=True),
+            v2.Normalize(mean=self.mean_dataset, std=self.std_dataset)])
         
         self.train_loader_config_general = {
             'batch_size': self.train_batch_size,

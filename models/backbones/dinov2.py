@@ -184,14 +184,10 @@ class DINOv2(nn.Module):
                                                                     ))
                 # Zero initialize the domain Fprompt mlp
                 for domain_prompt_mlp in self.domain_prompt_mlp_list:
-                    if not single_mlp:
-                        nn.init.constant_(domain_prompt_mlp[0].weight, 0)
-                        nn.init.constant_(domain_prompt_mlp[0].bias, 0)
-                        nn.init.constant_(domain_prompt_mlp[2].weight, 0)
-                        nn.init.constant_(domain_prompt_mlp[2].bias, 0)
-                    else:
-                        nn.init.constant_(domain_prompt_mlp[1].weight, 0)
-                        nn.init.constant_(domain_prompt_mlp[1].bias, 0)
+                    nn.init.constant_(domain_prompt_mlp[0].weight, 0)
+                    nn.init.constant_(domain_prompt_mlp[0].bias, 0)
+                    nn.init.constant_(domain_prompt_mlp[2].weight, 0)
+                    nn.init.constant_(domain_prompt_mlp[2].bias, 0)
             elif self.injection_method == "add_adapter":
                 self.shared_prompt_mlp = nn.Sequential(nn.Linear(num_clusters*cluster_dim+token_dim, hidden_size),
                                                         nn.SiLU(),
