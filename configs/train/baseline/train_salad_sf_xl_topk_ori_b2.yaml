@@ -2,7 +2,7 @@
 model:
   backbone_arch: dinov2_vitb14
   backbone_config: 
-    num_trainable_blocks: 4
+    num_trainable_blocks: 2
     return_token: True
     norm_layer: True
     domain_prompt: "none"
@@ -29,7 +29,7 @@ model:
 
 datasets:
   train_datasets: 
-    - mapillary_sls
+    - SF_XL
   val_datasets: 
     - pitts30k
     - pitts250k
@@ -73,6 +73,7 @@ training:
     margin: 0.1
   faiss_gpu: False
   recompute_clusters: False
-  recompute_interval: 4
+  recompute_interval: 1
   prefetch_factor: 1
   cross_loss: False
+  cross_loss_weight: 1.0

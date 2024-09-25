@@ -15,7 +15,7 @@ model:
     shared_clusters: 0
     freeze_backbone: False
     multiscale: "1"
-  agg_arch: QueriesSALAD
+  agg_arch: SharedQueriesSALAD
   agg_config:
     num_channels: 768
     num_clusters: 64
@@ -75,6 +75,7 @@ training:
     margin: 0.1
   faiss_gpu: False
   recompute_clusters: True
-  recompute_interval: 4
+  recompute_interval: 1
   prefetch_factor: 1
   cross_loss: False
+  cross_loss_weight: 1.0
