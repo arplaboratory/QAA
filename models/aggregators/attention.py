@@ -57,9 +57,12 @@ class QueriesAttention(nn.Module):
     """
     def __init__(self,
             num_channels=1536,
+            num_clusters=64,
             cluster_dim=128,
             token_dim=256,
+            dropout=0.3,
             divide=1,
+            shared_clusters=0,
             num_queries=32,
         ) -> None:
         super().__init__()
