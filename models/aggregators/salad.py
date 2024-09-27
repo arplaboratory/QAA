@@ -72,11 +72,12 @@ class SALAD(nn.Module):
             dropout = nn.Identity()
 
         # MLP for global scene token g
-        self.token_features = nn.Sequential(
-            nn.Linear(self.num_channels, 512),
-            nn.ReLU(),
-            nn.Linear(512, self.token_dim)
-        )
+        if self.token_dim != 0:
+            self.token_features = nn.Sequential(
+                nn.Linear(self.num_channels, 512),
+                nn.ReLU(),
+                nn.Linear(512, self.token_dim)
+            )
         # MLP for local features f_i
         self.cluster_features = nn.Sequential(
             nn.Conv2d(self.num_channels, 512, 1),
@@ -143,7 +144,8 @@ class SALAD(nn.Module):
                     p = torch.cat([p_shared, p], dim=1)
         else:
             p = self.score(x).flatten(2)
-        t = self.token_features(t)
+        if self.token_dim != 0:
+            t = self.token_features(t)
         assert p.shape[1] == self.num_clusters if self.padding in ["detach"] else self.shared_clusters + self.specific_clusters
         # Sinkhorn algorithm
         p = log_optimal_transport(p, self.dust_bin, 3)
@@ -158,10 +160,13 @@ class SALAD(nn.Module):
         else:
             f = f.unsqueeze(2).repeat(1, 1, self.shared_clusters + self.specific_clusters, 1)
 
-        f = torch.cat([
-            nn.functional.normalize(t, p=2, dim=-1),
-            nn.functional.normalize((f * p).sum(dim=-1), p=2, dim=1).flatten(1)
-        ], dim=-1)
+        if token_dim == 0:
+            f = nn.functional.normalize((f * p).sum(dim=-1), p=2, dim=1).flatten(1)
+        else:
+            f = torch.cat([
+                nn.functional.normalize(t, p=2, dim=-1),
+                nn.functional.normalize((f * p).sum(dim=-1), p=2, dim=1).flatten(1)
+            ], dim=-1)
 
         return nn.functional.normalize(f, p=2, dim=-1)
 

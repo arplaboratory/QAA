@@ -72,11 +72,12 @@ class QueriesAttention(nn.Module):
         
         self.queries = QuerySelfAttn(self.num_channels, self.num_queries, nheads=self.num_channels // 64)
         self.cluster_features =  QueryCrossAttn(self.num_channels, self.cluster_dim, nheads=self.num_channels // 64)
-        self.token_features = nn.Sequential(
-            nn.Linear(self.num_channels, 512),
-            nn.ReLU(),
-            nn.Linear(512, self.token_dim)
-        )
+        if self.token_dim != 0:
+            self.token_features = nn.Sequential(
+                nn.Linear(self.num_channels, 512),
+                nn.ReLU(),
+                nn.Linear(512, self.token_dim)
+            )
 
     def forward(self, x, domain_idx=None):
         """
@@ -92,11 +93,15 @@ class QueriesAttention(nn.Module):
 
         q = self.queries()
         f, f_attn = self.cluster_features(x, q)
-        t = self.token_features(t)
+        if self.token_dim != 0:
+            t = self.token_features(t)
 
-        f = torch.cat([
-            nn.functional.normalize(t, p=2, dim=-1),
-            nn.functional.normalize(f.flatten(1), p=2, dim=1).flatten(1)
+        if token_dim == 0:
+            f = nn.functional.normalize((f * p).sum(dim=-1), p=2, dim=1).flatten(1)
+        else:
+            f = torch.cat([
+                nn.functional.normalize(t, p=2, dim=-1),
+                nn.functional.normalize((f * p).sum(dim=-1), p=2, dim=1).flatten(1)
             ], dim=-1)
 
         return nn.functional.normalize(f, p=2, dim=-1)
