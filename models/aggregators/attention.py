@@ -99,12 +99,12 @@ class QueriesAttention(nn.Module):
         if self.token_dim != 0:
             t = self.token_features(t)
 
-        if token_dim == 0:
-            f = nn.functional.normalize((f * p).sum(dim=-1), p=2, dim=1).flatten(1)
+        if self.token_dim == 0:
+            f = nn.functional.normalize(f.flatten(1), p=2, dim=1).flatten(1)
         else:
             f = torch.cat([
                 nn.functional.normalize(t, p=2, dim=-1),
-                nn.functional.normalize((f * p).sum(dim=-1), p=2, dim=1).flatten(1)
+                nn.functional.normalize(f.flatten(1), p=2, dim=1).flatten(1)
             ], dim=-1)
 
         return nn.functional.normalize(f, p=2, dim=-1)
