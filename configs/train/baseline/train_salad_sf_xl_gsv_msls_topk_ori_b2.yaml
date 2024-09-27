@@ -10,7 +10,6 @@ model:
     cluster_dim: 16
     token_dim: 256
     dropout: 0.3
-    padding: "detach"
     divide: 1
     shared_clusters: 0
     freeze_backbone: False
@@ -22,7 +21,6 @@ model:
     cluster_dim: 128
     token_dim: 256
     dropout: 0.3
-    padding: "detach"
     divide: 1
     shared_clusters: 0
     num_queries: 64
