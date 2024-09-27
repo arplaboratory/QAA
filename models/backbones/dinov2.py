@@ -102,7 +102,6 @@ class DINOv2(nn.Module):
             dropout=0.0,
             divide=1,
             shared_clusters=0,
-            padding="detach",
             freeze_backbone=False,
             residual=True,
             num_queries=64,
@@ -127,20 +126,19 @@ class DINOv2(nn.Module):
         if self.domain_prompt!="none":
             assert injection_layer > 0, 'Injection layer should be greater than 0'
             hidden_size = self.model.blocks[0].norm1.weight.shape[0]
-            assert padding in ["detach"], 'Padding should be either detach'
             assert self.num_trainable_blocks > 0, 'First blocks should be frozen when using domain prompt'
             if self.domain_prompt == "SALAD":
                 self.domain_prompt_model = SALAD(num_channels=hidden_size, num_clusters=num_clusters, cluster_dim=cluster_dim,
-                                                token_dim=token_dim, dropout=dropout, padding=padding,
+                                                token_dim=token_dim, dropout=dropout,
                                                 divide=divide, shared_clusters=shared_clusters)
             elif self.domain_prompt == "QueriesSALAD":
                 self.domain_prompt_model = QueriesSALAD(num_channels=hidden_size, num_clusters=num_clusters, cluster_dim=cluster_dim,
-                                                token_dim=token_dim, dropout=dropout, padding=padding,
+                                                token_dim=token_dim, dropout=dropout,
                                                 divide=divide, shared_clusters=shared_clusters,
                                                 num_queries=num_queries)
             elif self.domain_prompt == "SharedQueriesSALAD":
                 self.domain_prompt_model = SharedQueriesSALAD(num_channels=hidden_size, num_clusters=num_clusters, cluster_dim=cluster_dim,
-                                                token_dim=token_dim, dropout=dropout, padding=padding,
+                                                token_dim=token_dim, dropout=dropout,
                                                 divide=divide, shared_clusters=shared_clusters,
                                                 num_queries=num_queries)
             elif self.domain_prompt == "QueriesAttention":

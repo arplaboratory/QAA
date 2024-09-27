@@ -51,7 +51,6 @@ class SALAD(nn.Module):
             dropout=0.3,
             divide=1,
             shared_clusters=0,
-            padding="detach",
         ) -> None:
         super().__init__()
 
@@ -63,8 +62,6 @@ class SALAD(nn.Module):
         if divide > 1:
             self.shared_clusters = shared_clusters
             self.specific_clusters = (self.num_clusters - shared_clusters) // divide
-        self.padding = padding # Ensure the dimension is the same
-        assert self.padding in ["detach", "none"]
         
         if dropout > 0:
             dropout = nn.Dropout(dropout)
@@ -146,7 +143,7 @@ class SALAD(nn.Module):
             p = self.score(x).flatten(2)
         if self.token_dim != 0:
             t = self.token_features(t)
-        assert p.shape[1] == self.num_clusters if self.padding in ["detach"] else self.shared_clusters + self.specific_clusters
+        assert p.shape[1] == self.num_clusters
         # Sinkhorn algorithm
         p = log_optimal_transport(p, self.dust_bin, 3)
         p = torch.exp(p)
@@ -155,10 +152,7 @@ class SALAD(nn.Module):
 
 
         p = p.unsqueeze(1).repeat(1, self.cluster_dim, 1, 1)
-        if self.padding in ["detach"] or domain_idx is None:
-            f = f.unsqueeze(2).repeat(1, 1, self.num_clusters, 1)
-        else:
-            f = f.unsqueeze(2).repeat(1, 1, self.shared_clusters + self.specific_clusters, 1)
+        f = f.unsqueeze(2).repeat(1, 1, self.num_clusters, 1)
 
         if token_dim == 0:
             f = nn.functional.normalize((f * p).sum(dim=-1), p=2, dim=1).flatten(1)
@@ -177,11 +171,8 @@ class SALAD(nn.Module):
         return p_zero
     
     def generate_score_from_decoupled_pnet(self, x, domain_idx):
-        if self.padding == "none":
-            p = torch.cat([self.score_list[i](x[domain_idx == i]).flatten(2) for i in range(self.divide)], dim=0)
-        elif self.padding == "detach":
-            p_list = [self.score_list[i](x).flatten(2) for i in range(self.divide)]
-            for i in range(self.divide): # For each domain
-                p_list[i][domain_idx != i] = p_list[i][domain_idx != i].detach() # detach the other domains
-            p = torch.cat(p_list, dim=1)
+        p_list = [self.score_list[i](x).flatten(2) for i in range(self.divide)]
+        for i in range(self.divide): # For each domain
+            p_list[i][domain_idx != i] = p_list[i][domain_idx != i].detach() # detach the other domains
+        p = torch.cat(p_list, dim=1)
         return p
