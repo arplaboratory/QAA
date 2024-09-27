@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+from .attention import QuerySelfAttn, QueryCrossAttn
 
 # Code from SuperGlue (https://github.com/magicleap/SuperGluePretrainedNetwork/blob/master/models/superglue.py)
 def log_sinkhorn_iterations(Z: torch.Tensor, log_mu: torch.Tensor, log_nu: torch.Tensor, iters: int) -> torch.Tensor:
@@ -30,50 +31,6 @@ def log_optimal_transport(scores: torch.Tensor, alpha: torch.Tensor, iters: int)
     Z = log_sinkhorn_iterations(couplings, log_mu, log_nu, iters)
     Z = Z - norm  # multiply probabilities by M+N
     return Z
-
-
-class QuerySelfAttn(torch.nn.Module):
-    def __init__(self, in_dim, num_queries, nheads=8):
-        super(QuerySelfAttn, self).__init__()
-        
-        self.queries = torch.nn.Parameter(torch.randn(1, num_queries, in_dim))
-        
-        # the following two lines are used during training only, you can cache their output in eval.
-        self.self_attn = torch.nn.MultiheadAttention(in_dim, num_heads=nheads, batch_first=True)
-        self.norm_q = torch.nn.LayerNorm(in_dim)
-        #####
-
-    def forward(self):
-        # B = x.size(0)
-
-        # q = self.queries.repeat(B, 1, 1)
-        q = self.queries
-        # the following two lines are used during training.
-        # for stability purposes 
-        q = q + self.self_attn(q, q, q)[0]
-        q = self.norm_q(q)
-        #######
-        
-        return q
-        
-class QueryCrossAttn(torch.nn.Module):
-    def __init__(self, in_dim, output_dim, nheads=8):
-        super(QueryCrossAttn, self).__init__()
-        
-        self.cross_attn = torch.nn.MultiheadAttention(in_dim, num_heads=nheads, batch_first=True)
-        self.norm_out = torch.nn.LayerNorm(in_dim)
-        self.conv = torch.nn.Conv1d(in_dim, output_dim, 1)
-
-    def forward(self, x, q):
-        B = x.size(0)
-
-        q = q.repeat(B, 1, 1)
-        x_flatten = x.flatten(2).permute(0, 2, 1)
-        
-        out, attn = self.cross_attn(q, x_flatten, x_flatten)
-        out = self.norm_out(out)
-        out = self.conv(out.permute(0, 2, 1))
-        return out, attn
 
 class SharedQueriesSALAD(nn.Module):
     """
