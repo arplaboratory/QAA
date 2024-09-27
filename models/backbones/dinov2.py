@@ -142,9 +142,9 @@ class DINOv2(nn.Module):
                                                 divide=divide, shared_clusters=shared_clusters,
                                                 num_queries=num_queries)
             elif self.domain_prompt == "QueriesAttention":
-                self.domain_prompt_model = QueriesAttention(num_channels=hidden_size, cluster_dim=cluster_dim,
-                                                token_dim=token_dim,
-                                                divide=divide,
+                self.domain_prompt_model = QueriesAttention(num_channels=hidden_size, num_clusters=num_clusters, cluster_dim=cluster_dim,
+                                                token_dim=token_dim, dropout=dropout,
+                                                divide=divide, shared_clusters=shared_clusters,
                                                 num_queries=num_queries)                        
             else:
                 raise ValueError(f'Unknown domain prompt {self.domain_prompt}')
