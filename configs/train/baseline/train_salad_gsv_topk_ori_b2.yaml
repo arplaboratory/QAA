@@ -51,7 +51,7 @@ training:
   train_batch_size: 30
   test_batch_size: 256
   num_workers: 4
-  train_image_size: [224, 224]
+  train_image_size: [280, 280]
   test_image_size: [322, 322]
   optimizer:
     name: AdamW
@@ -71,7 +71,7 @@ training:
     margin: 0.1
   faiss_gpu: False
   recompute_clusters: False
-  recompute_interval: 1
+  recompute_interval: 4
   prefetch_factor: 1
   cross_loss: False
   cross_loss_weight: 1.0

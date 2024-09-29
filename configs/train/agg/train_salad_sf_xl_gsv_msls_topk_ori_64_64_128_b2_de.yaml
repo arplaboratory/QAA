@@ -14,7 +14,7 @@ model:
     shared_clusters: 0
     freeze_backbone: False
     multiscale: "1"
-  agg_arch: SALAD
+  agg_arch: QueriesSALAD
   agg_config:
     num_channels: 768
     num_clusters: 64
@@ -27,6 +27,7 @@ model:
 
 datasets:
   train_datasets: 
+    - SF_XL
     - GSV
     - mapillary_sls
   val_datasets: 
