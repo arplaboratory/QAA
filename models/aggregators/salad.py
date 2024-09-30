@@ -154,7 +154,7 @@ class SALAD(nn.Module):
         p = p.unsqueeze(1).repeat(1, self.cluster_dim, 1, 1)
         f = f.unsqueeze(2).repeat(1, 1, self.num_clusters, 1)
 
-        if token_dim == 0:
+        if self.token_dim == 0:
             f = nn.functional.normalize((f * p).sum(dim=-1), p=2, dim=1).flatten(1)
         else:
             f = torch.cat([
