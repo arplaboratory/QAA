@@ -74,7 +74,7 @@ class QueriesAttention(nn.Module):
         self.num_queries = num_queries
         
         self.queries = QuerySelfAttn(self.num_channels, self.num_queries, nheads=self.num_channels // 64)
-        self.cluster_features =  QueryCrossAttn(self.num_channels, self.cluster_dim, nheads=self.num_channels // 64)
+        self.cluster_features = QueryCrossAttn(self.num_channels, self.cluster_dim, nheads=self.num_channels // 64)
         if self.token_dim != 0:
             self.token_features = nn.Sequential(
                 nn.Linear(self.num_channels, 512),

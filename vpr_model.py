@@ -8,6 +8,10 @@ import utils
 from models import helper
 from dataloaders.GenericDataloader import IMAGENET_MEAN_STD
 
+def off_diagonal(x):
+    n, m = x.shape
+    assert n == m
+    return x.flatten()[:-1].view(n - 1, n + 1)[:, 1:].flatten()
 
 class VPRModel(pl.LightningModule):
     """This is the main model for Visual Place Recognition
@@ -220,12 +224,16 @@ class VPRModel(pl.LightningModule):
         domain_idx = torch.cat(domain_idx, dim=0)
 
         # Feed forward the batch to the model
-        descriptors = self(images, domain_idx) # Here we are calling the method forward that we defined above
+        if self.backbone.domain_prompt != "none":
+            descriptors, domain_desc = self(images, domain_idx)
+        else:
+            descriptors = self(images, domain_idx) # Here we are calling the method forward that we defined above
 
         if torch.isnan(descriptors).any():
             raise ValueError('NaNs in descriptors')
 
         loss = 0
+        domain_loss = 0
         for i in range(len(BS_list)):
             BS = BS_list[i]
             N = N_list[i]
@@ -237,14 +245,28 @@ class VPRModel(pl.LightningModule):
                 lab = labels[prev_BS_N:prev_BS_N+BS*N]
             loss += self.loss_function(desc, lab)
             if self.cross_loss:
-                std_x = torch.sqrt(desc.var(dim=0) + 0.0001)
-                loss += self.cross_loss_weight * torch.mean(F.relu(1 - std_x))
+                # if self.cross_loss_weight >= 0: # variance
+                #     std_x = torch.sqrt(desc.var(dim=0) + 0.0001)
+                #     loss += self.cross_loss_weight * torch.mean(F.relu(1 - std_x))
+                # else:
+                #     cov_x = torch.matmul(desc.t(), desc) / (desc.shape[0] - 1)
+                #     loss += -self.cross_loss_weight * off_diagonal(cov_x).pow_(2).sum().div(desc.shape[1])
+                if i == 0:
+                    desc = domain_desc[:BS*N]
+                    lab = labels[:BS*N]
+                else:
+                    desc = domain_desc[prev_BS_N:prev_BS_N+BS*N]
+                    lab = labels[prev_BS_N:prev_BS_N+BS*N]
+                domain_loss = self.loss_function(desc, lab)
+                loss += self.cross_loss_weight * domain_loss
             if i == 0:
                 prev_BS_N = BS*N
             else:
                 prev_BS_N += BS*N
         
         self.log('loss', loss.item(), logger=True, prog_bar=True)
+        if self.cross_loss:
+            self.log('domain_loss', domain_loss.item(), logger=True, prog_bar=True)
         return {'loss': loss}
     
     def on_train_epoch_end(self):
@@ -256,7 +278,10 @@ class VPRModel(pl.LightningModule):
     # this is the way Pytorch Lghtning is made. All about modularity, folks.
     def validation_step(self, batch, batch_idx, dataloader_idx=None):
         places, _ = batch
-        descriptors = self(places)
+        if self.backbone.domain_prompt != "none":
+            descriptors, domain_desc = self(places)
+        else:
+            descriptors = self(places)
         if dataloader_idx is None: # Only one val dataset
             dataloader_idx = 0
         if self.current_dataloader_idx != dataloader_idx:
@@ -329,7 +354,10 @@ class VPRModel(pl.LightningModule):
     # this is the way Pytorch Lghtning is made. All about modularity, folks.
     def test_step(self, batch, batch_idx, dataloader_idx=None):
         places, _ = batch
-        descriptors = self(places)
+        if self.backbone.domain_prompt != "none":
+            descriptors, domain_desc = self(places)
+        else:
+            descriptors = self(places)
         if dataloader_idx is None: # Only one val dataset
             dataloader_idx = 0
         if self.current_dataloader_idx != dataloader_idx:

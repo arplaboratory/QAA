@@ -127,11 +127,7 @@ class DINOv2(nn.Module):
             assert injection_layer > 0, 'Injection layer should be greater than 0'
             hidden_size = self.model.blocks[0].norm1.weight.shape[0]
             assert self.num_trainable_blocks > 0, 'First blocks should be frozen when using domain prompt'
-            if self.domain_prompt == "SALAD":
-                self.domain_prompt_model = SALAD(num_channels=hidden_size, num_clusters=num_clusters, cluster_dim=cluster_dim,
-                                                token_dim=token_dim, dropout=dropout,
-                                                divide=divide, shared_clusters=shared_clusters)
-            elif self.domain_prompt == "QueriesSALAD":
+            if self.domain_prompt == "QueriesSALAD":
                 self.domain_prompt_model = QueriesSALAD(num_channels=hidden_size, num_clusters=num_clusters, cluster_dim=cluster_dim,
                                                 token_dim=token_dim, dropout=dropout,
                                                 divide=divide, shared_clusters=shared_clusters,
@@ -212,18 +208,6 @@ class DINOv2(nn.Module):
                     nn.init.constant_(domain_prompt_mlp[0].bias, 0)
                     nn.init.constant_(domain_prompt_mlp[2].weight, 0)
                     nn.init.constant_(domain_prompt_mlp[2].bias, 0)
-            elif self.injection_method == "add_attention":
-                self.shared_prompt_mlp = nn.Sequential(nn.Linear(num_clusters*cluster_dim+token_dim, hidden_size),
-                                                        nn.SiLU(),
-                                                        nn.Linear(hidden_size, hidden_size))
-                self.domain_prompt_mlp_list = nn.ModuleList()
-                for i, blk in enumerate(self.model.blocks[self.injection_layer:]):
-                    self.domain_prompt_mlp_list.append(QueryCrossAttnPrompt(hidden_size, nheads=hidden_size // 64))
-                # Zero initialize the domain prompt mlp
-                nn.init.constant_(self.shared_prompt_mlp[0].weight, 0)
-                nn.init.constant_(self.shared_prompt_mlp[0].bias, 0)
-                nn.init.constant_(self.shared_prompt_mlp[2].weight, 0)
-                nn.init.constant_(self.shared_prompt_mlp[2].bias, 0)
             else:
                 raise ValueError(f'Unknown injection method {self.injection_method}')
 
@@ -277,9 +261,6 @@ class DINOv2(nn.Module):
                 elif self.injection_method == "add_adapter":
                     domain_prompt_output = self.shared_prompt_mlp(domain_prompt_desc)
                     x = blk(x + self.domain_prompt_mlp_list[i - self.injection_layer](domain_prompt_output).unsqueeze(1)) # domain_prompt_output broadcasting
-                elif self.injection_method == "add_attention":
-                    domain_prompt_output = self.shared_prompt_mlp(domain_prompt_desc)
-                    x = blk(x + self.domain_prompt_mlp_list[i - self.injection_layer](x, x + domain_prompt_output.unsqueeze(1))[0]) # domain_prompt_output broadcasting
                 else:
                     raise ValueError(f'Unknown injection method {self.injection_method}')
                 # print(f"After {i} block")
@@ -315,5 +296,7 @@ class DINOv2(nn.Module):
                 f_out = f.reshape((B, H // 14, W // 14, self.num_channels)).permute(0, 3, 1, 2)
 
         if self.return_token:
+            if self.domain_prompt != "none":
+                return f_out, t_out, domain_prompt_desc
             return f_out, t_out
         return f_out

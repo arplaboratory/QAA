@@ -109,7 +109,11 @@ class SharedQueriesSALAD(nn.Module):
         Returns:
             f (torch.Tensor): The global descriptor [B, m*l + g]
         """
-        x, t = x # Extract features and token
+        if len(x) == 3:
+            x, t, domain_desc = x
+        else:
+            x, t = x # Extract features and token
+            domain_desc = None
 
         q = self.queries()
         f, f_attn = self.cluster_features(x, q)
@@ -142,7 +146,7 @@ class SharedQueriesSALAD(nn.Module):
         p = p.unsqueeze(1).repeat(1, self.cluster_dim, 1, 1)
         f = f.unsqueeze(2).repeat(1, 1, self.num_clusters, 1)
 
-        if token_dim == 0:
+        if self.token_dim == 0:
             f = nn.functional.normalize((f * p).sum(dim=-1), p=2, dim=1).flatten(1)
         else:
             f = torch.cat([
@@ -150,6 +154,8 @@ class SharedQueriesSALAD(nn.Module):
                 nn.functional.normalize((f * p).sum(dim=-1), p=2, dim=1).flatten(1)
             ], dim=-1)
 
+        if domain_desc is not None:
+            return nn.functional.normalize(f, p=2, dim=-1), domain_desc
         return nn.functional.normalize(f, p=2, dim=-1)
 
     def pad_zero_score(self, p, domain_idx):
