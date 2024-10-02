@@ -102,10 +102,10 @@ class DINOv2(nn.Module):
             dropout=0.0,
             divide=1,
             shared_clusters=0,
-            freeze_backbone=False,
             residual=True,
             num_queries=64,
-            multiscale="1",
+            multi_scale="1",
+            multi_adapt="none",
         ):
         super().__init__()
 
@@ -118,31 +118,61 @@ class DINOv2(nn.Module):
         self.domain_prompt = domain_prompt
         self.injection_method = injection_method
         self.injection_layer = len(self.model.blocks) - injection_layer
-        self.freeze_backbone = freeze_backbone
         self.residual = residual
         self.num_queries = num_queries
-        self.multiscale_layers = [len(self.model.blocks) - int(x) for x in multiscale.split(",")]
+        self.multi_scale_layers = [len(self.model.blocks) - int(x) for x in multi_scale.split(",")]
+        self.multi_adapt = multi_adapt
         
         if self.domain_prompt!="none":
             assert injection_layer > 0, 'Injection layer should be greater than 0'
             hidden_size = self.model.blocks[0].norm1.weight.shape[0]
             assert self.num_trainable_blocks > 0, 'First blocks should be frozen when using domain prompt'
             if self.domain_prompt == "QueriesSALAD":
-                self.domain_prompt_model = QueriesSALAD(num_channels=hidden_size, num_clusters=num_clusters, cluster_dim=cluster_dim,
-                                                token_dim=token_dim, dropout=dropout,
-                                                divide=divide, shared_clusters=shared_clusters,
-                                                num_queries=num_queries)
+                if multi_adapt == "none" or multi_adapt == "shared":
+                    self.domain_prompt_model = QueriesSALAD(num_channels=hidden_size, num_clusters=num_clusters, cluster_dim=cluster_dim,
+                                                    token_dim=token_dim, dropout=dropout,
+                                                    divide=divide, shared_clusters=shared_clusters,
+                                                    num_queries=num_queries)
+                elif multi_adapt == "separate":
+                    self.domain_prompt_model_list = nn.ModuleList()
+                    for i, blk in enumerate(self.model.blocks[self.injection_layer:]):
+                        self.domain_prompt_model_list.append(QueriesSALAD(num_channels=hidden_size, num_clusters=num_clusters, cluster_dim=cluster_dim,
+                                                        token_dim=token_dim, dropout=dropout,
+                                                        divide=divide, shared_clusters=shared_clusters,
+                                                        num_queries=num_queries))
+                else:
+                    raise NotImplementedError()
             elif self.domain_prompt == "SharedQueriesSALAD":
-                self.domain_prompt_model = SharedQueriesSALAD(num_channels=hidden_size, num_clusters=num_clusters, cluster_dim=cluster_dim,
-                                                token_dim=token_dim, dropout=dropout,
-                                                divide=divide, shared_clusters=shared_clusters,
-                                                num_queries=num_queries)
+                if multi_adapt == "none" or multi_adapt == "shared":
+                    self.domain_prompt_model = SharedQueriesSALAD(num_channels=hidden_size, num_clusters=num_clusters, cluster_dim=cluster_dim,
+                                                    token_dim=token_dim, dropout=dropout,
+                                                    divide=divide, shared_clusters=shared_clusters,
+                                                    num_queries=num_queries)
+                elif multi_adapt == "separate":
+                    self.domain_prompt_model_list = nn.ModuleList()
+                    for i, blk in enumerate(self.model.blocks[self.injection_layer:]):
+                        self.domain_prompt_model_list.append(SharedQueriesSALAD(num_channels=hidden_size, num_clusters=num_clusters, cluster_dim=cluster_dim,
+                                                        token_dim=token_dim, dropout=dropout,
+                                                        divide=divide, shared_clusters=shared_clusters,
+                                                        num_queries=num_queries))
+                else:
+                    raise NotImplementedError()
             elif self.domain_prompt == "QueriesAttention":
                 assert num_clusters == num_queries, 'Number of clusters should be equal to number of queries'
-                self.domain_prompt_model = QueriesAttention(num_channels=hidden_size, num_clusters=num_clusters, cluster_dim=cluster_dim,
-                                                token_dim=token_dim, dropout=dropout,
-                                                divide=divide, shared_clusters=shared_clusters,
-                                                num_queries=num_queries)                        
+                if multi_adapt == "none" or multi_adapt == "shared":
+                    self.domain_prompt_model = QueriesAttention(num_channels=hidden_size, num_clusters=num_clusters, cluster_dim=cluster_dim,
+                                                    token_dim=token_dim, dropout=dropout,
+                                                    divide=divide, shared_clusters=shared_clusters,
+                                                    num_queries=num_queries) 
+                elif multi_adapt == "separate":
+                    self.domain_prompt_model_list = nn.ModuleList()
+                    for i, blk in enumerate(self.model.blocks[self.injection_layer:]):
+                        self.domain_prompt_model_list.append(QueriesAttention(num_channels=hidden_size, num_clusters=num_clusters, cluster_dim=cluster_dim,
+                                                        token_dim=token_dim, dropout=dropout,
+                                                        divide=divide, shared_clusters=shared_clusters,
+                                                        num_queries=num_queries))
+                else:
+                    raise NotImplementedError()
             else:
                 raise ValueError(f'Unknown domain prompt {self.domain_prompt}')
             if self.injection_method == "norm":
@@ -232,15 +262,29 @@ class DINOv2(nn.Module):
         feature_list = []
         layer_count = 0
         domain_prompt_desc = None
+        if self.domain_prompt != "none" and self.multi_adapt != "none":
+            domain_prompt_desc_list = []
         # First blocks are frozen
         for i, blk in enumerate(self.model.blocks):
             # print(f"Before {i} block")
-            if self.domain_prompt != "none" and layer_count == self.injection_layer:
-                t = x[:, 0]
-                f = x[:, 1:]
-                # Reshape to (B, C, H, W)
-                f = f.reshape((B, H // 14, W // 14, self.num_channels)).permute(0, 3, 1, 2)
-                domain_prompt_desc = self.domain_prompt_model((f, t), domain_idx)
+            if self.domain_prompt != "none":
+                if self.multi_adapt == "none" and layer_count == self.injection_layer:
+                    t = x[:, 0]
+                    f = x[:, 1:]
+                    # Reshape to (B, C, H, W)
+                    f = f.reshape((B, H // 14, W // 14, self.num_channels)).permute(0, 3, 1, 2)
+                    domain_prompt_desc = self.domain_prompt_model((f, t), domain_idx)
+                elif (self.multi_adapt == "shared" or self.multi_adapt == "separate") and layer_count >= self.injection_layer:
+                    t = x[:, 0]
+                    f = x[:, 1:]
+                    # Reshape to (B, C, H, W)
+                    f = f.reshape((B, H // 14, W // 14, self.num_channels)).permute(0, 3, 1, 2)
+                    if self.multi_adapt == "shared":
+                        domain_prompt_desc = self.domain_prompt_model((f, t), domain_idx)
+                        domain_prompt_desc_list.append(domain_prompt_desc)
+                    elif self.multi_adapt == "separate":
+                        domain_prompt_desc = self.domain_prompt_model_list[i - self.injection_layer]((f, t), domain_idx)
+                        domain_prompt_desc_list.append(domain_prompt_desc)
                 # print(f"Use feature after block {i-1} to output domain prompt desc")
             if domain_prompt_desc is not None:
                 # print(f"Use domain prompt desc and domain mlp {i-self.injection_layer} for block {i}")
@@ -268,11 +312,11 @@ class DINOv2(nn.Module):
             else:
                 x = blk(x)
                 # print(f"After {i} block")
-            if layer_count in self.multiscale_layers:
+            if layer_count in self.multi_scale_layers:
                 # print(f"Featured {i} add")
                 feature_list.append(x)
             layer_count+=1
-            if layer_count > self.multiscale_layers[0]: # Break if we have all the multiscale layers
+            if layer_count > self.multi_scale_layers[0]: # Break if we have all the multi_scale layers
                 break
 
         for i in range(len(feature_list)):
@@ -297,7 +341,9 @@ class DINOv2(nn.Module):
                 f_out = f.reshape((B, H // 14, W // 14, self.num_channels)).permute(0, 3, 1, 2)
 
         if self.return_token:
-            if self.domain_prompt != "none":
+            if self.domain_prompt != "none" and self.multi_adapt != "none":
+                return f_out, t_out, domain_prompt_desc_list
+            elif self.domain_prompt != "none":
                 return f_out, t_out, domain_prompt_desc
             return f_out, t_out
         return f_out

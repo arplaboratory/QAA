@@ -245,19 +245,24 @@ class VPRModel(pl.LightningModule):
                 lab = labels[prev_BS_N:prev_BS_N+BS*N]
             loss += self.loss_function(desc, lab)
             if self.cross_loss:
-                # if self.cross_loss_weight >= 0: # variance
-                #     std_x = torch.sqrt(desc.var(dim=0) + 0.0001)
-                #     loss += self.cross_loss_weight * torch.mean(F.relu(1 - std_x))
-                # else:
-                #     cov_x = torch.matmul(desc.t(), desc) / (desc.shape[0] - 1)
-                #     loss += -self.cross_loss_weight * off_diagonal(cov_x).pow_(2).sum().div(desc.shape[1])
-                if i == 0:
-                    desc = domain_desc[:BS*N]
-                    lab = labels[:BS*N]
+                if self.backbone.multi_adapt == "none":
+                    if i == 0:
+                        desc = domain_desc[:BS*N]
+                        lab = labels[:BS*N]
+                    else:
+                        desc = domain_desc[prev_BS_N:prev_BS_N+BS*N]
+                        lab = labels[prev_BS_N:prev_BS_N+BS*N]
+                    domain_loss = self.loss_function(desc, lab)
                 else:
-                    desc = domain_desc[prev_BS_N:prev_BS_N+BS*N]
-                    lab = labels[prev_BS_N:prev_BS_N+BS*N]
-                domain_loss = self.loss_function(desc, lab)
+                    domain_loss = 0
+                    for j in range(len(domain_desc)):
+                        if i == 0:
+                            desc = domain_desc[j][:BS*N]
+                            lab = labels[:BS*N]
+                        else:
+                            desc = domain_desc[j][prev_BS_N:prev_BS_N+BS*N]
+                            lab = labels[prev_BS_N:prev_BS_N+BS*N]
+                        domain_loss += self.loss_function(desc, lab)
                 loss += self.cross_loss_weight * domain_loss
             if i == 0:
                 prev_BS_N = BS*N
