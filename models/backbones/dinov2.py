@@ -138,6 +138,7 @@ class DINOv2(nn.Module):
                                                 divide=divide, shared_clusters=shared_clusters,
                                                 num_queries=num_queries)
             elif self.domain_prompt == "QueriesAttention":
+                assert num_clusters == num_queries, 'Number of clusters should be equal to number of queries'
                 self.domain_prompt_model = QueriesAttention(num_channels=hidden_size, num_clusters=num_clusters, cluster_dim=cluster_dim,
                                                 token_dim=token_dim, dropout=dropout,
                                                 divide=divide, shared_clusters=shared_clusters,
