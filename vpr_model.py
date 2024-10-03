@@ -105,6 +105,9 @@ class VPRModel(pl.LightningModule):
         if hasattr(self.backbone, "domain_prompt_model"):
             params.append({'params': self.backbone.domain_prompt_model.parameters()})
             print(f"Add params: domain_prompt_model")
+        if hasattr(self.backbone, "domain_prompt_model_list"):
+            params.append({'params': self.backbone.domain_prompt_model_list.parameters()})
+            print(f"Add params: domain_prompt_model_list")
         if hasattr(self.backbone, "domain_prompt_mlp_list"):
             params.append({'params': self.backbone.domain_prompt_mlp_list.parameters()})
             print(f"Add params: domain_prompt_mlp_list")
