@@ -112,7 +112,10 @@ def compute_cluster_descriptors(city_df, model, batch_size=32):
                 img, clusters = batch
                 img = img.cuda()
                 with torch.autocast(device_type="cuda", dtype=torch.float16):
-                    descriptors = model(img)
+                    if model.backbone.domain_prompt != "none":
+                        descriptors, domain_desc = model(img)
+                    else:
+                        descriptors = model(img)
                 if descriptor_size is None:
                     descriptor_size = descriptors.shape[1]
                     cluster_descriptors = [[] for _ in range(df.unique_cluster.max() + 1)]
