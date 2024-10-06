@@ -269,7 +269,8 @@ class CliqueMapillaryDataset(Dataset):
         img_idx = index % self.batch_size
          
         imgs = []
-        for img_name in self.data[batch_idx, img_idx]:
+        for index in range(self.num_images_per_place):
+            img_name = self.data[batch_idx, img_idx, index]
             img_path = self.base_path + img_name
             img = self.image_loader(img_path)
 
@@ -312,6 +313,10 @@ class CliqueMapillaryDataset(Dataset):
             )
         else:
             self.data = self.data[np.random.permutation(self.data.shape[0])]
+            if self.prefetch_factor > 1:
+                for i in range(self.data.shape[0]):
+                    for j in  range(self.data[i].shape[0]):
+                        self.data[i][j] = self.data[i][j][np.random.permutation(self.data[i][j].shape[0])]
         
 
     def create_dataset(
