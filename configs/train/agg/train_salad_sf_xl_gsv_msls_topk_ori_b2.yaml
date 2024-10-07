@@ -12,7 +12,6 @@ model:
     dropout: 0.3
     divide: 1
     shared_clusters: 0
-    freeze_backbone: False
     multiscale: "1"
   agg_arch: SALAD
   agg_config:
@@ -52,7 +51,9 @@ training:
   num_epochs: 64
   train_batch_size: 30
   test_batch_size: 256
+  img_per_place: 4
   num_workers: 4
+  num_batches: 2000
   train_image_size: [224, 224]
   test_image_size: [322, 322]
   optimizer:
@@ -73,7 +74,7 @@ training:
     margin: 0.1
   faiss_gpu: False
   recompute_clusters: False
-  recompute_interval: 4
   prefetch_factor: 1
+  recompute_interval: 4
   cross_loss: False
   cross_loss_weight: 1.0

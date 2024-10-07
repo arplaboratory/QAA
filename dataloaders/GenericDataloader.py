@@ -120,8 +120,8 @@ class GenericDataModule(pl.LightningDataModule):
                     self.train_datasets.append(GSVCitiesDataset(
                                                 split="train",
                                                 cities=GSV_params.training.GSV_TRAIN_CITIES,
-                                                img_per_place=GSV_params.training.img_per_place,
-                                                min_img_per_place=GSV_params.training.min_img_per_place,
+                                                img_per_place=self.train_cfg_training.img_per_place,
+                                                min_img_per_place=self.train_cfg_training.img_per_place*self.train_cfg_training.prefetch_factor,
                                                 random_sample_from_each_place=GSV_params.training.random_sample_from_each_place,
                                                 transform=self.train_transform))
                     if GSV_params.training.show_data_stats:
@@ -131,6 +131,8 @@ class GenericDataModule(pl.LightningDataModule):
                                                 split="train", 
                                                 transform=self.train_transform,
                                                 batch_size=self.train_batch_size,
+                                                num_images_per_place=self.train_cfg_training.img_per_place,
+                                                num_batches=self.train_cfg_training.num_batches,
                                                 prefetch_factor=self.train_cfg_training.prefetch_factor,
                                                 **self.train_datasets_cfg["mapillary_sls"].training.clique_args))
                 elif dataset_name == "SF_XL":
@@ -138,6 +140,8 @@ class GenericDataModule(pl.LightningDataModule):
                                                 split="train",
                                                 transform=self.train_transform,
                                                 batch_size=self.train_batch_size,
+                                                num_images_per_place=self.train_cfg_training.img_per_place,
+                                                num_batches=self.train_cfg_training.num_batches,
                                                 prefetch_factor=self.train_cfg_training.prefetch_factor,
                                                 **self.train_datasets_cfg["SF_XL"].training.clique_args))
                 else:
@@ -189,8 +193,8 @@ class GenericDataModule(pl.LightningDataModule):
             GSV_params = self.train_datasets_cfg["GSV"]
             self.train_datasets[index] = GSVCitiesDataset(split="train",
                                                         cities=GSV_params.training.GSV_TRAIN_CITIES,
-                                                        img_per_place=GSV_params.training.img_per_place,
-                                                        min_img_per_place=GSV_params.training.min_img_per_place,
+                                                        img_per_place=self.train_cfg_training.img_per_place,
+                                                        min_img_per_place=self.train_cfg_training.img_per_place,
                                                         random_sample_from_each_place=GSV_params.training.random_sample_from_each_place,
                                                         transform=self.train_transform)
         else:
@@ -253,7 +257,7 @@ class GenericDataModule(pl.LightningDataModule):
         table.align['Value'] = "l"
         table.header = False
         table.add_row(
-            ["Batch size (PxK)", f"{self.train_batch_size}x{GSV_params.training.img_per_place}"])
+            ["Batch size (PxK)", f"{self.train_batch_size}x{self.train_cfg_training.img_per_place}"])
         table.add_row(
             ["# of iterations", f"{GSV_dataset.__len__()//self.train_batch_size}"])
         table.add_row(["Image size", f"{self.train_image_size}"])
