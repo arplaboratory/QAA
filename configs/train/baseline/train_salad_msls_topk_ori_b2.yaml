@@ -51,7 +51,7 @@ training:
   test_batch_size: 256
   img_per_place: 4
   num_workers: 4
-  num_batches: 2000
+  num_batches: 4000
   train_image_size: [224, 224]
   test_image_size: [322, 322]
   optimizer:
