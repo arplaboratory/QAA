@@ -133,6 +133,8 @@ class GenericDataModule(pl.LightningDataModule):
                                                 batch_size=self.train_batch_size,
                                                 num_images_per_place=self.train_cfg_training.img_per_place,
                                                 num_batches=self.train_cfg_training.num_batches,
+                                                sampled_similar_places=self.train_cfg_training.sampled_similar_places,
+                                                num_processes=self.train_cfg_training.num_processes,
                                                 prefetch_factor=self.train_cfg_training.prefetch_factor,
                                                 **self.train_datasets_cfg["mapillary_sls"].training.clique_args))
                 elif dataset_name == "SF_XL":
@@ -142,6 +144,8 @@ class GenericDataModule(pl.LightningDataModule):
                                                 batch_size=self.train_batch_size,
                                                 num_images_per_place=self.train_cfg_training.img_per_place,
                                                 num_batches=self.train_cfg_training.num_batches,
+                                                sampled_similar_places=self.train_cfg_training.sampled_similar_places,
+                                                num_processes=self.train_cfg_training.num_processes,
                                                 prefetch_factor=self.train_cfg_training.prefetch_factor,
                                                 **self.train_datasets_cfg["SF_XL"].training.clique_args))
                 else:

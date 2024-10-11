@@ -78,10 +78,11 @@ class SharedQueriesSALAD(nn.Module):
                 nn.ReLU(),
                 nn.Linear(512, self.token_dim)
             )
+        # MLP for local features f_i
+        self.queries = QuerySelfAttn(self.num_channels, self.num_queries, nheads=self.num_channels // 64)
+        self.cluster_features = QueryCrossAttn(self.num_channels, self.cluster_dim, nheads=self.num_channels // 64)
+        # MLP for score matrix S
         if divide > 1:
-            self.queries = QuerySelfAttn(self.num_channels, self.num_queries, nheads=self.num_channels // 64)
-            # MLP for local features f_i
-            self.cluster_features = QueryCrossAttn(self.num_channels, self.cluster_dim, nheads=self.num_channels // 64)
             if self.shared_clusters > 0:
                 self.shared_score = QueryCrossAttn(self.num_channels, self.shared_clusters, nheads=self.num_channels // 64)
             else:
@@ -90,11 +91,7 @@ class SharedQueriesSALAD(nn.Module):
                  QueryCrossAttn(self.num_channels, self.specific_clusters, nheads=self.num_channels // 64) for _ in range(divide)
             ])
         else:
-            self.queries = QuerySelfAttn(self.num_channels, self.num_queries, nheads=self.num_channels // 64)
-            # MLP for local features f_i
-            self.cluster_features = QueryCrossAttn(self.num_channels, self.cluster_dim, nheads=self.num_channels // 64)
-            # MLP for score matrix S
-            self.score =  QueryCrossAttn(self.num_channels, self.num_clusters, nheads=self.num_channels // 64)
+            self.score = QueryCrossAttn(self.num_channels, self.num_clusters, nheads=self.num_channels // 64)
         # Dustbin parameter z
         self.dust_bin = nn.Parameter(torch.tensor(1.))
 
@@ -157,12 +154,6 @@ class SharedQueriesSALAD(nn.Module):
         if domain_desc is not None:
             return nn.functional.normalize(f, p=2, dim=-1), domain_desc
         return nn.functional.normalize(f, p=2, dim=-1)
-
-    def pad_zero_score(self, p, domain_idx):
-        p_zero = torch.zeros((p.shape[0], self.num_clusters, p.shape[2]), device=p.device)
-        for i, domain_id_single in enumerate(domain_idx):
-            p_zero[i, domain_id_single * self.specific_clusters: (domain_id_single + 1) * self.specific_clusters] = p[i]
-        return p_zero
     
     def generate_score_from_decoupled_pnet(self, x, q, domain_idx):
         p_list = [self.score_list[i](x, q)[0] for i in range(self.divide)]

@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+from .attention import QuerySelfAttn, QueryCrossAttn
 
 # Code from SuperGlue (https://github.com/magicleap/SuperGluePretrainedNetwork/blob/master/models/superglue.py)
 def log_sinkhorn_iterations(Z: torch.Tensor, log_mu: torch.Tensor, log_nu: torch.Tensor, iters: int) -> torch.Tensor:
@@ -32,7 +33,7 @@ def log_optimal_transport(scores: torch.Tensor, alpha: torch.Tensor, iters: int)
     return Z
 
 
-class SALAD(nn.Module):
+class DomainSharedQueriesSALAD(nn.Module):
     """
     This class represents the Sinkhorn Algorithm for Locally Aggregated Descriptors (SALAD) model.
 
@@ -51,6 +52,7 @@ class SALAD(nn.Module):
             dropout=0.3,
             divide=1,
             shared_clusters=0,
+            num_queries=32,
         ) -> None:
         super().__init__()
 
@@ -62,6 +64,7 @@ class SALAD(nn.Module):
         if divide > 1:
             self.shared_clusters = shared_clusters
             self.specific_clusters = (self.num_clusters - shared_clusters) // divide
+        self.num_queries = num_queries
         
         if dropout > 0:
             dropout = nn.Dropout(dropout)
@@ -76,38 +79,22 @@ class SALAD(nn.Module):
                 nn.Linear(512, self.token_dim)
             )
         # MLP for local features f_i
-        self.cluster_features = nn.Sequential(
-            nn.Conv2d(self.num_channels, 512, 1),
-            dropout,
-            nn.ReLU(),
-            nn.Conv2d(512, self.cluster_dim, 1)
-        )
+        self.queries = QuerySelfAttn(self.num_channels, self.num_queries, nheads=self.num_channels // 64)
+        self.cluster_features = QueryCrossAttn(self.num_channels, self.cluster_dim, nheads=self.num_channels // 64)
         # MLP for score matrix S
         if divide > 1:
             if self.shared_clusters > 0:
-                self.shared_score = nn.Sequential(
-                        nn.Conv2d(self.num_channels, 512, 1),
-                        dropout,
-                        nn.ReLU(),
-                        nn.Conv2d(512, self.shared_clusters, 1),
-                    )
+                self.shared_queries = QuerySelfAttn(self.num_channels,self.num_queries, nheads=self.num_channels // 64)
+                self.shared_score = QueryCrossAttn(self.num_channels, self.shared_clusters, nheads=self.num_channels // 64)
             else:
+                self.shared_queries = None
                 self.shared_score = None
-            self.score_list = nn.ModuleList([
-                nn.Sequential(
-                    nn.Conv2d(self.num_channels, 512, 1),
-                    dropout,
-                    nn.ReLU(),
-                    nn.Conv2d(512, self.specific_clusters, 1),
-                ) for _ in range(divide)
+            self.queries_list = nn.ModuleList([
+                QuerySelfAttn(self.num_channels, self.num_queries, nheads=self.num_channels // 64) for _ in range(divide)
             ])
+            self.score_list = QueryCrossAttn(self.num_channels, self.specific_clusters, nheads=self.num_channels // 64)
         else:
-            self.score = nn.Sequential(
-                nn.Conv2d(self.num_channels, 512, 1),
-                dropout,
-                nn.ReLU(),
-                nn.Conv2d(512, self.num_clusters, 1),
-            )
+            raise NotImplementedError()
         # Dustbin parameter z
         self.dust_bin = nn.Parameter(torch.tensor(1.))
 
@@ -122,25 +109,30 @@ class SALAD(nn.Module):
         Returns:
             f (torch.Tensor): The global descriptor [B, m*l + g]
         """
-        x, t = x # Extract features and token
+        if len(x) == 3:
+            x, t, domain_desc = x
+        else:
+            x, t = x # Extract features and token
+            domain_desc = None
 
-        f = self.cluster_features(x).flatten(2)
+        q = self.queries()
+        f, f_attn = self.cluster_features(x, q)
         if self.divide > 1:
             # Use decoupled score network
             if domain_idx is None:
                 if self.shared_clusters > 0:
-                    p_shared = self.shared_score(x).flatten(2)
-                p = torch.cat([self.score_list[i](x).flatten(2) for i in range(self.divide)], dim=1) # For each domain
+                    p_shared = self.shared_score(x, self.shared_queries())[0]
+                p = torch.cat([self.score_list(x, self.queries_list[i]())[0] for i in range(self.divide)], dim=1) # For each domain
                 if self.shared_clusters > 0:
                     p = torch.cat([p_shared, p], dim=1)
             else:
                 if self.shared_clusters > 0:
-                    p_shared = self.shared_score(x).flatten(2)
-                p = self.generate_score_from_decoupled_pnet(x, domain_idx)
+                    p_shared = self.shared_score(x, self.shared_queries())[0]
+                p = self.generate_score_from_shared_pnet(x, self.queries_list, domain_idx)
                 if self.shared_clusters > 0:
                     p = torch.cat([p_shared, p], dim=1)
         else:
-            p = self.score(x).flatten(2)
+            raise NotImplementedError()
         if self.token_dim != 0:
             t = self.token_features(t)
         assert p.shape[1] == self.num_clusters
@@ -162,10 +154,12 @@ class SALAD(nn.Module):
                 nn.functional.normalize((f * p).sum(dim=-1), p=2, dim=1).flatten(1)
             ], dim=-1)
 
+        if domain_desc is not None:
+            return nn.functional.normalize(f, p=2, dim=-1), domain_desc
         return nn.functional.normalize(f, p=2, dim=-1)
-
-    def generate_score_from_decoupled_pnet(self, x, domain_idx):
-        p_list = [self.score_list[i](x).flatten(2) for i in range(self.divide)]
+    
+    def generate_score_from_shared_pnet(self, x, q, domain_idx):
+        p_list = [self.score_list(x, q[i]())[0] for i in range(self.divide)]
         for i in range(self.divide): # For each domain
             p_list[i][domain_idx != i] = p_list[i][domain_idx != i].detach() # detach the other domains
         p = torch.cat(p_list, dim=1)
