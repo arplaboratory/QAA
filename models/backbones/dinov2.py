@@ -101,7 +101,7 @@ class DINOv2(nn.Module):
             token_dim=256,
             dropout=0.0,
             divide=1,
-            shared_clusters=0,
+            divide_ratio=[1,1,1,0],
             residual=True,
             num_queries=64,
             multi_scale="1",
@@ -131,14 +131,14 @@ class DINOv2(nn.Module):
                 if multi_adapt == "none" or multi_adapt == "shared":
                     self.domain_prompt_model = QueriesSALAD(num_channels=hidden_size, num_clusters=num_clusters, cluster_dim=cluster_dim,
                                                     token_dim=token_dim, dropout=dropout,
-                                                    divide=divide, shared_clusters=shared_clusters,
+                                                    divide=divide, divide_ratio=divide_ratio,
                                                     num_queries=num_queries)
                 elif multi_adapt == "separate":
                     self.domain_prompt_model_list = nn.ModuleList()
                     for i, blk in enumerate(self.model.blocks[self.injection_layer:]):
                         self.domain_prompt_model_list.append(QueriesSALAD(num_channels=hidden_size, num_clusters=num_clusters, cluster_dim=cluster_dim,
                                                         token_dim=token_dim, dropout=dropout,
-                                                        divide=divide, shared_clusters=shared_clusters,
+                                                        divide=divide, divide_ratio=divide_ratio,
                                                         num_queries=num_queries))
                 else:
                     raise NotImplementedError()
@@ -146,14 +146,14 @@ class DINOv2(nn.Module):
                 if multi_adapt == "none" or multi_adapt == "shared":
                     self.domain_prompt_model = SharedQueriesSALAD(num_channels=hidden_size, num_clusters=num_clusters, cluster_dim=cluster_dim,
                                                     token_dim=token_dim, dropout=dropout,
-                                                    divide=divide, shared_clusters=shared_clusters,
+                                                    divide=divide, divide_ratio=divide_ratio,
                                                     num_queries=num_queries)
                 elif multi_adapt == "separate":
                     self.domain_prompt_model_list = nn.ModuleList()
                     for i, blk in enumerate(self.model.blocks[self.injection_layer:]):
                         self.domain_prompt_model_list.append(SharedQueriesSALAD(num_channels=hidden_size, num_clusters=num_clusters, cluster_dim=cluster_dim,
                                                         token_dim=token_dim, dropout=dropout,
-                                                        divide=divide, shared_clusters=shared_clusters,
+                                                        divide=divide, divide_ratio=divide_ratio,
                                                         num_queries=num_queries))
                 else:
                     raise NotImplementedError()
@@ -162,14 +162,14 @@ class DINOv2(nn.Module):
                 if multi_adapt == "none" or multi_adapt == "shared":
                     self.domain_prompt_model = QueriesAttention(num_channels=hidden_size, num_clusters=num_clusters, cluster_dim=cluster_dim,
                                                     token_dim=token_dim, dropout=dropout,
-                                                    divide=divide, shared_clusters=shared_clusters,
+                                                    divide=divide, divide_ratio=divide_ratio,
                                                     num_queries=num_queries) 
                 elif multi_adapt == "separate":
                     self.domain_prompt_model_list = nn.ModuleList()
                     for i, blk in enumerate(self.model.blocks[self.injection_layer:]):
                         self.domain_prompt_model_list.append(QueriesAttention(num_channels=hidden_size, num_clusters=num_clusters, cluster_dim=cluster_dim,
                                                         token_dim=token_dim, dropout=dropout,
-                                                        divide=divide, shared_clusters=shared_clusters,
+                                                        divide=divide, divide_ratio=divide_ratio,
                                                         num_queries=num_queries))
                 else:
                     raise NotImplementedError()

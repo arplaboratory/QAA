@@ -10,8 +10,8 @@ model:
     cluster_dim: 16
     token_dim: 256
     dropout: 0.3
+    divide_ratio: [1, 1, 1, 0]
     divide: 1
-    shared_clusters: 0
     multi_scale: "1"
   agg_arch: SALAD
   agg_config:
@@ -20,8 +20,8 @@ model:
     cluster_dim: 128
     token_dim: 256
     dropout: 0.3
+    divide_ratio: [1, 1, 1, 0]
     divide: 1
-    shared_clusters: 0
     num_queries: 64
 
 datasets:

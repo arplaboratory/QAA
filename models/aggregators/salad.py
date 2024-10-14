@@ -49,8 +49,8 @@ class SALAD(nn.Module):
             cluster_dim=128,
             token_dim=256,
             dropout=0.3,
+            divide_ratio=[1,1,1,0],
             divide=1,
-            shared_clusters=0,
         ) -> None:
         super().__init__()
 
@@ -59,6 +59,10 @@ class SALAD(nn.Module):
         self.cluster_dim = cluster_dim
         self.token_dim = token_dim
         self.divide = divide
+        self.divide_ratio = divide_ratio
+        assert self.divide == len(self.divide_ratio) - 1 # Last one for shared clusters
+        assert num_clusters % sum(self.divide_ratio) == 0
+        assert num_queries % sum(self.divide_ratio) == 0
         if divide > 1:
             self.shared_clusters = shared_clusters
             self.specific_clusters = (self.num_clusters - shared_clusters) // divide

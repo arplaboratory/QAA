@@ -50,8 +50,8 @@ class QueriesSALAD(nn.Module):
             cluster_dim=128,
             token_dim=256,
             dropout=0.3,
+            divide_ratio=[1,1,1,0],
             divide=1,
-            shared_clusters=0,
             num_queries=32,
         ) -> None:
         super().__init__()
@@ -61,9 +61,12 @@ class QueriesSALAD(nn.Module):
         self.cluster_dim = cluster_dim
         self.token_dim = token_dim
         self.divide = divide
+        self.divide_ratio = divide_ratio
+        assert self.divide == len(self.divide_ratio) - 1 # Last one for shared clusters
+        assert num_clusters % sum(self.divide_ratio) == 0
+        assert num_queries % sum(self.divide_ratio) == 0
         if divide > 1:
-            self.shared_clusters = shared_clusters
-            self.specific_clusters = (self.num_clusters - shared_clusters) // divide
+            self.divide_cluster_list = [num_clusters * self.divide_ratio[i] // sum(self.divide_ratio)  for i in range(len(divide_ratio))]
         self.num_queries = num_queries
         
         if dropout > 0:
@@ -84,12 +87,8 @@ class QueriesSALAD(nn.Module):
         self.cluster_features = QueryCrossAttn(self.num_channels, self.cluster_dim, nheads=self.num_channels // 64)
         # MLP for score matrix S
         if divide > 1:
-            if self.shared_clusters > 0:
-                self.shared_score = QueryCrossAttn(self.num_channels, self.shared_clusters, nheads=self.num_channels // 64)
-            else:
-                self.shared_score = None
             self.score_list = nn.ModuleList([
-                 QueryCrossAttn(self.num_channels, self.specific_clusters, nheads=self.num_channels // 64) for _ in range(divide)
+                 QueryCrossAttn(self.num_channels, divide_clusters, nheads=self.num_channels // 64) if divide_clusters != 0 else None for divide_clusters in self.divide_cluster_list
             ])
         else:
             self.score = QueryCrossAttn(self.num_channels, self.num_clusters, nheads=self.num_channels // 64)
@@ -119,17 +118,9 @@ class QueriesSALAD(nn.Module):
         if self.divide > 1:
             # Use decoupled score network
             if domain_idx is None:
-                if self.shared_clusters > 0:
-                    p_shared = self.shared_score(x, q_c)[0]
-                p = torch.cat([self.score_list[i](x, q_c)[0] for i in range(self.divide)], dim=1) # For each domain
-                if self.shared_clusters > 0:
-                    p = torch.cat([p_shared, p], dim=1)
+                p = torch.cat([self.score_list[i](x, q_c)[0] if self.divide_cluster_list[i] != 0 else None for i in range(len(self.divide_cluster_list))], dim=1) # For each domain
             else:
-                if self.shared_clusters > 0:
-                    p_shared = self.shared_score(x, q_c)[0]
                 p = self.generate_score_from_decoupled_pnet(x, q_c, domain_idx)
-                if self.shared_clusters > 0:
-                    p = torch.cat([p_shared, p], dim=1)
         else:
             p, p_attn = self.score(x, q_c)
         if self.token_dim != 0:
@@ -158,8 +149,10 @@ class QueriesSALAD(nn.Module):
         return nn.functional.normalize(f, p=2, dim=-1)
     
     def generate_score_from_decoupled_pnet(self, x, q, domain_idx):
-        p_list = [self.score_list[i](x, q)[0] for i in range(self.divide)]
-        for i in range(self.divide): # For each domain
-            p_list[i][domain_idx != i] = p_list[i][domain_idx != i].detach() # detach the other domains
+        p_list = [self.score_list[i](x, q)[0] if self.divide_cluster_list[i] != 0 else None for i in range(len(self.divide_cluster_list))]
+        for i in range(len(self.divide_cluster_list)): # For each domain
+            if p_list[i] is not None:
+                p_list[i][domain_idx != i] = p_list[i][domain_idx != i].detach() # detach the other domains
+        p_list = [p for p in p_list if p is not None]
         p = torch.cat(p_list, dim=1)
         return p

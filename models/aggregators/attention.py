@@ -61,8 +61,8 @@ class QueriesAttention(nn.Module):
             cluster_dim=128,
             token_dim=256,
             dropout=0.3,
+            divide_ratio=[1,1,1,0],
             divide=1,
-            shared_clusters=0,
             num_queries=32,
         ) -> None:
         super().__init__()
@@ -71,6 +71,7 @@ class QueriesAttention(nn.Module):
         self.cluster_dim = cluster_dim
         self.token_dim = token_dim
         self.divide = divide
+        self.divide_ratio = divide_ratio
         self.num_queries = num_queries
         
         self.queries = QuerySelfAttn(self.num_channels, self.num_queries, nheads=self.num_channels // 64)
