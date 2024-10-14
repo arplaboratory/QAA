@@ -49,6 +49,7 @@ class VPRModel(pl.LightningModule):
         faiss_gpu=False,
         cross_loss=False,
         cross_loss_weight=1.0,
+        recompute_desc=False,
     ):
         super().__init__()
 
@@ -82,6 +83,7 @@ class VPRModel(pl.LightningModule):
         self.faiss_gpu = faiss_gpu
         self.cross_loss = cross_loss
         self.cross_loss_weight = cross_loss_weight
+        self.recompute_desc = recompute_desc
         
         # ----------------------------------
         # get the backbone and the aggregator
@@ -326,8 +328,12 @@ class VPRModel(pl.LightningModule):
         self.val_outputs = []
         self.results_list = []
 
-        print("Update model for recomputing if recomputing is enabled")
-        self.trainer.datamodule.model = self # Not sure if this is correct
+        if self.recompute_desc:
+            print("Update model for recomputing if recomputing is enabled")
+            self.trainer.datamodule.model = self # Not sure if this is correct
+        else:
+            print("Use existing descriptors for recomputing if recomputing is enabled")
+            self.trainer.datamodule.model = None
 
     def val_calculate_recall(self, dataloader_idx):
         # Clean memory once one dataset finished

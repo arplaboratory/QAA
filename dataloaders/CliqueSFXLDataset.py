@@ -333,7 +333,7 @@ class CliqueSFXLDataset(Dataset):
             cluster_descriptors_dict = compute_cluster_descriptors(city_df, model)
             if not recompute: # recompute does not save
                 np.save(cluster_descriptors_path, cluster_descriptors_dict)
-        elif os.path.isfile(cluster_descriptors_path) and not recompute:
+        elif os.path.isfile(cluster_descriptors_path):
             cluster_descriptors_dict = np.load(cluster_descriptors_path, allow_pickle=True).item()
         else:
             print('Model must be provided to compute cluster descriptors')
