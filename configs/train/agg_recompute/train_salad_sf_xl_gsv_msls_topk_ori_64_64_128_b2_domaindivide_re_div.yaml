@@ -13,16 +13,16 @@ model:
     divide_ratio: [1, 1, 1, 0]
     divide: 1
     multi_scale: "1"
-  agg_arch: SharedQueriesSALAD
+  agg_arch: DomainDivideQueriesSALAD
   agg_config:
     num_channels: 768
-    num_clusters: 64
+    num_clusters: 63
     cluster_dim: 128
     token_dim: 256
     dropout: 0.3
     divide_ratio: [1, 1, 1, 0]
-    divide: 1
-    num_queries: 64
+    divide: 3
+    num_queries: 63
 
 datasets:
   train_datasets: 

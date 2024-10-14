@@ -120,7 +120,9 @@ class DomainQueriesSALAD(nn.Module):
         if self.divide > 1:
             # Use decoupled score network
             if domain_idx is None:
-                p = torch.cat([self.score_list[i](x, self.queries_list[i]())[0] if self.divide_cluster_list[i] != 0 else None for i in range(len(self.divide_cluster_list))], dim=1) # For each domain
+                p_list = [self.score_list[i](x, self.queries_list[i]())[0] if self.divide_cluster_list[i] != 0 else None for i in range(len(self.divide_cluster_list))]
+                p_list = [p for p in p_list if p is not None]
+                p = torch.cat(p_list, dim=1) # For each domain
             else:
                 p = self.generate_score_from_decoupled_pnet(x, self.queries_list, domain_idx)
         else:

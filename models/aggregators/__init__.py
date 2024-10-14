@@ -6,3 +6,5 @@ from .salad import SALAD
 from .queries_salad import QueriesSALAD
 from .shared_queries_salad import SharedQueriesSALAD
 from .domain_queries_salad import DomainQueriesSALAD
+from .domain_divide_queries_salad import DomainDivideQueriesSALAD
+from .domain_divide_shared_queries_salad import DomainDivideSharedQueriesSALAD

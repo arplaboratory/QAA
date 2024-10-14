@@ -33,7 +33,7 @@ def log_optimal_transport(scores: torch.Tensor, alpha: torch.Tensor, iters: int)
     return Z
 
 
-class DomainSharedQueriesSALAD(nn.Module):
+class DomainDivideSharedQueriesSALAD(nn.Module):
     """
     This class represents the Sinkhorn Algorithm for Locally Aggregated Descriptors (SALAD) model.
 
@@ -50,8 +50,8 @@ class DomainSharedQueriesSALAD(nn.Module):
             cluster_dim=128,
             token_dim=256,
             dropout=0.3,
+            divide_ratio=[1,1,1,0],
             divide=1,
-            shared_clusters=0,
             num_queries=32,
         ) -> None:
         super().__init__()
@@ -61,9 +61,13 @@ class DomainSharedQueriesSALAD(nn.Module):
         self.cluster_dim = cluster_dim
         self.token_dim = token_dim
         self.divide = divide
+        self.divide_ratio = divide_ratio
+        assert self.divide == len(self.divide_ratio) - 1 # Last one for shared clusters
+        assert num_clusters % sum(self.divide_ratio) == 0
+        assert num_queries % sum(self.divide_ratio) == 0
         if divide > 1:
-            self.shared_clusters = shared_clusters
-            self.specific_clusters = (self.num_clusters - shared_clusters) // divide
+            self.divide_query_list = [num_queries * self.divide_ratio[i] // sum(self.divide_ratio)  for i in range(len(divide_ratio))]
+            self.divide_cluster_list = [num_clusters  for i in range(len(divide_ratio))]
         self.num_queries = num_queries
         
         if dropout > 0:
@@ -83,16 +87,10 @@ class DomainSharedQueriesSALAD(nn.Module):
         self.cluster_features = QueryCrossAttn(self.num_channels, self.cluster_dim, nheads=self.num_channels // 64)
         # MLP for score matrix S
         if divide > 1:
-            if self.shared_clusters > 0:
-                self.shared_queries = QuerySelfAttn(self.num_channels,self.num_queries, nheads=self.num_channels // 64)
-                self.shared_score = QueryCrossAttn(self.num_channels, self.shared_clusters, nheads=self.num_channels // 64)
-            else:
-                self.shared_queries = None
-                self.shared_score = None
             self.queries_list = nn.ModuleList([
-                QuerySelfAttn(self.num_channels, self.num_queries, nheads=self.num_channels // 64) for _ in range(divide)
+                QuerySelfAttn(self.num_channels, divide_queries, nheads=self.num_channels // 64) if divide_queries != 0 else None for divide_queries in self.divide_query_list
             ])
-            self.score_list = QueryCrossAttn(self.num_channels, self.specific_clusters, nheads=self.num_channels // 64)
+            self.score = QueryCrossAttn(self.num_channels, self.num_clusters, nheads=self.num_channels // 64)
         else:
             raise NotImplementedError()
         # Dustbin parameter z
@@ -120,17 +118,11 @@ class DomainSharedQueriesSALAD(nn.Module):
         if self.divide > 1:
             # Use decoupled score network
             if domain_idx is None:
-                if self.shared_clusters > 0:
-                    p_shared = self.shared_score(x, self.shared_queries())[0]
-                p = torch.cat([self.score_list(x, self.queries_list[i]())[0] for i in range(self.divide)], dim=1) # For each domain
-                if self.shared_clusters > 0:
-                    p = torch.cat([p_shared, p], dim=1)
+                p_list = [self.score(x, self.queries_list[i]())[0] if self.divide_query_list[i] != 0 else None for i in range(len(self.divide_query_list))]
+                p_list = [p for p in p_list if p is not None]
+                p = torch.cat(p_list, dim=2) # For each domain
             else:
-                if self.shared_clusters > 0:
-                    p_shared = self.shared_score(x, self.shared_queries())[0]
-                p = self.generate_score_from_shared_pnet(x, self.queries_list, domain_idx)
-                if self.shared_clusters > 0:
-                    p = torch.cat([p_shared, p], dim=1)
+                p = self.generate_score_from_decoupled_pnet(x, self.queries_list, domain_idx)
         else:
             raise NotImplementedError()
         if self.token_dim != 0:
@@ -158,9 +150,11 @@ class DomainSharedQueriesSALAD(nn.Module):
             return nn.functional.normalize(f, p=2, dim=-1), domain_desc
         return nn.functional.normalize(f, p=2, dim=-1)
     
-    def generate_score_from_shared_pnet(self, x, q, domain_idx):
-        p_list = [self.score_list(x, q[i]())[0] for i in range(self.divide)]
-        for i in range(self.divide): # For each domain
-            p_list[i][domain_idx != i] = p_list[i][domain_idx != i].detach() # detach the other domains
-        p = torch.cat(p_list, dim=1)
+    def generate_score_from_decoupled_pnet(self, x, q, domain_idx):
+        p_list = [self.score(x, q[i]())[0] if self.divide_query_list[i] != 0 else None for i in range(len(self.divide_query_list))]
+        for i in range(len(self.divide_cluster_list)): # For each domain
+            if p_list[i] is not None:
+                p_list[i][domain_idx != i] = p_list[i][domain_idx != i].detach() # detach the other domains
+        p_list = [p for p in p_list if p is not None]
+        p = torch.cat(p_list, dim=2)
         return p
