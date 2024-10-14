@@ -12,7 +12,7 @@ model:
     dropout: 0.3
     divide: 1
     shared_clusters: 0
-    multiscale: "1"
+    multi_scale: "1"
   agg_arch: SharedQueriesSALAD
   agg_config:
     num_channels: 768
@@ -53,6 +53,8 @@ training:
   test_batch_size: 256
   img_per_place: 4
   num_workers: 4
+  sampled_similar_places: 15
+  num_processes: 20
   num_batches: 4000
   train_image_size: [224, 224]
   test_image_size: [322, 322]
@@ -75,6 +77,7 @@ training:
   faiss_gpu: False
   recompute_clusters: True
   prefetch_factor: 1
+  recompute_desc: True
   recompute_interval: 4
   cross_loss: False
   cross_loss_weight: 1.0

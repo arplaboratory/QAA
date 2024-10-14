@@ -13,19 +13,21 @@ model:
     divide: 1
     shared_clusters: 0
     multi_scale: "1"
-  agg_arch: SALAD
+  agg_arch: DomainSharedQueriesSALAD
   agg_config:
     num_channels: 768
-    num_clusters: 64
+    num_clusters: 63
     cluster_dim: 128
     token_dim: 256
     dropout: 0.3
-    divide: 1
+    divide: 3
     shared_clusters: 0
-    num_queries: 64
+    num_queries: 63
 
 datasets:
   train_datasets: 
+    - SF_XL
+    - GSV
     - mapillary_sls
   val_datasets: 
     - pitts30k
@@ -73,9 +75,9 @@ training:
     name: 'MultiSimilarityMiner'
     margin: 0.1
   faiss_gpu: False
-  recompute_clusters: False
+  recompute_clusters: True
   prefetch_factor: 1
-  recompute_desc: False
+  recompute_desc: True
   recompute_interval: 4
   cross_loss: False
   cross_loss_weight: 1.0
