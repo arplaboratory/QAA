@@ -118,7 +118,7 @@ class QueriesSALAD(nn.Module):
         if self.divide > 1:
             # Use decoupled score network
             if domain_idx is None:
-                p_list = [self.score_list[i](x, q)[0] if self.divide_cluster_list[i] != 0 else None for i in range(len(self.divide_cluster_list))]
+                p_list = [self.score_list[i](x, q_c)[0] if self.divide_cluster_list[i] != 0 else None for i in range(len(self.divide_cluster_list))]
                 p_list = [p for p in p_list if p is not None]
                 p = torch.cat(p_list, dim=1) # For each domain
             else:
