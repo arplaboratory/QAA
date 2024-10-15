@@ -62,10 +62,10 @@ class DomainQueriesSALAD(nn.Module):
         self.token_dim = token_dim
         self.divide = divide
         self.divide_ratio = divide_ratio
-        assert self.divide == len(self.divide_ratio) - 1 # Last one for shared clusters
-        assert num_clusters % sum(self.divide_ratio) == 0
-        assert num_queries % sum(self.divide_ratio) == 0
-        if divide > 1:
+        if self.divide > 1:
+            assert self.divide == len(self.divide_ratio) - 1 # Last one for shared clusters
+            assert num_clusters % sum(self.divide_ratio) == 0
+            assert num_queries % sum(self.divide_ratio) == 0
             self.divide_query_list = [num_queries  for i in range(len(divide_ratio))]
             self.divide_cluster_list = [num_clusters * self.divide_ratio[i] // sum(self.divide_ratio)  for i in range(len(divide_ratio))]
         self.num_queries = num_queries
