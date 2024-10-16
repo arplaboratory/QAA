@@ -62,10 +62,10 @@ class VPRModel(pl.LightningModule):
         self.agg_config = agg_config
 
         # Train hyperparameters
-        self.lr = lr
+        self.lr = float(lr)
         self.optimizer = optimizer
-        self.weight_decay = weight_decay
-        self.momentum = momentum
+        self.weight_decay = float(weight_decay)
+        self.momentum = float(momentum)
         self.lr_sched = lr_sched
         self.lr_sched_args = lr_sched_args
 
@@ -130,6 +130,8 @@ class VPRModel(pl.LightningModule):
                 momentum=self.momentum
             )
         elif self.optimizer.lower() == 'adamw':
+            print(type(self.weight_decay))
+            print(type(self.lr))
             optimizer = torch.optim.AdamW(
                 params, 
                 lr=self.lr, 
@@ -144,7 +146,6 @@ class VPRModel(pl.LightningModule):
         else:
             raise ValueError(f'Optimizer {self.optimizer} has not been added to "configure_optimizers()"')
         
-
         if self.lr_sched.lower() == 'multistep':
             scheduler = lr_scheduler.MultiStepLR(optimizer, milestones=self.lr_sched_args['milestones'], gamma=self.lr_sched_args['gamma'])
         elif self.lr_sched.lower() == 'cosine':
@@ -160,10 +161,23 @@ class VPRModel(pl.LightningModule):
         return [optimizer], [scheduler]
     
     # configure the optizer step, takes into account the warmup stage
-    def optimizer_step(self,  epoch, batch_idx, optimizer, optimizer_closure):
-        # warm up lr
+    def optimizer_step(self, epoch, batch_idx, optimizer, optimizer_closure):
+        """
+        Define how a single optimization step is executed.
+
+        Args:
+            epoch: Current epoch.
+            batch_idx: Current batch index.
+            optimizer: Optimizer instance.
+            optimizer_closure: Closure for the optimizer.
+        """
+        if self.trainer.global_step < self.lr_sched_args['total_iters']:
+            lr_scale = min(1.0, float(self.trainer.global_step + 1) / self.lr_sched_args['total_iters'])
+            for pg in optimizer.param_groups:
+                pg["lr"] = lr_scale * pg["initial_lr"]
+
         optimizer.step(closure=optimizer_closure)
-        self.lr_schedulers().step()
+        self.log('_LR', optimizer.param_groups[-1]['lr'], prog_bar=False, logger=True)
         
     #  The loss function call (this method will be called at each training iteration)
     def loss_function(self, descriptors, labels):
