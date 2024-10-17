@@ -87,9 +87,7 @@ class QueriesSALAD(nn.Module):
         self.cluster_features = QueryCrossAttn(self.num_channels, self.cluster_dim, nheads=self.num_channels // 64)
         # MLP for score matrix S
         if divide > 1:
-            self.score_list = nn.ModuleList([
-                 QueryCrossAttn(self.num_channels, divide_clusters, nheads=self.num_channels // 64) if divide_clusters != 0 else None for divide_clusters in self.divide_cluster_list
-            ])
+            raise NotImplementedError()
         else:
             self.score = QueryCrossAttn(self.num_channels, self.num_clusters, nheads=self.num_channels // 64)
         # Dustbin parameter z
@@ -116,13 +114,7 @@ class QueriesSALAD(nn.Module):
         q_f = self.queries_feature()
         f, f_attn = self.cluster_features(x, q_f)
         if self.divide > 1:
-            # Use decoupled score network
-            if domain_idx is None:
-                p_list = [self.score_list[i](x, q_c)[0] if self.divide_cluster_list[i] != 0 else None for i in range(len(self.divide_cluster_list))]
-                p_list = [p for p in p_list if p is not None]
-                p = torch.cat(p_list, dim=1) # For each domain
-            else:
-                p = self.generate_score_from_decoupled_pnet(x, q_c, domain_idx)
+            raise NotImplementedError()
         else:
             p, p_attn = self.score(x, q_c)
         if self.token_dim != 0:
@@ -149,12 +141,3 @@ class QueriesSALAD(nn.Module):
         if domain_desc is not None:
             return nn.functional.normalize(f, p=2, dim=-1), domain_desc
         return nn.functional.normalize(f, p=2, dim=-1)
-    
-    def generate_score_from_decoupled_pnet(self, x, q, domain_idx):
-        p_list = [self.score_list[i](x, q)[0] if self.divide_cluster_list[i] != 0 else None for i in range(len(self.divide_cluster_list))]
-        for i in range(len(self.divide_cluster_list)): # For each domain
-            if p_list[i] is not None:
-                p_list[i][domain_idx != i] = p_list[i][domain_idx != i].detach() # detach the other domains
-        p_list = [p for p in p_list if p is not None]
-        p = torch.cat(p_list, dim=1)
-        return p

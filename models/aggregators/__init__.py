@@ -5,6 +5,7 @@ from .mixvpr import MixVPR
 from .salad import SALAD
 from .queries_salad import QueriesSALAD
 from .shared_queries_salad import SharedQueriesSALAD
-from .domain_queries_salad import DomainQueriesSALAD
-from .domain_divide_queries_salad import DomainDivideQueriesSALAD
-from .domain_divide_shared_queries_salad import DomainDivideSharedQueriesSALAD
+from .domain_queries_salad_shared import DomainQueriesSALADShared
+from .domain_queries_salad_score import DomainQueriesSALADScore
+from .domain_queries_salad_feature import DomainQueriesSALADFeature
+from .domain_queries_salad_score_feature import DomainQueriesSALADScoreFeature

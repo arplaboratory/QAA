@@ -130,8 +130,6 @@ class VPRModel(pl.LightningModule):
                 momentum=self.momentum
             )
         elif self.optimizer.lower() == 'adamw':
-            print(type(self.weight_decay))
-            print(type(self.lr))
             optimizer = torch.optim.AdamW(
                 params, 
                 lr=self.lr, 

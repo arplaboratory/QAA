@@ -13,7 +13,7 @@ model:
     divide_ratio: [1, 1, 1, 0]
     divide: 1
     multi_scale: "1"
-  agg_arch: QueriesSALAD
+  agg_arch: DomainQueriesSALADFeature
   agg_config:
     num_channels: 768
     num_clusters: 63
@@ -61,13 +61,14 @@ training:
   optimizer:
     name: AdamW
     lr: 6e-5
-    weight_decay: 9.5e-9
+    weight_decay: 1e-3
     momentum: 0.9
   scheduler:
-    name: linear
+    name: multistep
     args:
-      start_factor: 1
-      end_factor: 0.2
+      gamma: 0.1
+      milestones:
+        - 32
       total_iters: 4000
   loss:
     name: 'MultiSimilarityLoss'
