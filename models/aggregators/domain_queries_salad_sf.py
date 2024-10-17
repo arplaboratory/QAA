@@ -121,7 +121,7 @@ class DomainQueriesSALADSF(nn.Module):
                 p_list = [self.score(x, self.queries_score_list[i]())[0] if self.divide_query_list[i] != 0 else None for i in range(len(self.divide_query_list))]
                 p_list = [p for p in p_list if p is not None]
                 f_list = [self.cluster_features(x, self.queries_feature_list[i]())[0] if self.divide_query_list[i] != 0 else None for i in range(len(self.divide_query_list))]
-                f_list = [f_list for f in f_list if f is not None]
+                f_list = [f for f in f_list if f is not None]
                 p = torch.cat(p_list, dim=2) # For each domain
                 f = torch.cat(f_list, dim=2) # For each domain
             else:
