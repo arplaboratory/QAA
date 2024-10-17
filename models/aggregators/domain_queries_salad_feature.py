@@ -121,8 +121,8 @@ class DomainQueriesSALADFeature(nn.Module):
                 f_list = [f for f in f_list if p is not None]
                 f = torch.cat(f_list, dim=2) # For each domain
             else:
-                f = self.generate_score_from_decoupled_fnet(x, self.queries_list, domain_idx)
-            p = self.score(p, q)
+                f = self.generate_score_from_decoupled_fnet(x, self.queries_feature_list, domain_idx)
+            p = self.score(p, q)[0]
         else:
             raise NotImplementedError()
         if self.token_dim != 0:

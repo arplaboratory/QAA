@@ -33,7 +33,7 @@ def log_optimal_transport(scores: torch.Tensor, alpha: torch.Tensor, iters: int)
     return Z
 
 
-class DomainQueriesSALADScoreFeature(nn.Module):
+class DomainQueriesSALADSF(nn.Module):
     """
     This class represents the Sinkhorn Algorithm for Locally Aggregated Descriptors (SALAD) model.
 
