@@ -99,6 +99,8 @@ class DINOv2(nn.Module):
             num_clusters=16,
             cluster_dim=16,
             token_dim=256,
+            self_attn=True,
+            dust_bin=True,
             dropout=0.0,
             divide=1,
             divide_ratio=[1,1,1,0],

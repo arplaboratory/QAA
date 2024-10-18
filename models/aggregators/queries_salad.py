@@ -18,13 +18,19 @@ def log_optimal_transport(scores: torch.Tensor, alpha: torch.Tensor, iters: int)
     one = scores.new_tensor(1)
     ms, ns, bs = (m*one).to(scores), (n*one).to(scores), ((n-m)*one).to(scores)
 
-    bins = alpha.expand(b, 1, n)
-    alpha = alpha.expand(b, 1, 1)
-    
-    couplings = torch.cat([scores, bins], 1)
+    if alpha is not None:
+        bins = alpha.expand(b, 1, n)
+        alpha = alpha.expand(b, 1, 1)
+        
+        couplings = torch.cat([scores, bins], 1)
+    else:
+        couplings = scores
 
     norm = - (ms + ns).log()
-    log_mu = torch.cat([norm.expand(m), bs.log()[None] + norm])
+    if alpha is not None:
+        log_mu = torch.cat([norm.expand(m), bs.log()[None] + norm])
+    else:
+        log_mu = norm.expand(m)
     log_nu = norm.expand(n)
     log_mu, log_nu = log_mu[None].expand(b, -1), log_nu[None].expand(b, -1)
 
@@ -53,6 +59,8 @@ class QueriesSALAD(nn.Module):
             divide_ratio=[1,1,1,0],
             divide=1,
             num_queries=32,
+            self_attn=True,
+            dust_bin=True,
         ) -> None:
         super().__init__()
 
@@ -63,10 +71,7 @@ class QueriesSALAD(nn.Module):
         self.divide = divide
         self.divide_ratio = divide_ratio
         if self.divide > 1:
-            assert self.divide == len(self.divide_ratio) - 1 # Last one for shared clusters
-            assert num_clusters % sum(self.divide_ratio) == 0
-            assert num_queries % sum(self.divide_ratio) == 0
-            self.divide_cluster_list = [num_clusters * self.divide_ratio[i] // sum(self.divide_ratio)  for i in range(len(divide_ratio))]
+            raise NotImplementedError()
         self.num_queries = num_queries
         
         if dropout > 0:
@@ -82,16 +87,18 @@ class QueriesSALAD(nn.Module):
                 nn.Linear(512, self.token_dim)
             )
         # MLP for local features f_i
-        self.queries_cluster = QuerySelfAttn(self.num_channels, self.num_queries, nheads=self.num_channels // 64)
-        self.queries_feature = QuerySelfAttn(self.num_channels, self.num_queries, nheads=self.num_channels // 64)
-        self.cluster_features = QueryCrossAttn(self.num_channels, self.cluster_dim, nheads=self.num_channels // 64)
         # MLP for score matrix S
+        self.queries_cluster = QuerySelfAttn(self.num_channels, self.num_queries, nheads=self.num_channels // 64, self_attn=self_attn)
+        self.queries_feature = QuerySelfAttn(self.num_channels, self.num_queries, nheads=self.num_channels // 64, self_attn=self_attn)
+        self.cluster_features = QueryCrossAttn(self.num_channels, self.cluster_dim, nheads=self.num_channels // 64)
+        self.score = QueryCrossAttn(self.num_channels, self.num_clusters, nheads=self.num_channels // 64)
         if divide > 1:
             raise NotImplementedError()
-        else:
-            self.score = QueryCrossAttn(self.num_channels, self.num_clusters, nheads=self.num_channels // 64)
         # Dustbin parameter z
-        self.dust_bin = nn.Parameter(torch.tensor(1.))
+        if dust_bin:
+            self.dust_bin = nn.Parameter(torch.tensor(1.))
+        else:
+            self.dust_bin = None
 
 
     def forward(self, x, domain_idx=None):
@@ -124,7 +131,8 @@ class QueriesSALAD(nn.Module):
         p = log_optimal_transport(p, self.dust_bin, 3)
         p = torch.exp(p)
         # Normalize to maintain mass
-        p = p[:, :-1, :]
+        if self.dust_bin is not None:
+            p = p[:, :-1, :]
 
 
         p = p.unsqueeze(1).repeat(1, self.cluster_dim, 1, 1)

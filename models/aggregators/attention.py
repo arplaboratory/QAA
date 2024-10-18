@@ -2,25 +2,29 @@ import torch
 import torch.nn as nn
 
 class QuerySelfAttn(torch.nn.Module):
-    def __init__(self, in_dim, num_queries, nheads=8):
+    def __init__(self, in_dim, num_queries, nheads=8, self_attn=True):
         super(QuerySelfAttn, self).__init__()
         
         self.queries = torch.nn.Parameter(torch.randn(1, num_queries, in_dim))
+        self.self_attn = self_attn
         
-        # the following two lines are used during training only, you can cache their output in eval.
-        self.self_attn = torch.nn.MultiheadAttention(in_dim, num_heads=nheads, batch_first=True)
-        self.norm_q = torch.nn.LayerNorm(in_dim)
-        #####
+        if self.self_attn:
+            # the following two lines are used during training only, you can cache their output in eval.
+            self.self_attn = torch.nn.MultiheadAttention(in_dim, num_heads=nheads, batch_first=True)
+            self.norm_q = torch.nn.LayerNorm(in_dim)
+            #####
 
     def forward(self):
         # B = x.size(0)
 
         # q = self.queries.repeat(B, 1, 1)
         q = self.queries
-        # the following two lines are used during training.
-        # for stability purposes 
-        q = q + self.self_attn(q, q, q)[0]
-        q = self.norm_q(q)
+        if self.self_attn:
+            # the following two lines are used during training.
+            # for stability purposes 
+            q = q + self.self_attn(q, q, q)[0]
+            q = self.norm_q(q)
+            print("HERE")
         #######
         
         return q
@@ -64,6 +68,8 @@ class QueriesAttention(nn.Module):
             divide_ratio=[1,1,1,0],
             divide=1,
             num_queries=32,
+            self_attn=True,
+            dust_bin=True,
         ) -> None:
         super().__init__()
 
@@ -74,7 +80,7 @@ class QueriesAttention(nn.Module):
         self.divide_ratio = divide_ratio
         self.num_queries = num_queries
         
-        self.queries = QuerySelfAttn(self.num_channels, self.num_queries, nheads=self.num_channels // 64)
+        self.queries = QuerySelfAttn(self.num_channels, self.num_queries, nheads=self.num_channels // 64, self_attn=self_attn)
         self.cluster_features = QueryCrossAttn(self.num_channels, self.cluster_dim, nheads=self.num_channels // 64)
         if self.token_dim != 0:
             self.token_features = nn.Sequential(

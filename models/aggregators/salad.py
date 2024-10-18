@@ -17,13 +17,19 @@ def log_optimal_transport(scores: torch.Tensor, alpha: torch.Tensor, iters: int)
     one = scores.new_tensor(1)
     ms, ns, bs = (m*one).to(scores), (n*one).to(scores), ((n-m)*one).to(scores)
 
-    bins = alpha.expand(b, 1, n)
-    alpha = alpha.expand(b, 1, 1)
-    
-    couplings = torch.cat([scores, bins], 1)
+    if alpha is not None:
+        bins = alpha.expand(b, 1, n)
+        alpha = alpha.expand(b, 1, 1)
+        
+        couplings = torch.cat([scores, bins], 1)
+    else:
+        couplings = scores
 
     norm = - (ms + ns).log()
-    log_mu = torch.cat([norm.expand(m), bs.log()[None] + norm])
+    if alpha is not None:
+        log_mu = torch.cat([norm.expand(m), bs.log()[None] + norm])
+    else:
+        log_mu = norm.expand(m)
     log_nu = norm.expand(n)
     log_mu, log_nu = log_mu[None].expand(b, -1), log_nu[None].expand(b, -1)
 
@@ -51,6 +57,7 @@ class SALAD(nn.Module):
             dropout=0.3,
             divide_ratio=[1,1,1,0],
             divide=1,
+            dust_bin=True,
         ) -> None:
         super().__init__()
 
@@ -62,10 +69,6 @@ class SALAD(nn.Module):
         self.divide_ratio = divide_ratio
         assert self.divide == len(self.divide_ratio) - 1 # Last one for shared clusters
         assert num_clusters % sum(self.divide_ratio) == 0
-        assert num_queries % sum(self.divide_ratio) == 0
-        if divide > 1:
-            self.shared_clusters = shared_clusters
-            self.specific_clusters = (self.num_clusters - shared_clusters) // divide
         
         if dropout > 0:
             dropout = nn.Dropout(dropout)
@@ -87,33 +90,19 @@ class SALAD(nn.Module):
             nn.Conv2d(512, self.cluster_dim, 1)
         )
         # MLP for score matrix S
-        if divide > 1:
-            if self.shared_clusters > 0:
-                self.shared_score = nn.Sequential(
-                        nn.Conv2d(self.num_channels, 512, 1),
-                        dropout,
-                        nn.ReLU(),
-                        nn.Conv2d(512, self.shared_clusters, 1),
-                    )
-            else:
-                self.shared_score = None
-            self.score_list = nn.ModuleList([
-                nn.Sequential(
-                    nn.Conv2d(self.num_channels, 512, 1),
-                    dropout,
-                    nn.ReLU(),
-                    nn.Conv2d(512, self.specific_clusters, 1),
-                ) for _ in range(divide)
-            ])
-        else:
-            self.score = nn.Sequential(
+        self.score = nn.Sequential(
                 nn.Conv2d(self.num_channels, 512, 1),
                 dropout,
                 nn.ReLU(),
                 nn.Conv2d(512, self.num_clusters, 1),
-            )
+        )
+        if divide > 1:
+            raise NotImplementedError()
         # Dustbin parameter z
-        self.dust_bin = nn.Parameter(torch.tensor(1.))
+        if dust_bin:
+            self.dust_bin = nn.Parameter(torch.tensor(1.))
+        else:
+            self.dust_bin = None
 
 
     def forward(self, x, domain_idx=None):
@@ -129,22 +118,9 @@ class SALAD(nn.Module):
         x, t = x # Extract features and token
 
         f = self.cluster_features(x).flatten(2)
+        p = self.score(x).flatten(2)
         if self.divide > 1:
-            # Use decoupled score network
-            if domain_idx is None:
-                if self.shared_clusters > 0:
-                    p_shared = self.shared_score(x).flatten(2)
-                p = torch.cat([self.score_list[i](x).flatten(2) for i in range(self.divide)], dim=1) # For each domain
-                if self.shared_clusters > 0:
-                    p = torch.cat([p_shared, p], dim=1)
-            else:
-                if self.shared_clusters > 0:
-                    p_shared = self.shared_score(x).flatten(2)
-                p = self.generate_score_from_decoupled_pnet(x, domain_idx)
-                if self.shared_clusters > 0:
-                    p = torch.cat([p_shared, p], dim=1)
-        else:
-            p = self.score(x).flatten(2)
+            raise NotImplementedError()
         if self.token_dim != 0:
             t = self.token_features(t)
         assert p.shape[1] == self.num_clusters
@@ -152,7 +128,8 @@ class SALAD(nn.Module):
         p = log_optimal_transport(p, self.dust_bin, 3)
         p = torch.exp(p)
         # Normalize to maintain mass
-        p = p[:, :-1, :]
+        if self.dust_bin is not None:
+            p = p[:, :-1, :]
 
 
         p = p.unsqueeze(1).repeat(1, self.cluster_dim, 1, 1)
