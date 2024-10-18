@@ -121,7 +121,7 @@ class DomainQueriesSALADFeature(nn.Module):
                 f_list = [f for f in f_list if f is not None]
                 f = torch.cat(f_list, dim=2) # For each domain
             else:
-                f = self.generate_score_from_decoupled_fnet(x, self.queries_feature_list, domain_idx)
+                f = self.generate_score_from_decoupled_fnet(x, self.queries_feature_list, domain_idx, self.cluster_features)
             p = self.score(x, q)[0]
         else:
             raise NotImplementedError()
@@ -150,20 +150,19 @@ class DomainQueriesSALADFeature(nn.Module):
             return nn.functional.normalize(f, p=2, dim=-1), domain_desc
         return nn.functional.normalize(f, p=2, dim=-1)
     
-    def generate_score_from_decoupled_pnet(self, x, q, domain_idx):
-        p_list = [self.score(x, q[i]())[0] if self.divide_query_list[i] != 0 else None for i in range(len(self.divide_query_list))]
-        for i in range(len(self.divide_cluster_list)): # For each domain
-            if p_list[i] is not None:
-                p_list[i][domain_idx != i] = p_list[i][domain_idx != i].detach() # detach the other domains
-        p_list = [p for p in p_list if p is not None]
-        p = torch.cat(p_list, dim=2)
-        return p
-    
-    def generate_score_from_decoupled_fnet(self, x, q, domain_idx):
-        f_list = [self.cluster_features(x, q[i]())[0] if self.divide_query_list[i] != 0 else None for i in range(len(self.divide_query_list))]
+    def generate_score_from_decoupled_fnet(self, x, q, domain_idx, network):
+        f_list = [network(x, q[i]())[0] if self.divide_query_list[i] != 0 else None for i in range(len(self.divide_query_list))]
+        f_list_new = []
         for i in range(len(self.divide_cluster_list)): # For each domain
             if f_list[i] is not None:
-                f_list[i][domain_idx != i] = f_list[i][domain_idx != i].detach() # detach the other domains
-        f_list = [f for f in f_list if f is not None]
-        f = torch.cat(f_list, dim=2)
+                f_list_single = []
+                for j in torch.unique(domain_idx):
+                    domain_f = f_list[i][domain_idx == j]
+                    if len(domain_f) == 0:
+                        continue
+                    if j != i:
+                        domain_f = domain_f.detach()
+                    f_list_single.append(domain_f)
+                f_list_new.append(torch.cat(f_list_single, dim=0))
+        f = torch.cat(f_list_new, dim=2)
         return f
