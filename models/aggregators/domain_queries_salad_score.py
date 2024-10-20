@@ -1,42 +1,7 @@
 import torch
 import torch.nn as nn
 from .attention import QuerySelfAttn, QueryCrossAttn
-
-# Code from SuperGlue (https://github.com/magicleap/SuperGluePretrainedNetwork/blob/master/models/superglue.py)
-def log_sinkhorn_iterations(Z: torch.Tensor, log_mu: torch.Tensor, log_nu: torch.Tensor, iters: int) -> torch.Tensor:
-    """ Perform Sinkhorn Normalization in Log-space for stability"""
-    u, v = torch.zeros_like(log_mu), torch.zeros_like(log_nu)
-    for _ in range(iters):
-        u = log_mu - torch.logsumexp(Z + v.unsqueeze(1), dim=2)
-        v = log_nu - torch.logsumexp(Z + u.unsqueeze(2), dim=1)
-    return Z + u.unsqueeze(2) + v.unsqueeze(1)
-
-# Code from SuperGlue (https://github.com/magicleap/SuperGluePretrainedNetwork/blob/master/models/superglue.py)
-def log_optimal_transport(scores: torch.Tensor, alpha: torch.Tensor, iters: int) -> torch.Tensor:
-    """ Perform Differentiable Optimal Transport in Log-space for stability"""
-    b, m, n = scores.shape
-    one = scores.new_tensor(1)
-    ms, ns, bs = (m*one).to(scores), (n*one).to(scores), ((n-m)*one).to(scores)
-
-    if alpha is not None:
-        bins = alpha.expand(b, 1, n)
-        alpha = alpha.expand(b, 1, 1)
-        
-        couplings = torch.cat([scores, bins], 1)
-    else:
-        couplings = scores
-
-    norm = - (ms + ns).log()
-    if alpha is not None:
-        log_mu = torch.cat([norm.expand(m), bs.log()[None] + norm])
-    else:
-        log_mu = norm.expand(m)
-    log_nu = norm.expand(n)
-    log_mu, log_nu = log_mu[None].expand(b, -1), log_nu[None].expand(b, -1)
-
-    Z = log_sinkhorn_iterations(couplings, log_mu, log_nu, iters)
-    Z = Z - norm  # multiply probabilities by M+N
-    return Z
+from .salad import log_optimal_transport
 
 
 class DomainQueriesSALADScore(nn.Module):

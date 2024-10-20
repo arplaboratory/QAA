@@ -1,42 +1,7 @@
 import torch
 import torch.nn as nn
 from .attention import QuerySelfAttn, QueryCrossAttn
-
-# Code from SuperGlue (https://github.com/magicleap/SuperGluePretrainedNetwork/blob/master/models/superglue.py)
-def log_sinkhorn_iterations(Z: torch.Tensor, log_mu: torch.Tensor, log_nu: torch.Tensor, iters: int) -> torch.Tensor:
-    """ Perform Sinkhorn Normalization in Log-space for stability"""
-    u, v = torch.zeros_like(log_mu), torch.zeros_like(log_nu)
-    for _ in range(iters):
-        u = log_mu - torch.logsumexp(Z + v.unsqueeze(1), dim=2)
-        v = log_nu - torch.logsumexp(Z + u.unsqueeze(2), dim=1)
-    return Z + u.unsqueeze(2) + v.unsqueeze(1)
-
-# Code from SuperGlue (https://github.com/magicleap/SuperGluePretrainedNetwork/blob/master/models/superglue.py)
-def log_optimal_transport(scores: torch.Tensor, alpha: torch.Tensor, iters: int) -> torch.Tensor:
-    """ Perform Differentiable Optimal Transport in Log-space for stability"""
-    b, m, n = scores.shape
-    one = scores.new_tensor(1)
-    ms, ns, bs = (m*one).to(scores), (n*one).to(scores), ((n-m)*one).to(scores)
-
-    if alpha is not None:
-        bins = alpha.expand(b, 1, n)
-        alpha = alpha.expand(b, 1, 1)
-        
-        couplings = torch.cat([scores, bins], 1)
-    else:
-        couplings = scores
-
-    norm = - (ms + ns).log()
-    if alpha is not None:
-        log_mu = torch.cat([norm.expand(m), bs.log()[None] + norm])
-    else:
-        log_mu = norm.expand(m)
-    log_nu = norm.expand(n)
-    log_mu, log_nu = log_mu[None].expand(b, -1), log_nu[None].expand(b, -1)
-
-    Z = log_sinkhorn_iterations(couplings, log_mu, log_nu, iters)
-    Z = Z - norm  # multiply probabilities by M+N
-    return Z
+from .salad import log_optimal_transport
 
 
 class SharedQueriesSALAD(nn.Module):
@@ -88,9 +53,10 @@ class SharedQueriesSALAD(nn.Module):
             )
         # MLP for local features f_i
         # MLP for score matrix S
-        self.queries = QuerySelfAttn(self.num_channels, self.num_queries, nheads=self.num_channels // 64, self_attn=self_attn)
-        self.cluster_features = QueryCrossAttn(self.num_channels, self.cluster_dim, nheads=self.num_channels // 64)
-        self.score = QueryCrossAttn(self.num_channels, self.num_clusters, nheads=self.num_channels // 64)
+        self.queries = QuerySelfAttn(self.num_channels, self.num_queries, nheads=self.num_channels // 128, self_attn=self_attn)
+        self.queries_feature = QuerySelfAttn(self.cluster_dim, self.num_queries, nheads=self.cluster_dim // 32, self_attn=self_attn)
+        self.cluster_features = QueryCrossAttn(self.num_channels, self.cluster_dim, nheads=self.num_channels // 128)
+        self.score = QueryCrossAttn(self.num_channels, self.num_clusters, nheads=self.num_channels // 128)
         if divide > 1:
             raise NotImplementedError()
         # Dustbin parameter z
@@ -117,7 +83,7 @@ class SharedQueriesSALAD(nn.Module):
             domain_desc = None
 
         q = self.queries()
-        f, f_attn = self.cluster_features(x, q)
+        f = self.queries_feature().permute(0, 2, 1).repeat(x.shape[0], 1, 1)
         p, p_attn = self.score(x, q)
         if self.divide > 1:
             raise NotImplementedError()
