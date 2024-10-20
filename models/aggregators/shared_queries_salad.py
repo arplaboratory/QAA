@@ -53,10 +53,9 @@ class SharedQueriesSALAD(nn.Module):
             )
         # MLP for local features f_i
         # MLP for score matrix S
-        self.queries = QuerySelfAttn(self.num_channels, self.num_queries, nheads=self.num_channels // 128, self_attn=self_attn)
+        self.queries_score = nn.Conv1d(self.cluster_dim, self.num_channels, 1)
         self.queries_feature = QuerySelfAttn(self.cluster_dim, self.num_queries, nheads=self.cluster_dim // 32, self_attn=self_attn)
-        self.cluster_features = QueryCrossAttn(self.num_channels, self.cluster_dim, nheads=self.num_channels // 128)
-        self.score = QueryCrossAttn(self.num_channels, self.num_clusters, nheads=self.num_channels // 128)
+        self.score = QueryCrossAttn(self.num_channels, self.num_clusters, nheads=self.num_channels // 64)
         if divide > 1:
             raise NotImplementedError()
         # Dustbin parameter z
@@ -82,8 +81,9 @@ class SharedQueriesSALAD(nn.Module):
             x, t = x # Extract features and token
             domain_desc = None
 
-        q = self.queries()
-        f = self.queries_feature().permute(0, 2, 1).repeat(x.shape[0], 1, 1)
+        f = self.queries_feature().permute(0, 2, 1)
+        q = self.queries_score(f).permute(0, 2, 1)
+        f = f.repeat(x.shape[0], 1, 1)
         p, p_attn = self.score(x, q)
         if self.divide > 1:
             raise NotImplementedError()

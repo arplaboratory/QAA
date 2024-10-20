@@ -5,7 +5,6 @@ from typing import Union
 from ..aggregators.salad import SALAD
 from ..aggregators.queries_salad import QueriesSALAD
 from ..aggregators.shared_queries_salad import SharedQueriesSALAD
-from ..aggregators.attention import QueriesAttention
 
 DINOV2_ARCHS = {
     'dinov2_vits14': 384,
@@ -154,22 +153,6 @@ class DINOv2(nn.Module):
                     self.domain_prompt_model_list = nn.ModuleList()
                     for i, blk in enumerate(self.model.blocks[self.injection_layer:]):
                         self.domain_prompt_model_list.append(SharedQueriesSALAD(num_channels=hidden_size, num_clusters=num_clusters, cluster_dim=cluster_dim,
-                                                        token_dim=token_dim, dropout=dropout,
-                                                        divide=divide, divide_ratio=divide_ratio,
-                                                        num_queries=num_queries))
-                else:
-                    raise NotImplementedError()
-            elif self.domain_prompt == "QueriesAttention":
-                assert num_clusters == num_queries, 'Number of clusters should be equal to number of queries'
-                if multi_adapt == "none" or multi_adapt == "shared":
-                    self.domain_prompt_model = QueriesAttention(num_channels=hidden_size, num_clusters=num_clusters, cluster_dim=cluster_dim,
-                                                    token_dim=token_dim, dropout=dropout,
-                                                    divide=divide, divide_ratio=divide_ratio,
-                                                    num_queries=num_queries) 
-                elif multi_adapt == "separate":
-                    self.domain_prompt_model_list = nn.ModuleList()
-                    for i, blk in enumerate(self.model.blocks[self.injection_layer:]):
-                        self.domain_prompt_model_list.append(QueriesAttention(num_channels=hidden_size, num_clusters=num_clusters, cluster_dim=cluster_dim,
                                                         token_dim=token_dim, dropout=dropout,
                                                         divide=divide, divide_ratio=divide_ratio,
                                                         num_queries=num_queries))

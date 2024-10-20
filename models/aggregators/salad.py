@@ -67,8 +67,8 @@ class SALAD(nn.Module):
         self.token_dim = token_dim
         self.divide = divide
         self.divide_ratio = divide_ratio
-        assert self.divide == len(self.divide_ratio) - 1 # Last one for shared clusters
-        assert num_clusters % sum(self.divide_ratio) == 0
+        if self.divide > 1:
+            raise NotImplementedError()
         
         if dropout > 0:
             dropout = nn.Dropout(dropout)
@@ -115,7 +115,11 @@ class SALAD(nn.Module):
         Returns:
             f (torch.Tensor): The global descriptor [B, m*l + g]
         """
-        x, t = x # Extract features and token
+        if len(x) == 3:
+            x, t, domain_desc = x
+        else:
+            x, t = x # Extract features and token
+            domain_desc = None
 
         f = self.cluster_features(x).flatten(2)
         p = self.score(x).flatten(2)
@@ -143,11 +147,6 @@ class SALAD(nn.Module):
                 nn.functional.normalize((f * p).sum(dim=-1), p=2, dim=1).flatten(1)
             ], dim=-1)
 
+        if domain_desc is not None:
+            return nn.functional.normalize(f, p=2, dim=-1), domain_desc
         return nn.functional.normalize(f, p=2, dim=-1)
-
-    def generate_score_from_decoupled_pnet(self, x, domain_idx):
-        p_list = [self.score_list[i](x).flatten(2) for i in range(self.divide)]
-        for i in range(self.divide): # For each domain
-            p_list[i][domain_idx != i] = p_list[i][domain_idx != i].detach() # detach the other domains
-        p = torch.cat(p_list, dim=1)
-        return p

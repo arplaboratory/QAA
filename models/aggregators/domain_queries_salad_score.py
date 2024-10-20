@@ -61,8 +61,7 @@ class DomainQueriesSALADScore(nn.Module):
             self.queries_score_list = nn.ModuleList([
                 QuerySelfAttn(self.num_channels, divide_queries, nheads=self.num_channels // 64, self_attn=self_attn) if divide_queries != 0 else None for divide_queries in self.divide_query_list
             ])
-            self.queries_feature = QuerySelfAttn(self.num_channels, self.num_queries, nheads=self.num_channels // 64, self_attn=self_attn)
-            self.cluster_features = QueryCrossAttn(self.num_channels, self.cluster_dim, nheads=self.num_channels // 64)
+            self.queries_feature = QuerySelfAttn(self.cluster_dim, self.num_queries, nheads=self.cluster_dim // 32, self_attn=self_attn)
             self.score = QueryCrossAttn(self.num_channels, self.num_clusters, nheads=self.num_channels // 64)
         else:
             raise NotImplementedError()
@@ -89,7 +88,7 @@ class DomainQueriesSALADScore(nn.Module):
             x, t = x # Extract features and token
             domain_desc = None
 
-        q = self.queries_feature()
+        f = self.queries_feature().permute(0, 2, 1).repeat(x.shape[0], 1, 1)
         if self.divide > 1:
             # Use decoupled score network
             if domain_idx is None:
@@ -97,8 +96,7 @@ class DomainQueriesSALADScore(nn.Module):
                 p_list = [p for p in p_list if p is not None]
                 p = torch.cat(p_list, dim=2) # For each domain
             else:
-                p = self.generate_score_from_decoupled_fnet(x, self.queries_score_list, domain_idx, self.score)
-            f = self.cluster_features(x, q)[0]
+                p = self.generate_score_from_decoupled_fnet(x, self.queries_score_list, domain_idx, "score")
         else:
             raise NotImplementedError()
         if self.token_dim != 0:
@@ -127,8 +125,13 @@ class DomainQueriesSALADScore(nn.Module):
             return nn.functional.normalize(f, p=2, dim=-1), domain_desc
         return nn.functional.normalize(f, p=2, dim=-1)
     
-    def generate_score_from_decoupled_fnet(self, x, q, domain_idx, network):
-        f_list = [network(x, q[i]())[0] if self.divide_query_list[i] != 0 else None for i in range(len(self.divide_query_list))]
+    def generate_score_from_decoupled_fnet(self, x, q, domain_idx, type=None):
+        if type == "feature":
+            raise NotImplementedError()
+        elif type == "score":
+            f_list = [self.score(x, q[i]())[0] if self.divide_query_list[i] != 0 else None for i in range(len(self.divide_query_list))]
+        else:
+            raise NotImplementedError()
         f_list_new = []
         for i in range(len(self.divide_cluster_list)): # For each domain
             if f_list[i] is not None:

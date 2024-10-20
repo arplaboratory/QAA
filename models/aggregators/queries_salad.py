@@ -53,9 +53,8 @@ class QueriesSALAD(nn.Module):
             )
         # MLP for local features f_i
         # MLP for score matrix S
-        self.queries_cluster = QuerySelfAttn(self.num_channels, self.num_queries, nheads=self.num_channels // 64, self_attn=self_attn)
-        self.queries_feature = QuerySelfAttn(self.num_channels, self.num_queries, nheads=self.num_channels // 64, self_attn=self_attn)
-        self.cluster_features = QueryCrossAttn(self.num_channels, self.cluster_dim, nheads=self.num_channels // 64)
+        self.queries_score = QuerySelfAttn(self.num_channels, self.num_queries, nheads=self.num_channels // 64, self_attn=self_attn)
+        self.queries_feature = QuerySelfAttn(self.cluster_dim, self.num_queries, nheads=self.cluster_dim // 32, self_attn=self_attn)
         self.score = QueryCrossAttn(self.num_channels, self.num_clusters, nheads=self.num_channels // 64)
         if divide > 1:
             raise NotImplementedError()
@@ -82,13 +81,11 @@ class QueriesSALAD(nn.Module):
             x, t = x # Extract features and token
             domain_desc = None
 
-        q_c = self.queries_cluster()
-        q_f = self.queries_feature()
-        f, f_attn = self.cluster_features(x, q_f)
+        f = self.queries_feature().permute(0, 2, 1).repeat(x.shape[0], 1, 1)
+        q = self.queries_score()
+        p, p_attn = self.score(x, q)
         if self.divide > 1:
             raise NotImplementedError()
-        else:
-            p, p_attn = self.score(x, q_c)
         if self.token_dim != 0:
             t = self.token_features(t)
         assert p.shape[1] == self.num_clusters
