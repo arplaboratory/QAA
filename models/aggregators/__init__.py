@@ -4,7 +4,6 @@ from .gem import GeMPool
 from .mixvpr import MixVPR
 from .salad import SALAD
 from .queries_salad import QueriesSALAD
-from .domain_queries_salad_shared import DomainQueriesSALADShared
 from .domain_queries_salad_score import DomainQueriesSALADScore
 from .domain_queries_salad_feature import DomainQueriesSALADFeature
 from .domain_queries_salad_sf import DomainQueriesSALADSF
