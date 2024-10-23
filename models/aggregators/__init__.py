@@ -8,3 +8,4 @@ from .domain_queries_salad_shared import DomainQueriesSALADShared
 from .domain_queries_salad_score import DomainQueriesSALADScore
 from .domain_queries_salad_feature import DomainQueriesSALADFeature
 from .domain_queries_salad_sf import DomainQueriesSALADSF
+from .conditioned_queries_salad import ConditionedQueriesSALAD
