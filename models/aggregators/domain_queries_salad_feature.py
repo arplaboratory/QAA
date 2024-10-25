@@ -40,7 +40,7 @@ class DomainQueriesSALADFeature(nn.Module):
             assert num_clusters % sum(self.divide_ratio) == 0
             assert num_queries % sum(self.divide_ratio) == 0
             self.divide_query_list = [num_queries * self.divide_ratio[i] // sum(self.divide_ratio)  for i in range(len(divide_ratio))]
-            self.divide_cluster_list = [num_clusters  for i in range(len(divide_ratio))]
+            self.divide_query_idx_list = [sum(self.divide_query_list[:i+1]) for i in range(len(self.divide_query_list))]
         self.num_queries = num_queries
         
         if dropout > 0:
@@ -59,9 +59,7 @@ class DomainQueriesSALADFeature(nn.Module):
         # MLP for score matrix S
         if divide > 1:
             self.queries_score = QuerySelfAttn(self.num_channels, self.num_queries, nheads=self.num_channels // 64, self_attn=self_attn)
-            self.queries_feature_list = nn.ModuleList([
-                QuerySelfAttn(self.cluster_dim, divide_queries, nheads=self.cluster_dim // 32, self_attn=self_attn) if divide_queries != 0 else None for divide_queries in self.divide_query_list
-            ])
+            self.queries_feature_list = QuerySelfAttn(self.cluster_dim, self.num_queries, nheads=self.cluster_dim // 32, self_attn=self_attn, detach=True)
             self.score = QueryCrossAttn(self.num_channels, self.num_clusters, nheads=self.num_channels // 64)
         else:
             raise NotImplementedError()
@@ -88,14 +86,12 @@ class DomainQueriesSALADFeature(nn.Module):
             x, t = x # Extract features and token
             domain_desc = None
 
-        q = self.queries_score()
+        q = self.queries_score().repeat(x.shape[0], 1, 1)
         p, p_attn = self.score(x, q)
         if self.divide > 1:
             # Use decoupled score network
             if domain_idx is None:
-                f_list = [self.queries_feature_list[i]().permute(0, 2, 1).repeat(x.shape[0], 1, 1) if self.divide_query_list[i] != 0 else None for i in range(len(self.divide_query_list))]
-                f_list = [f for f in f_list if f is not None]
-                f = torch.cat(f_list, dim=2) # For each domain
+                f = self.queries_feature_list()[0].permute(0, 2, 1).repeat(x.shape[0], 1, 1)
             else:
                 f = self.generate_score_from_decoupled_fnet(x, self.queries_feature_list, domain_idx, "feature")
         else:
@@ -128,22 +124,30 @@ class DomainQueriesSALADFeature(nn.Module):
     
     def generate_score_from_decoupled_fnet(self, x, q, domain_idx, type=None):
         if type == "feature":
-            f_list = [q[i]().permute(0, 2, 1).repeat(x.shape[0], 1, 1) if self.divide_query_list[i] != 0 else None for i in range(len(self.divide_query_list))]
+            q_f, q_f_detach = q()
+            q_f = q_f.permute(0, 2, 1)
+            q_f_detach = q_f_detach.permute(0, 2, 1)
+            q_f_new = []
+            for i in range(len(self.divide_query_list)): # For each domain
+                if self.divide_query_list[i] > 0:
+                    q_f_list = []
+                    for j in torch.unique(domain_idx):
+                        bs = (domain_idx == j).sum()
+                        if j == 0:
+                            start = 0
+                            end = self.divide_query_idx_list[j]
+                        else:
+                            start = self.divide_query_idx_list[j-1]
+                            end = self.divide_query_idx_list[j]
+                        if i == j:
+                            domain_q_f = q_f[:, :, start : end].repeat(bs, 1, 1)
+                        else:
+                            domain_q_f = q_f_detach[:, :, start : end].repeat(bs, 1, 1)
+                        q_f_list.append(domain_q_f)
+                    q_f_new.append(torch.cat(q_f_list, dim=0))
+            q_f_new = torch.cat(q_f_new, dim=2)
+            return q_f_new
         elif type == "score":
             raise NotImplementedError()
         else:
             raise NotImplementedError()
-        f_list_new = []
-        for i in range(len(self.divide_cluster_list)): # For each domain
-            if f_list[i] is not None:
-                f_list_single = []
-                for j in torch.unique(domain_idx):
-                    domain_f = f_list[i][domain_idx == j]
-                    if len(domain_f) == 0:
-                        continue
-                    if j != i:
-                        domain_f = domain_f.detach()
-                    f_list_single.append(domain_f)
-                f_list_new.append(torch.cat(f_list_single, dim=0))
-        f = torch.cat(f_list_new, dim=2)
-        return f

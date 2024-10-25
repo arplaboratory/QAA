@@ -2,11 +2,12 @@ import torch
 import torch.nn as nn
 
 class QuerySelfAttn(torch.nn.Module):
-    def __init__(self, in_dim, num_queries, nheads=8, self_attn=True):
+    def __init__(self, in_dim, num_queries, nheads=8, self_attn=True, detach=False):
         super(QuerySelfAttn, self).__init__()
         
         self.queries = torch.nn.Parameter(torch.randn(1, num_queries, in_dim))
         self.self_attn = self_attn
+        self.detach = detach
         
         if self.self_attn:
             # the following two lines are used during training only, you can cache their output in eval.
@@ -26,8 +27,10 @@ class QuerySelfAttn(torch.nn.Module):
             q = self.norm_q(q)
         #######
         
+        if self.detach:
+            return q, q.detach()
         return q
-        
+
 class QueryCrossAttn(torch.nn.Module):
     def __init__(self, in_dim, output_dim, nheads=8):
         super(QueryCrossAttn, self).__init__()
@@ -38,9 +41,6 @@ class QueryCrossAttn(torch.nn.Module):
         self.conv = torch.nn.Conv1d(in_dim, output_dim, 1)
 
     def forward(self, x, q):
-        B = x.size(0)
-
-        q = q.repeat(B, 1, 1)
         x_flatten = x.flatten(2).permute(0, 2, 1)
         
         out, attn = self.cross_attn(q, x_flatten, x_flatten)

@@ -82,8 +82,8 @@ class ConditionedQueriesSALAD(nn.Module):
             x, t = x # Extract features and token
             domain_desc = None
 
-        f = self.queries_feature()
-        q = self.queries_score()
+        f = self.queries_feature().repeat(x.shape[0], 1, 1)
+        q = self.queries_score().repeat(x.shape[0], 1, 1)
         f, f_attn = self.cluster_feature(x, f)
         p, p_attn = self.score(x, q)
         if self.divide > 1:
