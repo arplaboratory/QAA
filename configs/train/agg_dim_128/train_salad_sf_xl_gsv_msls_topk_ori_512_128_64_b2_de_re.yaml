@@ -13,16 +13,16 @@ model:
     divide_ratio: [1, 1, 1, 0]
     divide: 1
     multi_scale: "1"
-  agg_arch: DomainQueriesSALADScore
+  agg_arch: QueriesSALAD
   agg_config:
     num_channels: 768
-    num_clusters: 63
-    cluster_dim: 128
+    num_clusters: 128
+    cluster_dim: 64
     token_dim: 256
     dropout: 0.3
     divide_ratio: [1, 1, 1, 0]
-    divide: 3
-    num_queries: 63
+    divide: 1
+    num_queries: 512
 
 datasets:
   train_datasets: 
@@ -60,7 +60,7 @@ training:
   test_image_size: [322, 322]
   optimizer:
     name: AdamW
-    lr: 6e-5
+    lr: 1e-5
     weight_decay: 1e-3
     momentum: 0.9
   scheduler:
@@ -68,7 +68,7 @@ training:
     args:
       gamma: 0.1
       milestones:
-        - 32
+        - 64
       total_iters: 4000
   loss:
     name: 'MultiSimilarityLoss'

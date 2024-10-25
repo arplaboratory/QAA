@@ -13,7 +13,7 @@ model:
     divide_ratio: [1, 1, 1, 0]
     divide: 1
     multi_scale: "1"
-  agg_arch: SharedQueriesSALAD
+  agg_arch: QueriesSALAD
   agg_config:
     num_channels: 768
     num_clusters: 64
@@ -22,7 +22,7 @@ model:
     dropout: 0.3
     divide_ratio: [1, 1, 1, 0]
     divide: 1
-    num_queries: 64
+    num_queries: 128
 
 datasets:
   train_datasets: 
@@ -60,7 +60,7 @@ training:
   test_image_size: [322, 322]
   optimizer:
     name: AdamW
-    lr: 6e-5
+    lr: 1e-5
     weight_decay: 1e-3
     momentum: 0.9
   scheduler:
@@ -68,7 +68,7 @@ training:
     args:
       gamma: 0.1
       milestones:
-        - 32
+        - 64
       total_iters: 4000
   loss:
     name: 'MultiSimilarityLoss'
@@ -76,9 +76,9 @@ training:
     name: 'MultiSimilarityMiner'
     margin: 0.1
   faiss_gpu: False
-  recompute_clusters: False
+  recompute_clusters: True
   prefetch_factor: 1
-  recompute_desc: False
+  recompute_desc: True
   recompute_interval: 4
   cross_loss: False
   cross_loss_weight: 1.0

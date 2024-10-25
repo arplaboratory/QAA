@@ -13,7 +13,7 @@ model:
     divide_ratio: [1, 1, 1, 0]
     divide: 1
     multi_scale: "1"
-  agg_arch: SALAD
+  agg_arch: QueriesSALAD
   agg_config:
     num_channels: 768
     num_clusters: 64
@@ -22,10 +22,12 @@ model:
     dropout: 0.3
     divide_ratio: [1, 1, 1, 0]
     divide: 1
-    num_queries: 64
+    num_queries: 128
 
 datasets:
   train_datasets: 
+    - SF_XL
+    - GSV
     - mapillary_sls
   val_datasets: 
     - pitts30k
