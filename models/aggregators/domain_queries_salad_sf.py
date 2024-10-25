@@ -58,8 +58,8 @@ class DomainQueriesSALADSF(nn.Module):
         # MLP for local features f_i
         # MLP for score matrix S
         if divide > 1:
-            self.queries_score_list = QuerySelfAttn(self.num_channels, self.num_queries, nheads=self.num_channels // 64, self_attn=self_attn, detach=True)
-            self.queries_feature_list = QuerySelfAttn(self.cluster_dim, self.num_queries, nheads=self.cluster_dim // 32, self_attn=self_attn, detach=True)
+            self.queries_score_list = QuerySelfAttn(self.num_channels, self.num_queries, nheads=self.num_channels // 64, self_attn=self_attn)
+            self.queries_feature_list = QuerySelfAttn(self.cluster_dim, self.num_queries, nheads=self.cluster_dim // 32, self_attn=self_attn)
             self.score = QueryCrossAttn(self.num_channels, self.num_clusters, nheads=self.num_channels // 64)
         else:
             raise NotImplementedError()
@@ -124,7 +124,7 @@ class DomainQueriesSALADSF(nn.Module):
     
     def generate_score_from_decoupled_fnet(self, x, q, domain_idx, type=None):
         if type == "feature":
-            q_f, q_f_detach = q()
+            q_f, q_f_detach = q(detach=True)
             q_f = q_f.permute(0, 2, 1)
             q_f_detach = q_f_detach.permute(0, 2, 1)
             q_f_new = []
@@ -148,7 +148,7 @@ class DomainQueriesSALADSF(nn.Module):
             q_f_new = torch.cat(q_f_new, dim=2)
             return q_f_new
         elif type == "score":
-            q_f, q_f_detach = q()
+            q_f, q_f_detach = q(detach=True)
             q_f_new = []
             for i in range(len(self.divide_query_list)): # For each domain
                 if self.divide_query_list[i] > 0:

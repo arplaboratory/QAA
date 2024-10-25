@@ -58,7 +58,7 @@ class DomainQueriesSALADScore(nn.Module):
         # MLP for local features f_i
         # MLP for score matrix S
         if divide > 1:
-            self.queries_score_list = QuerySelfAttn(self.num_channels, self.num_queries, nheads=self.num_channels // 64, self_attn=self_attn, detach=True)
+            self.queries_score_list = QuerySelfAttn(self.num_channels, self.num_queries, nheads=self.num_channels // 64, self_attn=self_attn)
             self.queries_feature = QuerySelfAttn(self.cluster_dim, self.num_queries, nheads=self.cluster_dim // 32, self_attn=self_attn)
             self.score = QueryCrossAttn(self.num_channels, self.num_clusters, nheads=self.num_channels // 64)
         else:
@@ -125,7 +125,7 @@ class DomainQueriesSALADScore(nn.Module):
         if type == "feature":
             raise NotImplementedError()
         elif type == "score":
-            q_f, q_f_detach = q()
+            q_f, q_f_detach = q(detach=True)
             q_f_new = []
             for i in range(len(self.divide_query_list)): # For each domain
                 if self.divide_query_list[i] > 0:

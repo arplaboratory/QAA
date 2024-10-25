@@ -59,7 +59,7 @@ class DomainQueriesSALADFeature(nn.Module):
         # MLP for score matrix S
         if divide > 1:
             self.queries_score = QuerySelfAttn(self.num_channels, self.num_queries, nheads=self.num_channels // 64, self_attn=self_attn)
-            self.queries_feature_list = QuerySelfAttn(self.cluster_dim, self.num_queries, nheads=self.cluster_dim // 32, self_attn=self_attn, detach=True)
+            self.queries_feature_list = QuerySelfAttn(self.cluster_dim, self.num_queries, nheads=self.cluster_dim // 32, self_attn=self_attn)
             self.score = QueryCrossAttn(self.num_channels, self.num_clusters, nheads=self.num_channels // 64)
         else:
             raise NotImplementedError()
@@ -124,7 +124,7 @@ class DomainQueriesSALADFeature(nn.Module):
     
     def generate_score_from_decoupled_fnet(self, x, q, domain_idx, type=None):
         if type == "feature":
-            q_f, q_f_detach = q()
+            q_f, q_f_detach = q(detach=True)
             q_f = q_f.permute(0, 2, 1)
             q_f_detach = q_f_detach.permute(0, 2, 1)
             q_f_new = []
