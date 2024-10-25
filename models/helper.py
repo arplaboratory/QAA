@@ -60,7 +60,34 @@ def get_aggregator(agg_arch='ConvAP', agg_config={}):
         assert 'mix_depth' in agg_config
         return aggregators.MixVPR(**agg_config)
     
-    elif 'domainqueriessaladscore' in agg_arch.lower():
+    elif 'domainqueriessaladscoreback' == agg_arch.lower():
+        assert 'num_channels' in agg_config
+        assert 'num_clusters' in agg_config
+        assert 'cluster_dim' in agg_config
+        assert 'token_dim' in agg_config
+        assert 'num_queries' in agg_config
+        assert agg_config['num_queries'] >= agg_config['num_clusters'], 'Number of queries must be greater than or equal to number of clusters'
+        return aggregators.DomainQueriesSALADScoreBack(**agg_config)
+    
+    elif 'domainqueriessaladfeatureback' == agg_arch.lower():
+        assert 'num_channels' in agg_config
+        assert 'num_clusters' in agg_config
+        assert 'cluster_dim' in agg_config
+        assert 'token_dim' in agg_config
+        assert 'num_queries' in agg_config
+        assert agg_config['num_queries'] >= agg_config['num_clusters'], 'Number of queries must be greater than or equal to number of clusters'
+        return aggregators.DomainQueriesSALADFeatureBack(**agg_config)
+    
+    elif 'domainqueriessaladsfback' == agg_arch.lower():
+        assert 'num_channels' in agg_config
+        assert 'num_clusters' in agg_config
+        assert 'cluster_dim' in agg_config
+        assert 'token_dim' in agg_config
+        assert 'num_queries' in agg_config
+        assert agg_config['num_queries'] >= agg_config['num_clusters'], 'Number of queries must be greater than or equal to number of clusters'
+        return aggregators.DomainQueriesSALADSFBack(**agg_config)
+    
+    elif 'domainqueriessaladscore' == agg_arch.lower():
         assert 'num_channels' in agg_config
         assert 'num_clusters' in agg_config
         assert 'cluster_dim' in agg_config
@@ -69,7 +96,7 @@ def get_aggregator(agg_arch='ConvAP', agg_config={}):
         assert agg_config['num_queries'] >= agg_config['num_clusters'], 'Number of queries must be greater than or equal to number of clusters'
         return aggregators.DomainQueriesSALADScore(**agg_config)
     
-    elif 'domainqueriessaladfeature' in agg_arch.lower():
+    elif 'domainqueriessaladfeature' == agg_arch.lower():
         assert 'num_channels' in agg_config
         assert 'num_clusters' in agg_config
         assert 'cluster_dim' in agg_config
@@ -78,7 +105,7 @@ def get_aggregator(agg_arch='ConvAP', agg_config={}):
         assert agg_config['num_queries'] >= agg_config['num_clusters'], 'Number of queries must be greater than or equal to number of clusters'
         return aggregators.DomainQueriesSALADFeature(**agg_config)
     
-    elif 'domainqueriessaladsf' in agg_arch.lower():
+    elif 'domainqueriessaladsf' == agg_arch.lower():
         assert 'num_channels' in agg_config
         assert 'num_clusters' in agg_config
         assert 'cluster_dim' in agg_config
@@ -87,16 +114,7 @@ def get_aggregator(agg_arch='ConvAP', agg_config={}):
         assert agg_config['num_queries'] >= agg_config['num_clusters'], 'Number of queries must be greater than or equal to number of clusters'
         return aggregators.DomainQueriesSALADSF(**agg_config)
 
-    elif 'queriessalad' in agg_arch.lower():
-        assert 'num_channels' in agg_config
-        assert 'num_clusters' in agg_config
-        assert 'cluster_dim' in agg_config
-        assert 'token_dim' in agg_config
-        assert 'num_queries' in agg_config
-        assert agg_config['num_queries'] >= agg_config['num_clusters'], 'Number of queries must be greater than or equal to number of clusters'
-        return aggregators.QueriesSALAD(**agg_config)
-    
-    elif 'conditionedqueriessalad' in agg_arch.lower():
+    elif 'conditionedqueriessalad' == agg_arch.lower():
         assert 'num_channels' in agg_config
         assert 'num_clusters' in agg_config
         assert 'cluster_dim' in agg_config
@@ -105,7 +123,16 @@ def get_aggregator(agg_arch='ConvAP', agg_config={}):
         assert agg_config['num_queries'] >= agg_config['num_clusters'], 'Number of queries must be greater than or equal to number of clusters'
         return aggregators.ConditionedQueriesSALAD(**agg_config)
 
-    elif 'salad' in agg_arch.lower():
+    elif 'queriessalad' == agg_arch.lower():
+        assert 'num_channels' in agg_config
+        assert 'num_clusters' in agg_config
+        assert 'cluster_dim' in agg_config
+        assert 'token_dim' in agg_config
+        assert 'num_queries' in agg_config
+        assert agg_config['num_queries'] >= agg_config['num_clusters'], 'Number of queries must be greater than or equal to number of clusters'
+        return aggregators.QueriesSALAD(**agg_config)
+
+    elif 'salad' == agg_arch.lower():
         assert 'num_channels' in agg_config
         assert 'num_clusters' in agg_config
         assert 'cluster_dim' in agg_config
