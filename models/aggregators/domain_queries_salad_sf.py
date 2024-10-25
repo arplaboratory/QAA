@@ -131,14 +131,14 @@ class DomainQueriesSALADSF(nn.Module):
             for i in range(len(self.divide_query_list)): # For each domain
                 if self.divide_query_list[i] > 0:
                     q_f_list = []
+                    if i == 0:
+                        start = 0
+                        end = self.divide_query_idx_list[i]
+                    else:
+                        start = self.divide_query_idx_list[i-1]
+                        end = self.divide_query_idx_list[i]
                     for j in torch.unique(domain_idx):
                         bs = (domain_idx == j).sum()
-                        if j == 0:
-                            start = 0
-                            end = self.divide_query_idx_list[j]
-                        else:
-                            start = self.divide_query_idx_list[j-1]
-                            end = self.divide_query_idx_list[j]
                         if i == j:
                             domain_q_f = q_f[:, :, start : end].repeat(bs, 1, 1)
                         else:
@@ -153,14 +153,14 @@ class DomainQueriesSALADSF(nn.Module):
             for i in range(len(self.divide_query_list)): # For each domain
                 if self.divide_query_list[i] > 0:
                     q_f_list = []
+                    if i == 0:
+                        start = 0
+                        end = self.divide_query_idx_list[i]
+                    else:
+                        start = self.divide_query_idx_list[i-1]
+                        end = self.divide_query_idx_list[i]
                     for j in torch.unique(domain_idx):
                         bs = (domain_idx == j).sum()
-                        if j == 0:
-                            start = 0
-                            end = self.divide_query_idx_list[j]
-                        else:
-                            start = self.divide_query_idx_list[j-1]
-                            end = self.divide_query_idx_list[j]
                         if i == j:
                             domain_q_f = q_f[:, start : end].repeat(bs, 1, 1)
                         else:
