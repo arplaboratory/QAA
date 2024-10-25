@@ -58,12 +58,8 @@ class DomainQueriesSALADSF(nn.Module):
         # MLP for local features f_i
         # MLP for score matrix S
         if divide > 1:
-            self.queries_score_list = nn.ModuleList([
-                QuerySelfAttn(self.num_channels, divide_queries, nheads=self.num_channels // 64, self_attn=self_attn) if divide_queries != 0 else None for divide_queries in self.divide_query_list
-            ])
-            self.queries_feature_list = nn.ModuleList([
-                QuerySelfAttn(self.cluster_dim, divide_queries, nheads=self.cluster_dim // 32, self_attn=self_attn) if divide_queries != 0 else None for divide_queries in self.divide_query_list
-            ])
+            self.queries_score_list = QuerySelfAttn(self.num_channels, self.num_queries, nheads=self.num_channels // 64, self_attn=self_attn, detach=True)
+            self.queries_feature_list = QuerySelfAttn(self.cluster_dim, self.num_queries, nheads=self.cluster_dim // 32, self_attn=self_attn, detach=True)
             self.score = QueryCrossAttn(self.num_channels, self.num_clusters, nheads=self.num_channels // 64)
         else:
             raise NotImplementedError()
@@ -93,7 +89,7 @@ class DomainQueriesSALADSF(nn.Module):
         if self.divide > 1:
             # Use decoupled score network
             if domain_idx is None:
-                f = self.queries_feature_list().permute(0, 2, 1).repeat(x.shape[0], 1, 1)
+                f = self.queries_feature_list()[0].permute(0, 2, 1).repeat(x.shape[0], 1, 1)
                 p = self.score(x, self.queries_score_list()[0].repeat(x.shape[0], 1, 1))[0]
             else:
                 f = self.generate_score_from_decoupled_fnet(x, self.queries_feature_list, domain_idx, "feature")
