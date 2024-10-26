@@ -91,7 +91,7 @@ class DomainQueriesSALADFeature(nn.Module):
         if self.divide > 1:
             # Use decoupled score network
             if domain_idx is None:
-                f = self.queries_feature_list()[0].permute(0, 2, 1).repeat(x.shape[0], 1, 1)
+                f = self.queries_feature_list().permute(0, 2, 1).repeat(x.shape[0], 1, 1)
             else:
                 f = self.generate_score_from_decoupled_fnet(x, self.queries_feature_list, domain_idx, "feature")
         else:
