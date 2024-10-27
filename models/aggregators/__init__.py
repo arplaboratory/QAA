@@ -8,6 +8,7 @@ from .domain_queries_salad_score import DomainQueriesSALADScore
 from .domain_queries_salad_score_back import DomainQueriesSALADScoreBack
 from .domain_queries_salad_feature import DomainQueriesSALADFeature
 from .domain_queries_salad_feature_back import DomainQueriesSALADFeatureBack
+from .domain_queries_salad_feature_back_dc import DomainQueriesSALADFeatureBackDC
 from .domain_queries_salad_sf import DomainQueriesSALADSF
 from .domain_queries_salad_sf_back import DomainQueriesSALADSFBack
 from .conditioned_queries_salad import ConditionedQueriesSALAD

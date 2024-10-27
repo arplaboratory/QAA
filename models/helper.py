@@ -60,6 +60,15 @@ def get_aggregator(agg_arch='ConvAP', agg_config={}):
         assert 'mix_depth' in agg_config
         return aggregators.MixVPR(**agg_config)
     
+    elif 'domainqueriessaladfeaturebackdc' == agg_arch.lower():
+        assert 'num_channels' in agg_config
+        assert 'num_clusters' in agg_config
+        assert 'cluster_dim' in agg_config
+        assert 'token_dim' in agg_config
+        assert 'num_queries' in agg_config
+        assert agg_config['num_queries'] >= agg_config['num_clusters'], 'Number of queries must be greater than or equal to number of clusters'
+        return aggregators.DomainQueriesSALADFeatureBackDC(**agg_config)
+    
     elif 'domainqueriessaladscoreback' == agg_arch.lower():
         assert 'num_channels' in agg_config
         assert 'num_clusters' in agg_config
