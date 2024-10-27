@@ -4,7 +4,7 @@ from .attention import QuerySelfAttn, QueryCrossAttn
 from .salad import log_optimal_transport
 
 
-class DomainQueriesSALADSFBack(nn.Module):
+class DomainQueriesSALADScoreBackDC(nn.Module):
     """
     This class represents the Sinkhorn Algorithm for Locally Aggregated Descriptors (SALAD) model.
 
@@ -58,8 +58,8 @@ class DomainQueriesSALADSFBack(nn.Module):
         # MLP for local features f_i
         # MLP for score matrix S
         if divide > 1:
-            self.queries_score_list = QuerySelfAttn(self.num_channels, self.num_queries, nheads=self.num_channels // 64, self_attn=self_attn)
-            self.queries_feature_list = QuerySelfAttn(self.cluster_dim, self.num_queries, nheads=self.cluster_dim // 32, self_attn=self_attn)
+            self.queries_score_list = nn.ModuleList([QuerySelfAttn(self.num_channels, self.divide_query_list[i], nheads=self.num_channels // 64, self_attn=self_attn) if self.divide_query_list[i] > 0 else None for i in range(len(self.divide_query_list))])
+            self.queries_feature = QuerySelfAttn(self.cluster_dim, self.num_queries, nheads=self.cluster_dim // 32, self_attn=self_attn)
             self.score = QueryCrossAttn(self.num_channels, self.num_clusters, nheads=self.num_channels // 64)
         else:
             raise NotImplementedError()
@@ -86,13 +86,13 @@ class DomainQueriesSALADSFBack(nn.Module):
             x, t = x # Extract features and token
             domain_desc = None
 
+        f = self.queries_feature().permute(0, 2, 1).repeat(x.shape[0], 1, 1)
         if self.divide > 1:
             # Use decoupled score network
             if domain_idx is None:
-                f = self.queries_feature_list().permute(0, 2, 1).repeat(x.shape[0], 1, 1)
-                p = self.score(x, self.queries_score_list()[0].repeat(x.shape[0], 1, 1))[0]
+                p = [self.score(x, self.queries_score_list[i]().repeat(x.shape[0], 1, 1))[0] if self.divide_query_list[i] > 0 else None for i in range(len(self.divide_query_list))]
+                p = torch.cat([p[i] for i in range(len(p)) if p[i] is not None], dim=2)
             else:
-                f = self.generate_score_from_decoupled_fnet(x, self.queries_feature_list, domain_idx, "feature")
                 p = self.generate_score_from_decoupled_fnet(x, self.queries_score_list, domain_idx, "score")
         else:
             raise NotImplementedError()
@@ -124,49 +124,20 @@ class DomainQueriesSALADSFBack(nn.Module):
     
     def generate_score_from_decoupled_fnet(self, x, q, domain_idx, type=None):
         if type == "feature":
-            q_f = q()
-            q_f_detach = q_f.detach()
-            q_f = q_f.permute(0, 2, 1)
-            q_f_detach = q_f_detach.permute(0, 2, 1)
-            q_f_new = []
-            for i in range(len(self.divide_query_list)): # For each domain
-                if self.divide_query_list[i] > 0:
-                    q_f_list = []
-                    if i == 0:
-                        start = 0
-                        end = self.divide_query_idx_list[i]
-                    else:
-                        start = self.divide_query_idx_list[i-1]
-                        end = self.divide_query_idx_list[i]
-                    for j in torch.unique(domain_idx):
-                        bs = (domain_idx == j).sum()
-                        if i == j:
-                            domain_q_f = q_f[:, :, start : end].repeat(bs, 1, 1)
-                        else:
-                            domain_q_f = q_f_detach[:, :, start : end].repeat(bs, 1, 1)
-                        q_f_list.append(domain_q_f)
-                    q_f_new.append(torch.cat(q_f_list, dim=0))
-            q_f_new = torch.cat(q_f_new, dim=2)
-            return q_f_new
+            raise NotImplementedError()
         elif type == "score":
-            q_f = q()
-            q_f_detach = q_f.detach()
             q_f_new = []
             for i in range(len(self.divide_query_list)): # For each domain
                 if self.divide_query_list[i] > 0:
+                    q_f = q[i]()
+                    q_f_detach = q_f.detach()
                     q_f_list = []
-                    if i == 0:
-                        start = 0
-                        end = self.divide_query_idx_list[i]
-                    else:
-                        start = self.divide_query_idx_list[i-1]
-                        end = self.divide_query_idx_list[i]
                     for j in torch.unique(domain_idx):
                         bs = (domain_idx == j).sum()
                         if i == j:
-                            domain_q_f = q_f[:, start : end].repeat(bs, 1, 1)
+                            domain_q_f = q_f.repeat(bs, 1, 1)
                         else:
-                            domain_q_f = q_f_detach[:, start : end].repeat(bs, 1, 1)
+                            domain_q_f = q_f_detach.repeat(bs, 1, 1)
                         q_f_list.append(domain_q_f)
                     q_f_new.append(torch.cat(q_f_list, dim=0))
             q_f_new = torch.cat(q_f_new, dim=1)

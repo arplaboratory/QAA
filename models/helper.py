@@ -69,32 +69,23 @@ def get_aggregator(agg_arch='ConvAP', agg_config={}):
         assert agg_config['num_queries'] >= agg_config['num_clusters'], 'Number of queries must be greater than or equal to number of clusters'
         return aggregators.DomainQueriesSALADFeatureBackDC(**agg_config)
     
-    elif 'domainqueriessaladscoreback' == agg_arch.lower():
+    elif 'domainqueriessaladscorebackdc' == agg_arch.lower():
         assert 'num_channels' in agg_config
         assert 'num_clusters' in agg_config
         assert 'cluster_dim' in agg_config
         assert 'token_dim' in agg_config
         assert 'num_queries' in agg_config
         assert agg_config['num_queries'] >= agg_config['num_clusters'], 'Number of queries must be greater than or equal to number of clusters'
-        return aggregators.DomainQueriesSALADScoreBack(**agg_config)
+        return aggregators.DomainQueriesSALADScoreBackDC(**agg_config)
     
-    elif 'domainqueriessaladfeatureback' == agg_arch.lower():
+    elif 'domainqueriessaladsfbackdc' == agg_arch.lower():
         assert 'num_channels' in agg_config
         assert 'num_clusters' in agg_config
         assert 'cluster_dim' in agg_config
         assert 'token_dim' in agg_config
         assert 'num_queries' in agg_config
         assert agg_config['num_queries'] >= agg_config['num_clusters'], 'Number of queries must be greater than or equal to number of clusters'
-        return aggregators.DomainQueriesSALADFeatureBack(**agg_config)
-    
-    elif 'domainqueriessaladsfback' == agg_arch.lower():
-        assert 'num_channels' in agg_config
-        assert 'num_clusters' in agg_config
-        assert 'cluster_dim' in agg_config
-        assert 'token_dim' in agg_config
-        assert 'num_queries' in agg_config
-        assert agg_config['num_queries'] >= agg_config['num_clusters'], 'Number of queries must be greater than or equal to number of clusters'
-        return aggregators.DomainQueriesSALADSFBack(**agg_config)
+        return aggregators.DomainQueriesSALADSFBackDC(**agg_config)
     
     elif 'domainqueriessaladscore' == agg_arch.lower():
         assert 'num_channels' in agg_config
