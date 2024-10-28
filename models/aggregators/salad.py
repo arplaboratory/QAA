@@ -58,6 +58,7 @@ class SALAD(nn.Module):
             divide_ratio=[1,1,1,0],
             divide=1,
             dust_bin=True,
+            freeze="none",
         ) -> None:
         super().__init__()
 
@@ -65,6 +66,7 @@ class SALAD(nn.Module):
         self.num_clusters = num_clusters
         self.cluster_dim = cluster_dim
         self.token_dim = token_dim
+        self.freeze = freeze
         self.divide = divide
         self.divide_ratio = divide_ratio
         if self.divide > 1:

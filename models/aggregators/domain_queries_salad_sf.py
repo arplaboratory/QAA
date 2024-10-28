@@ -26,6 +26,7 @@ class DomainQueriesSALADSF(nn.Module):
             num_queries=32,
             self_attn=True,
             dust_bin=True,
+            freeze="none",
         ) -> None:
         super().__init__()
 
@@ -33,6 +34,7 @@ class DomainQueriesSALADSF(nn.Module):
         self.num_clusters = num_clusters
         self.cluster_dim = cluster_dim
         self.token_dim = token_dim
+        self.freeze = freeze
         self.divide = divide
         self.divide_ratio = divide_ratio
         if self.divide > 1:

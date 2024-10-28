@@ -102,8 +102,20 @@ class VPRModel(pl.LightningModule):
     
     # configure the optimizer 
     def configure_optimizers(self):
-        params = [{'params': self.aggregator.parameters()}]
-        print(f"Add params: aggregator")
+        if self.aggregator.freeze == "none":
+            params = [{'params': self.aggregator.parameters()}]
+            print(f"Add params: aggregator")
+        else:
+            params = [{'params': self.aggregator.token_features.parameters()}]
+            print(f"Add params: aggregator - token_features")
+            params = params + [{'params': self.aggregator.score.parameters()}]
+            print(f"Add params: aggregator - score")
+            if self.aggregator.freeze == "feature":
+                params = params + [{'params': self.aggregator.queries_score.parameters()}]
+                print(f"Add params: aggregator - queries_score")
+            if self.aggregator.freeze == "score":
+                params = params + [{'params': self.aggregator.queries_feature.parameters()}]
+                print(f"Add params: aggregator - queries_feature")
         if hasattr(self.backbone, "domain_prompt_model"):
             params.append({'params': self.backbone.domain_prompt_model.parameters()})
             print(f"Add params: domain_prompt_model")
