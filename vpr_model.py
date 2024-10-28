@@ -113,9 +113,13 @@ class VPRModel(pl.LightningModule):
             if self.aggregator.freeze == "feature":
                 params = params + [{'params': self.aggregator.queries_score.parameters()}]
                 print(f"Add params: aggregator - queries_score")
-            if self.aggregator.freeze == "score":
+            elif self.aggregator.freeze == "score":
                 params = params + [{'params': self.aggregator.queries_feature.parameters()}]
                 print(f"Add params: aggregator - queries_feature")
+            elif self.aggregator.freeze == "both":
+                pass
+            else:
+                raise NotImplementedError()
         if hasattr(self.backbone, "domain_prompt_model"):
             params.append({'params': self.backbone.domain_prompt_model.parameters()})
             print(f"Add params: domain_prompt_model")
@@ -131,9 +135,12 @@ class VPRModel(pl.LightningModule):
         if hasattr(self.backbone, "shared_prompt_mlp"):
             params.append({'params': self.backbone.shared_prompt_mlp.parameters()})
             print(f"Add params: shared_prompt_mlp")
-        for i, blk in enumerate(self.backbone.model.blocks[-self.backbone_config['num_trainable_blocks']:]):
-            params.append({'params': blk.parameters()})
-            print (f"Add params: Trainable block {len(self.backbone.model.blocks) - self.backbone_config['num_trainable_blocks'] + i}")
+        if self.backbone_config['num_trainable_blocks'] > 0:
+            for i, blk in enumerate(self.backbone.model.blocks[-self.backbone_config['num_trainable_blocks']:]):
+                params.append({'params': blk.parameters()})
+                print (f"Add params: Trainable block {len(self.backbone.model.blocks) - self.backbone_config['num_trainable_blocks'] + i}")
+        else:
+            print("All blocks are frozen")
         if self.optimizer.lower() == 'sgd':
             optimizer = torch.optim.SGD(
                 params, 
