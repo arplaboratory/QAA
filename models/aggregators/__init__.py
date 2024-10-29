@@ -4,10 +4,4 @@ from .gem import GeMPool
 from .mixvpr import MixVPR
 from .salad import SALAD
 from .queries_salad import QueriesSALAD
-from .domain_queries_salad_score import DomainQueriesSALADScore
-from .domain_queries_salad_score_back_dc import DomainQueriesSALADScoreBackDC
-from .domain_queries_salad_feature import DomainQueriesSALADFeature
-from .domain_queries_salad_feature_back_dc import DomainQueriesSALADFeatureBackDC
-from .domain_queries_salad_sf import DomainQueriesSALADSF
-from .domain_queries_salad_sf_back_dc import DomainQueriesSALADSFBackDC
 from .conditioned_queries_salad import ConditionedQueriesSALAD
