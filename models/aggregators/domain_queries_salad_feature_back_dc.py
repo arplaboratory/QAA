@@ -3,7 +3,6 @@ import torch.nn as nn
 from .attention import QuerySelfAttn, QueryCrossAttn
 from .salad import log_optimal_transport
 
-
 class DomainQueriesSALADFeatureBackDC(nn.Module):
     """
     This class represents the Sinkhorn Algorithm for Locally Aggregated Descriptors (SALAD) model.
