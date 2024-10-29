@@ -99,6 +99,7 @@ class DINOv2(nn.Module):
             token_dim=256,
             self_attn=True,
             dust_bin=True,
+            freeze="none",
             dropout=0.0,
             divide=1,
             divide_ratio=[1,1,1,0],

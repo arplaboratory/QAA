@@ -10,19 +10,21 @@ model:
     cluster_dim: 16
     token_dim: 256
     dropout: 0.3
+    freeze: "none"
     divide_ratio: [1, 1, 1, 0]
     divide: 1
     multi_scale: "1"
-  agg_arch: DomainQueriesSALADShared
+  agg_arch: DomainQueriesSALADFeature
   agg_config:
     num_channels: 768
-    num_clusters: 63
+    num_clusters: 64
     cluster_dim: 128
     token_dim: 256
     dropout: 0.3
-    divide_ratio: [1, 1, 1, 0]
+    freeze: "none"
+    divide_ratio: [0, 1, 1, 0]
     divide: 3
-    num_queries: 63
+    num_queries: 128
 
 datasets:
   train_datasets: 
@@ -60,7 +62,7 @@ training:
   test_image_size: [322, 322]
   optimizer:
     name: AdamW
-    lr: 6e-5
+    lr: 1e-5
     weight_decay: 1e-3
     momentum: 0.9
   scheduler:
@@ -68,7 +70,7 @@ training:
     args:
       gamma: 0.1
       milestones:
-        - 32
+        - 64
       total_iters: 4000
   loss:
     name: 'MultiSimilarityLoss'

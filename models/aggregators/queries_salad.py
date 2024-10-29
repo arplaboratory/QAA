@@ -26,6 +26,7 @@ class QueriesSALAD(nn.Module):
             num_queries=32,
             self_attn=True,
             dust_bin=True,
+            freeze="none",
         ) -> None:
         super().__init__()
 
@@ -33,6 +34,7 @@ class QueriesSALAD(nn.Module):
         self.num_clusters = num_clusters
         self.cluster_dim = cluster_dim
         self.token_dim = token_dim
+        self.freeze = freeze
         self.divide = divide
         self.divide_ratio = divide_ratio
         if self.divide > 1:
@@ -54,7 +56,7 @@ class QueriesSALAD(nn.Module):
         # MLP for local features f_i
         # MLP for score matrix S
         self.queries_score = QuerySelfAttn(self.num_channels, self.num_queries, nheads=self.num_channels // 64, self_attn=self_attn)
-        self.queries_feature = QuerySelfAttn(self.cluster_dim, self.num_queries, nheads=self.cluster_dim // 32, self_attn=self_attn)
+        self.queries_feature = QuerySelfAttn(self.cluster_dim, self.num_queries, nheads=16, self_attn=self_attn)
         self.score = QueryCrossAttn(self.num_channels, self.num_clusters, nheads=self.num_channels // 64)
         if divide > 1:
             raise NotImplementedError()
@@ -82,7 +84,7 @@ class QueriesSALAD(nn.Module):
             domain_desc = None
 
         f = self.queries_feature().permute(0, 2, 1).repeat(x.shape[0], 1, 1)
-        q = self.queries_score()
+        q = self.queries_score().repeat(x.shape[0], 1, 1)
         p, p_attn = self.score(x, q)
         if self.divide > 1:
             raise NotImplementedError()

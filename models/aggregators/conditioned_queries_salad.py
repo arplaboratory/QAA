@@ -26,6 +26,7 @@ class ConditionedQueriesSALAD(nn.Module):
             num_queries=32,
             self_attn=True,
             dust_bin=True,
+            freeze="none",
         ) -> None:
         super().__init__()
 
@@ -33,6 +34,7 @@ class ConditionedQueriesSALAD(nn.Module):
         self.num_clusters = num_clusters
         self.cluster_dim = cluster_dim
         self.token_dim = token_dim
+        self.freeze = freeze
         self.divide = divide
         self.divide_ratio = divide_ratio
         if self.divide > 1:
@@ -82,8 +84,8 @@ class ConditionedQueriesSALAD(nn.Module):
             x, t = x # Extract features and token
             domain_desc = None
 
-        f = self.queries_feature()
-        q = self.queries_score()
+        f = self.queries_feature().repeat(x.shape[0], 1, 1)
+        q = self.queries_score().repeat(x.shape[0], 1, 1)
         f, f_attn = self.cluster_feature(x, f)
         p, p_attn = self.score(x, q)
         if self.divide > 1:
