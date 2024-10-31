@@ -119,8 +119,6 @@ class VPRModel(pl.LightningModule):
             elif self.aggregator.freeze == "score":
                 params = params + [{'params': self.aggregator.queries_feature.parameters()}]
                 print(f"Add params: aggregator - queries_feature")
-            elif self.aggregator.freeze == "both":
-                pass
             else:
                 raise NotImplementedError()
         if hasattr(self.backbone, "domain_prompt_model"):
