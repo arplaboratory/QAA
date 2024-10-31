@@ -1,10 +1,11 @@
 #!/bin/bash 
 #SBATCH --nodes=1                        # requests 3 compute servers
 #SBATCH --ntasks-per-node=1              # runs 2 tasks on each server
-#SBATCH --cpus-per-task=8               # uses 1 compute core per task
-#SBATCH --time=12:00:00
+#SBATCH --cpus-per-task=24               # uses 1 compute core per task
+#SBATCH --time=23:59:00
 #SBATCH --gres=gpu:h100:1
-#SBATCH --mem=250GB
+#SBATCH --account=pr_122_tandon_advanced
+#SBATCH --mem=300GB
 #SBATCH --job-name=train_salad
 #SBATCH --output=train_salad.out
 
