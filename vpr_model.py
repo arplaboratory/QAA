@@ -110,6 +110,9 @@ class VPRModel(pl.LightningModule):
             print(f"Add params: aggregator - token_features")
             params = params + [{'params': self.aggregator.score.parameters()}]
             print(f"Add params: aggregator - score")
+            if hasattr(self.aggregator, "cluster_feature"):
+                params = params + [{'params': self.aggregator.cluster_feature.parameters()}]
+                print(f"Add params: aggregator - feature_cross_attn")
             if self.aggregator.freeze == "feature":
                 params = params + [{'params': self.aggregator.queries_score.parameters()}]
                 print(f"Add params: aggregator - queries_score")
@@ -137,8 +140,8 @@ class VPRModel(pl.LightningModule):
             print(f"Add params: shared_prompt_mlp")
         if self.backbone_config['num_trainable_blocks'] > 0:
             for i, blk in enumerate(self.backbone.model.blocks[-self.backbone_config['num_trainable_blocks']:]):
-                params.append({'params': blk.parameters()})
-                print (f"Add params: Trainable block {len(self.backbone.model.blocks) - self.backbone_config['num_trainable_blocks'] + i}")
+                params.append({'params': blk.parameters(), 'lr': 1e-5})
+                print (f"Add params: Trainable block {len(self.backbone.model.blocks) - self.backbone_config['num_trainable_blocks'] + i},")
         else:
             print("All blocks are frozen")
         if self.optimizer.lower() == 'sgd':
