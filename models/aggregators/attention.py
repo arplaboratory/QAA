@@ -11,8 +11,8 @@ class QuerySelfAttn(torch.nn.Module):
         if self.self_attn:
             # the following two lines are used during training only, you can cache their output in eval.
             self.self_attn = torch.nn.MultiheadAttention(in_dim, num_heads=nheads, batch_first=True)
-            self.norm_q = torch.nn.LayerNorm(in_dim)
-            #####
+        self.norm_q = torch.nn.LayerNorm(in_dim)
+        #####
 
     def forward(self, detach=False):
         # B = x.size(0)
@@ -24,9 +24,9 @@ class QuerySelfAttn(torch.nn.Module):
                 # the following two lines are used during training.
                 # for stability purposes 
                 q = q + self.self_attn(q, q, q)[0]
-                q = self.norm_q(q)
                 q_detach = q_detach + self.self_attn(q_detach, q_detach, q_detach)[0]
-                q_detach = self.norm_q(q_detach)
+            q = self.norm_q(q)
+            q_detach = self.norm_q(q_detach)
             #######
             
             return q, q_detach
@@ -36,7 +36,7 @@ class QuerySelfAttn(torch.nn.Module):
                 # the following two lines are used during training.
                 # for stability purposes 
                 q = q + self.self_attn(q, q, q)[0]
-                q = self.norm_q(q)
+            q = self.norm_q(q)
             #######
             
             return q
