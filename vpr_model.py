@@ -3,10 +3,20 @@ import torch
 from torch.optim import lr_scheduler, optimizer
 import torchvision
 import torch.nn.functional as F
+import os
 
 import utils
 from models import helper
 from dataloaders.GenericDataloader import IMAGENET_MEAN_STD
+
+imagenet_mean = IMAGENET_MEAN_STD['mean']
+imagenet_std = IMAGENET_MEAN_STD['std']
+inv_base_transform = torchvision.transforms.Compose(
+    [ 
+        torchvision.transforms.Normalize(mean = [ -m/s for m, s in zip(imagenet_mean, imagenet_std)],
+                             std = [ 1/s for s in imagenet_std]),
+    ]
+)
 
 def off_diagonal(x):
     n, m = x.shape
@@ -93,11 +103,14 @@ class VPRModel(pl.LightningModule):
         # For validation in Lightning v2.0.0
         self.val_outputs = []
         self.log_img_first_iter = False
+        self.visualize = False
         
     # the forward pass of the lightning model
     def forward(self, x, domain_idx=None):
         x = self.backbone(x, domain_idx=domain_idx)
-        x = self.aggregator(x, domain_idx=domain_idx)
+        if self.visualize and "Queries" not in self.agg_arch:
+            raise NotImplementedError()
+        x = self.aggregator(x, domain_idx=domain_idx, visualize=self.visualize)
         return x
     
     # configure the optimizer 
@@ -121,6 +134,7 @@ class VPRModel(pl.LightningModule):
                 print(f"Add params: aggregator - queries_feature")
             else:
                 raise NotImplementedError()
+        print(len(params))
         if hasattr(self.backbone, "domain_prompt_model"):
             params.append({'params': self.backbone.domain_prompt_model.parameters()})
             print(f"Add params: domain_prompt_model")
@@ -322,9 +336,20 @@ class VPRModel(pl.LightningModule):
     # For validation, we will also iterate step by step over the validation set
     # this is the way Pytorch Lghtning is made. All about modularity, folks.
     def validation_step(self, batch, batch_idx, dataloader_idx=None):
-        places, _ = batch
+        places, _, image_name = batch
         if self.backbone.domain_prompt != "none":
             descriptors, domain_desc = self(places)
+        elif self.visualize:
+            descriptors, attn_map = self(places)
+            if not os.path.isdir(f'vis/{dataloader_idx}'):
+                os.mkdir(f'vis/{dataloader_idx}')
+            os.mkdir(f'vis/{dataloader_idx}/{batch_idx}')
+            attn_map = attn_map.view(-1, self.aggregator.num_queries, places.shape[-2]//14, places.shape[-1]//14)
+            attn_map = F.interpolate(attn_map, size=(places.shape[-2], places.shape[-1]), mode='bilinear', align_corners=True)
+            for i in range(len(places)):
+                torchvision.utils.save_image(inv_base_transform(places[i].unsqueeze(0)), f'vis/{dataloader_idx}/{batch_idx}/places_{i}.png')
+                for j in range(len(attn_map[i])):
+                    torchvision.utils.save_image(attn_map[i][j].unsqueeze(0), f'vis/{dataloader_idx}/{batch_idx}/attn_map_{i}_{j}.png')
         else:
             descriptors = self(places)
         if dataloader_idx is None: # Only one val dataset
@@ -402,9 +427,20 @@ class VPRModel(pl.LightningModule):
     # For validation, we will also iterate step by step over the validation set
     # this is the way Pytorch Lghtning is made. All about modularity, folks.
     def test_step(self, batch, batch_idx, dataloader_idx=None):
-        places, _ = batch
+        places, _, image_name = batch
         if self.backbone.domain_prompt != "none":
             descriptors, domain_desc = self(places)
+        elif self.visualize:
+            descriptors, attn_map = self(places)
+            if not os.path.isdir(f'vis/{dataloader_idx}'):
+                os.mkdir(f'vis/{dataloader_idx}')
+            os.mkdir(f'vis/{dataloader_idx}/{batch_idx}')
+            attn_map = attn_map.view(-1, self.aggregator.num_queries, places.shape[-2]//14, places.shape[-1]//14)
+            attn_map = F.interpolate(attn_map, size=(places.shape[-2], places.shape[-1]), mode='bilinear', align_corners=True)
+            for i in range(len(places)):
+                torchvision.utils.save_image(inv_base_transform(places[i].unsqueeze(0)), f'vis/{dataloader_idx}/{batch_idx}/places_{i}.png')
+                for j in range(len(attn_map[i])):
+                    torchvision.utils.save_image(attn_map[i][j].unsqueeze(0), f'vis/{dataloader_idx}/{batch_idx}/attn_map_{i}_{j}.png')
         else:
             descriptors = self(places)
         if dataloader_idx is None: # Only one val dataset

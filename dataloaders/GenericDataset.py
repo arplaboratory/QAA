@@ -44,7 +44,7 @@ class GenericDataset(Dataset):
                 # Grayscale images
                 img = self.backup_transform(img)
 
-        return img, index
+        return img, index, self.images[index]
 
     def __len__(self):
         return len(self.images)

@@ -68,7 +68,7 @@ class ConditionedQueriesSALAD(nn.Module):
             self.dust_bin = None
 
 
-    def forward(self, x, domain_idx=None):
+    def forward(self, x, domain_idx=None, visualize=False):
         """
         x (tuple): A tuple containing two elements, f and t. 
             (torch.Tensor): The feature tensors (t_i) [B, C, H // 14, W // 14].
@@ -114,4 +114,6 @@ class ConditionedQueriesSALAD(nn.Module):
 
         if domain_desc is not None:
             return nn.functional.normalize(f, p=2, dim=-1), domain_desc
+        if visualize:
+            return nn.functional.normalize(f, p=2, dim=-1), p_attn
         return nn.functional.normalize(f, p=2, dim=-1)
