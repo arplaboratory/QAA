@@ -141,7 +141,7 @@ class VPRModel(pl.LightningModule):
         if self.backbone_config['num_trainable_blocks'] > 0:
             for i, blk in enumerate(self.backbone.model.blocks[-self.backbone_config['num_trainable_blocks']:]):
                 params.append({'params': blk.parameters(), 'lr': 1e-5})
-                print (f"Add params: Trainable block {len(self.backbone.model.blocks) - self.backbone_config['num_trainable_blocks'] + i},")
+                print (f"Add params: Trainable block {len(self.backbone.model.blocks) - self.backbone_config['num_trainable_blocks'] + i}")
         else:
             print("All blocks are frozen")
         if self.optimizer.lower() == 'sgd':
