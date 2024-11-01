@@ -8,6 +8,8 @@ import os
 import utils
 from models import helper
 from dataloaders.GenericDataloader import IMAGENET_MEAN_STD
+from PIL import Image
+from matplotlib import pyplot as plt
 
 imagenet_mean = IMAGENET_MEAN_STD['mean']
 imagenet_std = IMAGENET_MEAN_STD['std']
@@ -152,7 +154,7 @@ class VPRModel(pl.LightningModule):
             print(f"Add params: shared_prompt_mlp")
         if self.backbone_config['num_trainable_blocks'] > 0:
             for i, blk in enumerate(self.backbone.model.blocks[-self.backbone_config['num_trainable_blocks']:]):
-                params.append({'params': blk.parameters(), 'lr': 1e-5})
+                params.append({'params': blk.parameters()})
                 print (f"Add params: Trainable block {len(self.backbone.model.blocks) - self.backbone_config['num_trainable_blocks'] + i}")
         else:
             print("All blocks are frozen")
@@ -336,20 +338,30 @@ class VPRModel(pl.LightningModule):
     # For validation, we will also iterate step by step over the validation set
     # this is the way Pytorch Lghtning is made. All about modularity, folks.
     def validation_step(self, batch, batch_idx, dataloader_idx=None):
-        places, _, image_name = batch
+        places, _ = batch
         if self.backbone.domain_prompt != "none":
             descriptors, domain_desc = self(places)
         elif self.visualize:
             descriptors, attn_map = self(places)
-            if not os.path.isdir(f'vis/{dataloader_idx}'):
-                os.mkdir(f'vis/{dataloader_idx}')
-            os.mkdir(f'vis/{dataloader_idx}/{batch_idx}')
+            dataset_name = self.trainer.datamodule.val_datasets[dataloader_idx].dataset_name
+            if not os.path.isdir(f'vis/{dataset_name}'):
+                os.mkdir(f'vis/{dataset_name}')
+            os.mkdir(f'vis/{dataset_name}/{batch_idx}')
+            attn_map = (attn_map - attn_map.min(dim=-1, keepdim=True).values)/(attn_map.max(dim=-1, keepdim=True).values - attn_map.min(dim=-1, keepdim=True).values)
             attn_map = attn_map.view(-1, self.aggregator.num_queries, places.shape[-2]//14, places.shape[-1]//14)
             attn_map = F.interpolate(attn_map, size=(places.shape[-2], places.shape[-1]), mode='bilinear', align_corners=True)
             for i in range(len(places)):
-                torchvision.utils.save_image(inv_base_transform(places[i].unsqueeze(0)), f'vis/{dataloader_idx}/{batch_idx}/places_{i}.png')
+                ndarr = inv_base_transform(places[i]).mul(255).add_(0.5).clamp_(0, 255).permute(1, 2, 0).to("cpu", torch.uint8).numpy()
+                im = Image.fromarray(ndarr)
+                im.save(f'vis/{dataset_name}/{batch_idx}/place_{i}.png')
                 for j in range(len(attn_map[i])):
-                    torchvision.utils.save_image(attn_map[i][j].unsqueeze(0), f'vis/{dataloader_idx}/{batch_idx}/attn_map_{i}_{j}.png')
+                    ndarr_attn = attn_map[i][j].unsqueeze(0).mul(255).add_(0.5).clamp_(0, 255).permute(1, 2, 0).to("cpu", torch.uint8).numpy()
+                    plt.figure()
+                    plt.imshow(ndarr)
+                    plt.imshow(ndarr_attn, alpha=0.5, cmap='jet')
+                    plt.axis('off')
+                    plt.savefig(f'vis/{dataset_name}/{batch_idx}/attn_map_{i}_{j}.png', bbox_inches='tight', transparent="True", pad_inches=0)
+                    plt.close()
         else:
             descriptors = self(places)
         if dataloader_idx is None: # Only one val dataset
@@ -427,20 +439,30 @@ class VPRModel(pl.LightningModule):
     # For validation, we will also iterate step by step over the validation set
     # this is the way Pytorch Lghtning is made. All about modularity, folks.
     def test_step(self, batch, batch_idx, dataloader_idx=None):
-        places, _, image_name = batch
+        places, _ = batch
         if self.backbone.domain_prompt != "none":
             descriptors, domain_desc = self(places)
         elif self.visualize:
             descriptors, attn_map = self(places)
-            if not os.path.isdir(f'vis/{dataloader_idx}'):
-                os.mkdir(f'vis/{dataloader_idx}')
-            os.mkdir(f'vis/{dataloader_idx}/{batch_idx}')
+            dataset_name = self.trainer.datamodule.test_datasets[dataloader_idx].dataset_name
+            if not os.path.isdir(f'vis/{dataset_name}'):
+                os.mkdir(f'vis/{dataset_name}')
+            os.mkdir(f'vis/{dataset_name}/{batch_idx}')
+            attn_map = (attn_map - attn_map.min(dim=-1, keepdim=True).values)/(attn_map.max(dim=-1, keepdim=True).values - attn_map.min(dim=-1, keepdim=True).values)
             attn_map = attn_map.view(-1, self.aggregator.num_queries, places.shape[-2]//14, places.shape[-1]//14)
             attn_map = F.interpolate(attn_map, size=(places.shape[-2], places.shape[-1]), mode='bilinear', align_corners=True)
             for i in range(len(places)):
-                torchvision.utils.save_image(inv_base_transform(places[i].unsqueeze(0)), f'vis/{dataloader_idx}/{batch_idx}/places_{i}.png')
+                ndarr = inv_base_transform(places[i]).mul(255).add_(0.5).clamp_(0, 255).permute(1, 2, 0).to("cpu", torch.uint8).numpy()
+                im = Image.fromarray(ndarr)
+                im.save(f'vis/{dataset_name}/{batch_idx}/place_{i}.png')
                 for j in range(len(attn_map[i])):
-                    torchvision.utils.save_image(attn_map[i][j].unsqueeze(0), f'vis/{dataloader_idx}/{batch_idx}/attn_map_{i}_{j}.png')
+                    ndarr_attn = attn_map[i][j].unsqueeze(0).mul(255).add_(0.5).clamp_(0, 255).permute(1, 2, 0).to("cpu", torch.uint8).numpy()
+                    plt.figure()
+                    plt.imshow(ndarr)
+                    plt.imshow(ndarr_attn, alpha=0.5, cmap='jet')
+                    plt.axis('off')
+                    plt.savefig(f'vis/{dataset_name}/{batch_idx}/attn_map_{i}_{j}.png', bbox_inches='tight', transparent="True", pad_inches=0)
+                    plt.close()
         else:
             descriptors = self(places)
         if dataloader_idx is None: # Only one val dataset
