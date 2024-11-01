@@ -1,5 +1,6 @@
 import pytorch_lightning as pl
 import argparse
+import os
 
 from vpr_model import VPRModel
 from utils.load_cfg import load_config, load_datasets_config
@@ -12,6 +13,7 @@ if __name__ == '__main__':
     args = argparse.ArgumentParser()
     args.add_argument('--config', type=str)
     args.add_argument('--ckpt_path', type=str)
+    args.add_argument('--visualize', action='store_true')
     args = args.parse_args()
     # we load the training configuration
     train_cfg = load_config(args.config)
@@ -27,6 +29,12 @@ if __name__ == '__main__':
     )
     
     model = VPRModel.load_from_checkpoint(args.ckpt_path)
+    if args.visualize:
+        model.visualize = True
+        if os.path.isdir('vis'):
+            raise ValueError('Visualisation directory does exist')
+        else:
+            os.mkdir('vis')
 
     #------------------
     # we instanciate a trainer
@@ -43,4 +51,5 @@ if __name__ == '__main__':
     )
 
     # we call the trainer, we give it the model and the datamodule
+    trainer.validate(model=model, datamodule=datamodule)
     trainer.test(model=model, datamodule=datamodule)

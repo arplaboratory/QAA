@@ -13,6 +13,7 @@ class GenericModel(pl.LightningModule):
     def __init__(self, model):
         super().__init__()
         self.model = model
+        self.faiss_gpu = False
     def forward(self, x):
         return self.model(x)
     
