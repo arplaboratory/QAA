@@ -56,7 +56,7 @@ class QueriesSALAD(nn.Module):
         # MLP for local features f_i
         # MLP for score matrix S
         self.queries_score = QuerySelfAttn(self.num_channels, self.num_queries, nheads=self.num_channels // 64, self_attn=self_attn)
-        self.queries_feature = QuerySelfAttn(self.cluster_dim, self.num_queries, nheads=16, self_attn=self_attn)
+        self.queries_feature = QuerySelfAttn(self.cluster_dim, self.num_queries, nheads=self.cluster_dim // 32, self_attn=self_attn)
         self.score = QueryCrossAttn(self.num_channels, self.num_clusters, nheads=self.num_channels // 64)
         if divide > 1:
             raise NotImplementedError()
