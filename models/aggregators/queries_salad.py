@@ -24,9 +24,11 @@ class QueriesSALAD(nn.Module):
             divide_ratio=[1,1,1,0],
             divide=1,
             num_queries=32,
-            self_attn=True,
+            self_attn="both",
             dust_bin=True,
             freeze="none",
+            feature_nheads=4,
+            score_nheads=12,
         ) -> None:
         super().__init__()
 
@@ -55,9 +57,15 @@ class QueriesSALAD(nn.Module):
             )
         # MLP for local features f_i
         # MLP for score matrix S
-        self.queries_score = QuerySelfAttn(self.num_channels, self.num_queries, nheads=self.num_channels // 64, self_attn=self_attn)
-        self.queries_feature = QuerySelfAttn(self.cluster_dim, self.num_queries, nheads=self.cluster_dim // 32, self_attn=self_attn)
-        self.score = QueryCrossAttn(self.num_channels, self.num_clusters, nheads=self.num_channels // 64)
+        if self_attn == "both" or self_attn == "score":
+            self.queries_score = QuerySelfAttn(self.num_channels, self.num_queries, nheads=score_nheads, self_attn=True)
+        else:
+            self.queries_score = QuerySelfAttn(self.num_channels, self.num_queries, nheads=score_nheads, self_attn=False)
+        if self_attn == "both" or self_attn == "feature":
+            self.queries_feature = QuerySelfAttn(self.cluster_dim, self.num_queries, nheads=feature_nheads, self_attn=True)
+        else:
+            self.queries_feature = QuerySelfAttn(self.cluster_dim, self.num_queries, nheads=feature_nheads, self_attn=False)
+        self.score = QueryCrossAttn(self.num_channels, self.num_clusters, nheads=score_nheads)
         if divide > 1:
             raise NotImplementedError()
         # Dustbin parameter z
@@ -113,5 +121,5 @@ class QueriesSALAD(nn.Module):
         if domain_desc is not None:
             return nn.functional.normalize(f, p=2, dim=-1), domain_desc
         if visualize:
-            return nn.functional.normalize(f, p=2, dim=-1), p_attn
+            return nn.functional.normalize(f, p=2, dim=-1), p_attn, p
         return nn.functional.normalize(f, p=2, dim=-1)
