@@ -342,12 +342,12 @@ class VPRModel(pl.LightningModule):
         if self.backbone.domain_prompt != "none":
             descriptors, domain_desc = self(places)
         elif self.visualize:
-            descriptors, attn_map = self(places)
+            descriptors, attn_map, score = self(places)
             dataset_name = self.trainer.datamodule.val_datasets[dataloader_idx].dataset_name
             if not os.path.isdir(f'vis/{dataset_name}'):
                 os.mkdir(f'vis/{dataset_name}')
             os.mkdir(f'vis/{dataset_name}/{batch_idx}')
-            attn_map = (attn_map - attn_map.min(dim=-1, keepdim=True).values)/(attn_map.max(dim=-1, keepdim=True).values - attn_map.min(dim=-1, keepdim=True).values)
+            attn_map = (attn_map - attn_map.min())/(attn_map.max() - attn_map.min())
             attn_map = attn_map.view(-1, self.aggregator.num_queries, places.shape[-2]//14, places.shape[-1]//14)
             attn_map = F.interpolate(attn_map, size=(places.shape[-2], places.shape[-1]), mode='bilinear', align_corners=True)
             for i in range(len(places)):
@@ -362,6 +362,18 @@ class VPRModel(pl.LightningModule):
                     plt.axis('off')
                     plt.savefig(f'vis/{dataset_name}/{batch_idx}/attn_map_{i}_{j}.png', bbox_inches='tight', transparent="True", pad_inches=0)
                     plt.close()
+                # Calculate the similarity matrix between scores of current place and current place
+                plt.figure()
+                plt.imshow(torch.matmul(score[i][0].T, score[i][0]).cpu().numpy(), cmap='viridis')
+                plt.axis('off')
+                plt.savefig(f'vis/{dataset_name}/{batch_idx}/score_sim_matrix_{i}.png', bbox_inches='tight', transparent="True", pad_inches=0)
+                plt.close()
+                # Calculate the similarity matrix between scores of 0-th place and current place
+                plt.figure()
+                plt.imshow(torch.matmul(score[i][0].T, score[0][0]).cpu().numpy(), cmap='viridis')
+                plt.axis('off')
+                plt.savefig(f'vis/{dataset_name}/{batch_idx}/score_0_sim_matrix_{i}.png', bbox_inches='tight', transparent="True", pad_inches=0)
+                plt.close()
         else:
             descriptors = self(places)
         if dataloader_idx is None: # Only one val dataset
@@ -377,6 +389,8 @@ class VPRModel(pl.LightningModule):
         self.val_outputs = []
         self.results_list = []
         self.current_dataloader_idx = 0
+        if self.visualize:            
+            self.visualize_queries()
     
     def on_validation_epoch_end(self):
         """this return descriptors in their order
@@ -443,12 +457,12 @@ class VPRModel(pl.LightningModule):
         if self.backbone.domain_prompt != "none":
             descriptors, domain_desc = self(places)
         elif self.visualize:
-            descriptors, attn_map = self(places)
+            descriptors, attn_map, score = self(places)
             dataset_name = self.trainer.datamodule.test_datasets[dataloader_idx].dataset_name
             if not os.path.isdir(f'vis/{dataset_name}'):
                 os.mkdir(f'vis/{dataset_name}')
             os.mkdir(f'vis/{dataset_name}/{batch_idx}')
-            attn_map = (attn_map - attn_map.min(dim=-1, keepdim=True).values)/(attn_map.max(dim=-1, keepdim=True).values - attn_map.min(dim=-1, keepdim=True).values)
+            attn_map = (attn_map - attn_map.min())/(attn_map.max() - attn_map.min())
             attn_map = attn_map.view(-1, self.aggregator.num_queries, places.shape[-2]//14, places.shape[-1]//14)
             attn_map = F.interpolate(attn_map, size=(places.shape[-2], places.shape[-1]), mode='bilinear', align_corners=True)
             for i in range(len(places)):
@@ -463,6 +477,18 @@ class VPRModel(pl.LightningModule):
                     plt.axis('off')
                     plt.savefig(f'vis/{dataset_name}/{batch_idx}/attn_map_{i}_{j}.png', bbox_inches='tight', transparent="True", pad_inches=0)
                     plt.close()
+                # Calculate the similarity matrix between scores of current place and current place
+                plt.figure()
+                plt.imshow(torch.matmul(score[i][0].T, score[i][0]).cpu().numpy(), cmap='viridis')
+                plt.axis('off')
+                plt.savefig(f'vis/{dataset_name}/{batch_idx}/score_sim_matrix_{i}.png', bbox_inches='tight', transparent="True", pad_inches=0)
+                plt.close()
+                # Calculate the similarity matrix between scores of 0-th place and current place
+                plt.figure()
+                plt.imshow(torch.matmul(score[i][0].T, score[0][0]).cpu().numpy(), cmap='viridis')
+                plt.axis('off')
+                plt.savefig(f'vis/{dataset_name}/{batch_idx}/score_0_sim_matrix_{i}.png', bbox_inches='tight', transparent="True", pad_inches=0)
+                plt.close()
         else:
             descriptors = self(places)
         if dataloader_idx is None: # Only one val dataset
@@ -478,6 +504,8 @@ class VPRModel(pl.LightningModule):
         self.test_outputs = []
         self.results_list = []
         self.current_dataloader_idx = 0
+        if self.visualize:            
+            self.visualize_queries()
     
     def on_test_epoch_end(self):
         """this return descriptors in their order
@@ -556,3 +584,36 @@ class VPRModel(pl.LightningModule):
             self.results_list.append(pitts_dict)
 
         self.test_outputs = []
+
+    def visualize_queries(self):
+        feature_query = self.aggregator.queries_feature()
+        score_query = self.aggregator.queries_score()
+        max_min_norm = lambda x: (x - x.min())/(x.max() - x.min())
+        plt.figure()
+        norm_feature_queries = max_min_norm(feature_query[0])
+        print(norm_feature_queries.shape)
+        plt.imshow(norm_feature_queries.cpu().numpy(), cmap='viridis')
+        plt.axis('off')
+        plt.savefig(f'vis/feature_query.png', bbox_inches='tight', transparent="True", pad_inches=0)
+        plt.close()
+        plt.figure()
+        norm_score_queries = max_min_norm(score_query[0])
+        print(norm_score_queries.shape)
+        plt.imshow(norm_score_queries.cpu().numpy(), cmap='viridis')
+        plt.axis('off')
+        plt.savefig(f'vis/score_query.png', bbox_inches='tight', transparent="True", pad_inches=0)
+        plt.close()
+        norm_feature_queries = F.normalize(feature_query[0], p=2, dim=-1)
+        sim_matrix = torch.matmul(norm_feature_queries, norm_feature_queries.T)
+        plt.figure()
+        plt.imshow(sim_matrix.cpu().numpy(), cmap='viridis')
+        plt.axis('off')
+        plt.savefig(f'vis/sim_matrix_feature.png', bbox_inches='tight', transparent="True", pad_inches=0)
+        plt.close()
+        norm_score_queries = F.normalize(score_query[0], p=2, dim=-1)
+        sim_matrix = torch.matmul(norm_score_queries, norm_score_queries.T)
+        plt.figure()
+        plt.imshow(sim_matrix.cpu().numpy(), cmap='viridis')
+        plt.axis('off')
+        plt.savefig(f'vis//sim_matrix_score.png', bbox_inches='tight', transparent="True", pad_inches=0)
+        plt.close()
