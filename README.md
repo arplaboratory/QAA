@@ -1,23 +1,15 @@
-![DINOv2 SALAD](assets/dino_salad_title.png)
-# Optimal Transport Aggregation for Visual Place Recognition
-Sergio Izquierdo, Javier Civera
+# UniVPR: Advancing Universal Visual Place Recognition via Multi-Dataset Joint Training with Query-Based Adaptive Aggregation
 
-Code and models for Optimal Transport Aggregation for Visual Place Recognition (DINOv2 SALAD).
+This repository is the official implementation for [UniVPR: Advancing Universal Visual Place Recognition via Multi-Dataset Joint Training with Query-Based Adaptive Aggregation]().
 
 ## Summary
 
-We introduce DINOv2 SALAD, a Visual Place Recognition model that achieves state-of-the-art results on common benchmarks. We introduce two main contributions:
- - Using a finetuned DINOv2 encoder to get richer and more powerful features.
- - A new aggregation technique based on optimal transport to create a global descriptor based on optimal transport. This aggregation extends NetVLAD to consider feature-to-cluster relations as well as cluster-to-features. Besides, it includes a dustbin to discard uninformative features.
-
-For more details, check the paper at [arXiv](https://arxiv.org/abs/2311.15937).
-
-![Method](assets/method.jpg)
+We introduce the UniVPR framework for efficient multi-dataset joint training, and QAA for query-based adaptive feature aggregation to expand the model memory capacity, leading to better generalization performance for diverse datasets.
 
 ## Setup
 
-It has been tested on Pytorch 2.1.0 with CUDA 12.1 and Xformers. Create a ready to run environment with:
-```bash
+Create a conda environment with the following:
+```
 conda env create -f environment.yml
 ```
 
@@ -31,7 +23,7 @@ model.cuda()
 
 ## Dataset
 
-For training, download [GSV-Cities](https://github.com/amaralibey/gsv-cities) dataset. For evaluation download the desired datasets ([MSLS](https://github.com/FrederikWarburg/mapillary_sls), [NordLand](https://surfdrive.surf.nl/files/index.php/s/sbZRXzYe3l0v67W), [SPED](https://surfdrive.surf.nl/files/index.php/s/sbZRXzYe3l0v67W), or [Pittsburgh](https://data.ciirc.cvut.cz/public/projects/2015netVLAD/Pittsburgh250k/))
+For training, download [GSV-Cities](https://github.com/amaralibey/gsv-cities), [MSLS](https://www.mapillary.com/dataset/places), and [SF-XL](https://docs.google.com/forms/d/e/1FAIpQLSdQEcRULPLNr0Zk5x85jNw3vcel_RxoQoKtsrJA7QPjWPVqZg/viewform). For evaluation, download and format the desired datasets from [VPR-dataset-downloader](https://github.com/gmberton/VPR-datasets-downloader/tree/main), except for [Nordland*](https://surfdrive.surf.nl/files/index.php/s/sbZRXzYe3l0v67W) and MSLS (using official dataset).
 
 ## Train
 
@@ -86,6 +78,8 @@ python3 eval.py --ckpt_path 'weights/dino_salad.ckpt' --image_size 322 322 --bat
 
 ## Acknowledgements
 This code is based on the amazing work of:
+ - [CliqueMining](https://github.com/serizba/cliquemining)
+ - [BoQ](https://github.com/amaralibey/Bag-of-Queries)
  - [MixVPR](https://github.com/amaralibey/MixVPR)
  - [GSV-Cities](https://github.com/amaralibey/gsv-cities)
  - [DINOv2](https://github.com/facebookresearch/dinov2)
@@ -93,11 +87,5 @@ This code is based on the amazing work of:
 ## Cite
 Here is the bibtex to cite our paper
 ```
-@InProceedings{Izquierdo_CVPR_2024_SALAD,
-    author    = {Izquierdo, Sergio and Civera, Javier},
-    title     = {Optimal Transport Aggregation for Visual Place Recognition},
-    booktitle = {Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR)},
-    month     = {June},
-    year      = {2024},
-}
+TBD
 ```
