@@ -24,11 +24,7 @@ model:
     freeze: "none"
     divide_ratio: [1, 1, 1, 0]
     divide: 1
-    num_queries: 128
-    self_attn: "both"
-    feature_nheads: 8
-    score_nheads: 12
-
+    num_queries: 256
 
 datasets:
   train_datasets: 
@@ -54,7 +50,7 @@ datasets:
     - eynsham
   target_val_dataset: mapillary_sls
 training:
-  num_epochs: 64
+  num_epochs: 80
   train_batch_size: 30
   test_batch_size: 256
   img_per_place: 4
@@ -66,7 +62,7 @@ training:
   test_image_size: [322, 322]
   optimizer:
     name: AdamW
-    lr: 1e-5
+    lr: 8e-6
     weight_decay: 1e-3
     momentum: 0.9
   scheduler:

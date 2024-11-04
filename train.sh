@@ -52,19 +52,22 @@ sbatch --export=ALL,CONFIG=$CONFIG scripts/train/train_salad_longer.sbatch
 export CONFIG=configs/train/agg_dim_128/train_salad_sf_xl_gsv_msls_topk_ori_512_128_64_b2_de_re.yaml
 sbatch --export=ALL,CONFIG=$CONFIG scripts/train/train_salad_longer.sbatch
 
-export CONFIG=configs/train/agg_recompute_freeze/train_salad_sf_xl_gsv_msls_topk_ori_128_64_128_b2_con_re_backbone.yaml
-sbatch --export=ALL,CONFIG=$CONFIG scripts/train/train_salad_longer.sbatch
-export CONFIG=configs/train/agg_recompute_freeze/train_salad_sf_xl_gsv_msls_topk_ori_128_64_128_b2_con_re_feature.yaml
-sbatch --export=ALL,CONFIG=$CONFIG scripts/train/train_salad_longer.sbatch
-export CONFIG=configs/train/agg_recompute_freeze/train_salad_sf_xl_gsv_msls_topk_ori_128_64_128_b2_con_re_score.yaml
-sbatch --export=ALL,CONFIG=$CONFIG scripts/train/train_salad_longer.sbatch
-export CONFIG=configs/train/agg_recompute_freeze/train_salad_sf_xl_gsv_msls_topk_ori_128_64_128_b2_con_re_sf.yaml
-sbatch --export=ALL,CONFIG=$CONFIG scripts/train/train_salad_longer.sbatch
 export CONFIG=configs/train/agg_recompute_freeze/train_salad_sf_xl_gsv_msls_topk_ori_128_64_128_b2_de_re_backbone.yaml
 sbatch --export=ALL,CONFIG=$CONFIG scripts/train/train_salad_longer.sbatch
 export CONFIG=configs/train/agg_recompute_freeze/train_salad_sf_xl_gsv_msls_topk_ori_128_64_128_b2_de_re_feature.yaml
 sbatch --export=ALL,CONFIG=$CONFIG scripts/train/train_salad_longer.sbatch
 export CONFIG=configs/train/agg_recompute_freeze/train_salad_sf_xl_gsv_msls_topk_ori_128_64_128_b2_de_re_score.yaml
 sbatch --export=ALL,CONFIG=$CONFIG scripts/train/train_salad_longer.sbatch
-export CONFIG=configs/train/agg_recompute_freeze/train_salad_sf_xl_gsv_msls_topk_ori_128_64_128_b2_de_re_sf.yaml
+
+export CONFIG=configs/train/agg_recompute_sa/train_salad_sf_xl_gsv_msls_topk_ori_128_64_128_b2_de_re_sa_feature.yaml
+sbatch --export=ALL,CONFIG=$CONFIG scripts/train/train_salad_longer.sbatch
+export CONFIG=configs/train/agg_recompute_sa/train_salad_sf_xl_gsv_msls_topk_ori_128_64_128_b2_de_re_sa_none.yaml
+sbatch --export=ALL,CONFIG=$CONFIG scripts/train/train_salad_longer.sbatch
+export CONFIG=configs/train/agg_recompute_sa/train_salad_sf_xl_gsv_msls_topk_ori_128_64_128_b2_de_re_sa_score.yaml
+sbatch --export=ALL,CONFIG=$CONFIG scripts/train/train_salad_longer.sbatch
+
+# Final
+export CONFIG=configs/train/final3/train_salad_sf_xl_gsv_msls_topk_ori_128_64_128_b2_de_lr2_long.yaml
+sbatch --export=ALL,CONFIG=$CONFIG scripts/train/train_salad_longer.sbatch
+export CONFIG=configs/train/final3/train_salad_sf_xl_gsv_msls_topk_ori_128_64_128_b2_de_lr2.yaml
 sbatch --export=ALL,CONFIG=$CONFIG scripts/train/train_salad_longer.sbatch
