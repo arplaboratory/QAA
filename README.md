@@ -1,10 +1,10 @@
-# UniVPR: Advancing Universal Visual Place Recognition via Multi-Dataset Joint Training with Query-Based Adaptive Aggregation
+# Query-Based Adaptive Aggregation for Multi-Dataset Joint Training Toward Universal Visual Place Recognition
 
-This repository is the official implementation for [UniVPR: Advancing Universal Visual Place Recognition via Multi-Dataset Joint Training with Query-Based Adaptive Aggregation]().
+This repository is the official implementation for [Query-Based Adaptive Aggregation for Multi-Dataset Joint Training Toward Universal Visual Place Recognition]().
 
 ## Summary
 
-We introduce the UniVPR framework for efficient multi-dataset joint training, and QAA for query-based adaptive feature aggregation to expand the model memory capacity, leading to better generalization performance for diverse datasets.
+We introduce Query-based Adaptive Aggregation (QAA) to expand the model memory capacity, leading to better generalization performance for diverse datasets. We also introduce the UniVPR framework for efficient multi-dataset joint training.
 
 ## Setup
 
