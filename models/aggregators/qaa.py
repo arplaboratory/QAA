@@ -4,7 +4,7 @@ from .attention import QuerySelfAttn, QueryCrossAttn
 from .salad import log_optimal_transport
 
 
-class QueriesSALAD(nn.Module):
+class QAA(nn.Module):
     """
     This class represents the Sinkhorn Algorithm for Locally Aggregated Descriptors (SALAD) model.
 

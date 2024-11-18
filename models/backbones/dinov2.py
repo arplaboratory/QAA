@@ -3,7 +3,7 @@ import torch.nn as nn
 from torch import Tensor
 from typing import Union
 from ..aggregators.salad import SALAD
-from ..aggregators.queries_salad import QueriesSALAD
+from ..aggregators.queries_salad import QAA
 
 DINOV2_ARCHS = {
     'dinov2_vits14': 384,
@@ -128,16 +128,16 @@ class DINOv2(nn.Module):
             assert injection_layer > 0, 'Injection layer should be greater than 0'
             hidden_size = self.model.blocks[0].norm1.weight.shape[0]
             assert self.num_trainable_blocks > 0, 'First blocks should be frozen when using domain prompt'
-            if self.domain_prompt == "QueriesSALAD":
+            if self.domain_prompt == "QAA":
                 if multi_adapt == "none" or multi_adapt == "shared":
-                    self.domain_prompt_model = QueriesSALAD(num_channels=hidden_size, num_clusters=num_clusters, cluster_dim=cluster_dim,
+                    self.domain_prompt_model = QAA(num_channels=hidden_size, num_clusters=num_clusters, cluster_dim=cluster_dim,
                                                     token_dim=token_dim, dropout=dropout,
                                                     divide=divide, divide_ratio=divide_ratio,
                                                     num_queries=num_queries)
                 elif multi_adapt == "separate":
                     self.domain_prompt_model_list = nn.ModuleList()
                     for i, blk in enumerate(self.model.blocks[self.injection_layer:]):
-                        self.domain_prompt_model_list.append(QueriesSALAD(num_channels=hidden_size, num_clusters=num_clusters, cluster_dim=cluster_dim,
+                        self.domain_prompt_model_list.append(QAA(num_channels=hidden_size, num_clusters=num_clusters, cluster_dim=cluster_dim,
                                                         token_dim=token_dim, dropout=dropout,
                                                         divide=divide, divide_ratio=divide_ratio,
                                                         num_queries=num_queries))
