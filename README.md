@@ -39,24 +39,72 @@ Run the following scripts:
 ./preprocess_dataset_cluster_sfxl.sh  # For clustering the SF-XL training set
 ```
 
-The results will be stored in the `cache/datasets` directory.
+The preprocessing results will be saved in the cache/datasets directory. The provided code relies on [singularity](https://github.com/sylabs/singularity). If you do not have singularity installed, replace the following example command:
+```
+singularity exec --overlay $overlay_path:ro \
+                 /scratch/work/public/singularity/cuda12.1.1-cudnn8.9.0-devel-ubuntu22.04.2.sif \
+                 /bin/bash -c "source ~/.bashrc; conda activate UniVPR; python3 dataloaders/GenerateDatasetNpy.py --dataset_name SPED"
+```
+with:
+```
+mount $overlay_path / -t squashfs -o loop # Do this only if you use .sqf files; Otherwise skip mounting
+source ~/.bashrc; conda activate UniVPR; python3 dataloaders/GenerateDatasetNpy.py --dataset_name SPED
+```
 
-To add a new dataset, refer to `dataloaders/GenerateDatasetNpy.py` for guidance on generating .npy files.
+To include a new dataset, refer to the scripts `preprocess_dataset_npy.sh` and `dataloaders/GenerateDatasetNpy.py` for instructions on generating `.npy` files.
 
 ### Option 2: Use Preprocessed Data
 Download preprocessed dataset caches from [link]() (released after review). Place the files in the `cache/datasets` directory.
 
 ## Train
 
-The training script is `train.sh`, with config files in `configs/train` folder.
+All training scripts are included in `train.sh`, with config files in `configs/train` folder. The provided code relies on [singularity](https://github.com/sylabs/singularity). If you do not have singularity installed, replace the `scripts/train/train_salad_longer.sbatch`:
+```
+singularity exec --nv \
+                --overlay $overlay_path_gsv:ro \
+                --overlay $overlay_path_pitts30k:ro \
+                --overlay $overlay_path_pitts250k:ro \
+                --overlay $overlay_path_msls:ro \
+                --overlay $overlay_path_svox:ro \
+                --overlay $overlay_path_nordland:ro \
+                --overlay $overlay_path_nordland_subset:ro \
+                --overlay $overlay_path_sped:ro \
+                --overlay $overlay_path_tokyo247:ro \
+                --overlay $overlay_path_eynsham:ro \
+                --overlay $overlay_path_amstertime:ro \
+                --overlay $overlay_path_SF_XL_val:ro \
+                --overlay $overlay_path_SF_XL_test:ro \
+                --overlay $overlay_path_SF_XL_train:ro \
+                 /scratch/work/public/singularity/cuda12.1.1-cudnn8.9.0-devel-ubuntu22.04.2.sif \
+                 /bin/bash -c "source ~/.bashrc; conda activate UniVPR; python3 -u main.py --config $CONFIG"
+```
+with:
+```
+# Do this only if you use .sqf files; Otherwise skip mounting
+mount $overlay_path_gsv / -t squashfs -o loop
+mount $overlay_path_pitts30k / -t squashfs -o loop
+mount $overlay_path_pitts250k / -t squashfs -o loop
+mount $overlay_path_msls / -t squashfs -o loop
+mount $overlay_path_svox / -t squashfs -o loop
+mount $overlay_path_nordland / -t squashfs -o loop
+mount $overlay_path_nordland_subset / -t squashfs -o loop
+mount $overlay_path_sped / -t squashfs -o loop
+mount $overlay_path_tokyo247 / -t squashfs -o loop
+mount $overlay_path_eynsham / -t squashfs -o loop
+mount $overlay_path_amstertime / -t squashfs -o loop
+mount $overlay_path_SF_XL_val / -t squashfs -o loop
+mount $overlay_path_SF_XL_test / -t squashfs -o loop
+mount $overlay_path_SF_XL_train / -t squashfs -o loop
+source ~/.bashrc; conda activate UniVPR; python3 -u main.py --config $CONFIG
+```
 
 ## Evaluation
 
-You can download a pretrained UniVPR model from [here]() (released after review). For evaluating run:
+All evaluation scripts are included in `eval.sh`, with config files in `configs/eval` folder. The provided code relies on [singularity](https://github.com/sylabs/singularity). If you do not have singularity installed, please replace the code in `scripts/eval` similar to the training script.
 
-```bash
-python3 eval.py --ckpt_path 'weights/dino_salad.ckpt' --image_size 322 322 --batch_size 256 --val_datasets MSLS Nordland
-```
+## Model weights
+
+The model weights are provided in [link]() (released after review).
 
 ## Acknowledgements
 This code is based on the amazing work of:
