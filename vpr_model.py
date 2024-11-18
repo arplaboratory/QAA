@@ -558,7 +558,7 @@ class VPRModel(pl.LightningModule):
             assert test_dataset.split == "test"
             print(f"Save predictions to msls_preds.txt")
             try:
-                test_dataset.save_predictions(preds, f'UniVG/{self.logger.version}/checkpoints/msls_preds.txt')
+                test_dataset.save_predictions(preds, f'UniVPR/{self.logger.version}/checkpoints/msls_preds.txt')
             except Exception:
                 print("MSLS PRED TEXT SAVE IN ROOT FOLDER")
                 test_dataset.save_predictions(preds, f'./msls_preds.txt')

@@ -40,4 +40,4 @@ singularity exec --nv \
                 --overlay $overlay_path_SF_XL_test:ro \
                 --overlay $overlay_path_SF_XL_train:ro \
                  /scratch/work/public/singularity/cuda12.1.1-cudnn8.9.0-devel-ubuntu22.04.2.sif \
-                 /bin/bash -c "source ~/.bashrc; conda activate UniVG; python3 -u eval.py --config $CONFIG --ckpt_path $CKPT"
+                 /bin/bash -c "source ~/.bashrc; conda activate UniVPR; python3 -u eval.py --config $CONFIG --ckpt_path $CKPT"
