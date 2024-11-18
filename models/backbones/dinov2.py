@@ -3,7 +3,7 @@ import torch.nn as nn
 from torch import Tensor
 from typing import Union
 from ..aggregators.salad import SALAD
-from ..aggregators.queries_salad import QAA
+from ..aggregators.qaa import QAA
 
 DINOV2_ARCHS = {
     'dinov2_vits14': 384,
