@@ -7,14 +7,9 @@ import argparse
 from mapillary_sls.mapillary_sls.datasets.msls import MSLS
 import shutil
 import pandas as pd
-from GenerateDatasetUtils import load_npy_to_df, initialize
+from GenerateDatasetUtils import initialize
 
 NPY_ROOT = 'cache/datasets/'
-
-def generate_dataset_cluster_feature_distance(datasets_folder, dataset_name, val_positive_dist_threshold=25.0):
-    #### For Pitts and others
-    df = load_npy_to_df(dataset_name)
-    print(df[:10])
 
 def generate_dataset_cluster_groups(datasets_folder, dataset_name, val_positive_dist_threshold=25.0):
     #### For SF_XL

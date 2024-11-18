@@ -7,25 +7,6 @@ import shutil
 import pandas as pd
 from collections import defaultdict
 
-def load_npy_to_df(dataset_name):
-    db = np.load(os.path.join(NPY_ROOT, dataset_name, f"{dataset_name}_train_dbImages.npy"))
-    db = pd.DataFrame(db, columns=["key"])
-    db.insert(0, 'query', False)
-    easting = db["key"].apply(lambda x: float(x.split('/')[-1].split('@')[1]))
-    northing = db["key"].apply(lambda x: float(x.split('/')[-1].split('@')[2]))
-    db.insert(0, 'easting', easting)
-    db.insert(0, 'northing', northing)
-    q = np.load(os.path.join(NPY_ROOT, dataset_name, f"{dataset_name}_train_qImages.npy"))
-    q = pd.DataFrame(q, columns=["key"])
-    q.insert(0, 'query', True)
-    easting = q["key"].apply(lambda x: float(x.split('/')[-1].split('@')[1]))
-    northing = q["key"].apply(lambda x: float(x.split('/')[-1].split('@')[2]))
-    q.insert(0, 'easting', easting)
-    q.insert(0, 'northing', northing)
-    df = pd.concat([db, q], ignore_index=True)
-    df.insert(0, 'unique_cluster', -1)
-    return df
-
 # From Cosplace
 def initialize(dataset_folder, M=10, N=5, alpha=30, L=2, min_images_per_class=10, filename=None):
     print(f"Searching training images in {dataset_folder}")
