@@ -14,7 +14,7 @@ model:
     divide_ratio: [1, 1, 1, 0]
     divide: 1
     multi_scale: "1"
-  agg_arch: QueriesSALAD
+  agg_arch: QAA
   agg_config:
     num_channels: 768
     num_clusters: 16
