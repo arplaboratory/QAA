@@ -44,7 +44,7 @@ The results will be stored in the `cache/datasets` directory.
 To add a new dataset, refer to `dataloaders/GenerateDatasetNpy.py` for guidance on generating .npy files.
 
 ### Option 2: Use Preprocessed Data
-Download preprocessed dataset caches from [link](). Place the files in the `cache/datasets` directory.
+Download preprocessed dataset caches from [link]() (released after review). Place the files in the `cache/datasets` directory.
 
 ## Train
 
@@ -52,7 +52,7 @@ The training script is `train.sh`, with config files in `configs/train` folder.
 
 ## Evaluation
 
-You can download a pretrained UniVPR model from [here](https://drive.google.com/file/d/1u83Dmqmm1-uikOPr58IIhfIzDYwFxCy1/view?usp=sharing). For evaluating run:
+You can download a pretrained UniVPR model from [here]() (released after review). For evaluating run:
 
 ```bash
 python3 eval.py --ckpt_path 'weights/dino_salad.ckpt' --image_size 322 322 --batch_size 256 --val_datasets MSLS Nordland
