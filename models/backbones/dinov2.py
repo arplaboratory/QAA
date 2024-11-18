@@ -125,6 +125,7 @@ class DINOv2(nn.Module):
         self.multi_adapt = multi_adapt
         
         if self.domain_prompt!="none":
+            raise NotImplementedError()
             assert injection_layer > 0, 'Injection layer should be greater than 0'
             hidden_size = self.model.blocks[0].norm1.weight.shape[0]
             assert self.num_trainable_blocks > 0, 'First blocks should be frozen when using domain prompt'
