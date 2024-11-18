@@ -13,68 +13,50 @@ Create a conda environment with the following:
 conda env create -f environment.yml
 ```
 
-To quickly test and use our model, you can use Torch Hub:
-```python
-import torch
-model = torch.hub.load("serizba/salad", "dinov2_salad")
-model.eval()
-model.cuda()
-```
-
 ## Dataset
 
-For training, download [GSV-Cities](https://github.com/amaralibey/gsv-cities), [MSLS](https://www.mapillary.com/dataset/places), and [SF-XL](https://docs.google.com/forms/d/e/1FAIpQLSdQEcRULPLNr0Zk5x85jNw3vcel_RxoQoKtsrJA7QPjWPVqZg/viewform). For evaluation, download and format the desired datasets from [VPR-dataset-downloader](https://github.com/gmberton/VPR-datasets-downloader/tree/main), except for [Nordland*](https://surfdrive.surf.nl/files/index.php/s/sbZRXzYe3l0v67W) and MSLS (using official dataset).
+For training, download [GSV-Cities](https://github.com/amaralibey/gsv-cities), [MSLS](https://www.mapillary.com/dataset/places), and [SF-XL](https://docs.google.com/forms/d/e/1FAIpQLSdQEcRULPLNr0Zk5x85jNw3vcel_RxoQoKtsrJA7QPjWPVqZg/viewform). 
+
+For evaluation, download and format the desired datasets from [VPR-dataset-downloader](https://github.com/gmberton/VPR-datasets-downloader/tree/main), except for [Nordland*](https://surfdrive.surf.nl/files/index.php/s/sbZRXzYe3l0v67W) and MSLS (using official dataset).
+
+### Option 1: Compress datasets into sqf files
+For the best compatibility, compress dataset folders into a single `.sqf` file using `mksquashfs`. Example for MSLS:
+```
+mksquashfs mapillary_sls mapillary_sls.sqf  -keep-as-directory
+```
+Place the resulting `.sqf` file in the `datasets_sqf` directory.
+
+### Option 2: Utilize original datasets
+If you don't want to use `.sqf` files, just put the dataset folder into `datasets` folder.
+
+## Preprocess
+
+### Option 1: Preprocess from Scratch
+Run the following scripts:
+
+```
+./preprocess_dataset_npy.sh
+./preprocess_dataset_cluster_sfxl.sh  # For clustering the SF-XL training set
+```
+
+The results will be stored in the `cache/datasets` directory.
+
+To add a new dataset, refer to `dataloaders/GenerateDatasetNpy.py` for guidance on generating .npy files.
+
+### Option 2: Use Preprocessed Data
+Download preprocessed dataset caches from [link](). Place the files in the `cache/datasets` directory.
 
 ## Train
 
-Training is done on GSV-Cities for 4 complete epochs. It requires around 30 minutes on an NVIDIA RTX 3090. For training DINOv2 SALAD run:
-```bash
-python3 main.py
-```
-
-After training, logs and checkpoints should be on the `logs` dir.
+The training script is `train.sh`, with config files in `configs/train` folder.
 
 ## Evaluation
 
-You can download a pretrained DINOv2 SALAD model from [here](https://drive.google.com/file/d/1u83Dmqmm1-uikOPr58IIhfIzDYwFxCy1/view?usp=sharing). For evaluating run:
+You can download a pretrained UniVPR model from [here](https://drive.google.com/file/d/1u83Dmqmm1-uikOPr58IIhfIzDYwFxCy1/view?usp=sharing). For evaluating run:
 
 ```bash
 python3 eval.py --ckpt_path 'weights/dino_salad.ckpt' --image_size 322 322 --batch_size 256 --val_datasets MSLS Nordland
 ```
-
-<table>
-<thead>
-  <tr>
-    <th colspan="3">MSLS Challenge</th>
-    <th colspan="3">MSLS Val</th>
-    <th colspan="3">NordLand</th>
-  </tr>
-  <tr>
-    <th>R@1</th>
-    <th>R@5</th>
-    <th>R@10</th>
-    <th>R@1</th>
-    <th>R@5</th>
-    <th>R@10</th>
-    <th>R@1</th>
-    <th>R@5</th>
-    <th>R@10</th>
-  </tr>
-</thead>
-<tbody>
-  <tr>
-    <td>75.0</td>
-    <td>88.8</td>
-    <td>91.3</td>
-    <td>92.2</td>
-    <td>96.4</td>
-    <td>97.0</td>
-    <td>76.0</td>
-    <td>89.2</td>
-    <td>92.0</td>
-  </tr>
-</tbody>
-</table>
 
 ## Acknowledgements
 This code is based on the amazing work of:
