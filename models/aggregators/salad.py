@@ -17,13 +17,19 @@ def log_optimal_transport(scores: torch.Tensor, alpha: torch.Tensor, iters: int)
     one = scores.new_tensor(1)
     ms, ns, bs = (m*one).to(scores), (n*one).to(scores), ((n-m)*one).to(scores)
 
-    bins = alpha.expand(b, 1, n)
-    alpha = alpha.expand(b, 1, 1)
-    
-    couplings = torch.cat([scores, bins], 1)
+    if alpha is not None:
+        bins = alpha.expand(b, 1, n)
+        alpha = alpha.expand(b, 1, 1)
+        
+        couplings = torch.cat([scores, bins], 1)
+    else:
+        couplings = scores
 
     norm = - (ms + ns).log()
-    log_mu = torch.cat([norm.expand(m), bs.log()[None] + norm])
+    if alpha is not None:
+        log_mu = torch.cat([norm.expand(m), bs.log()[None] + norm])
+    else:
+        log_mu = norm.expand(m)
     log_nu = norm.expand(n)
     log_mu, log_nu = log_mu[None].expand(b, -1), log_nu[None].expand(b, -1)
 
@@ -49,13 +55,22 @@ class SALAD(nn.Module):
             cluster_dim=128,
             token_dim=256,
             dropout=0.3,
+            divide_ratio=[1,1,1,0],
+            divide=1,
+            dust_bin=True,
+            freeze="none",
         ) -> None:
         super().__init__()
 
         self.num_channels = num_channels
-        self.num_clusters= num_clusters
+        self.num_clusters = num_clusters
         self.cluster_dim = cluster_dim
         self.token_dim = token_dim
+        self.freeze = freeze
+        self.divide = divide
+        self.divide_ratio = divide_ratio
+        if self.divide > 1:
+            raise NotImplementedError()
         
         if dropout > 0:
             dropout = nn.Dropout(dropout)
@@ -63,11 +78,12 @@ class SALAD(nn.Module):
             dropout = nn.Identity()
 
         # MLP for global scene token g
-        self.token_features = nn.Sequential(
-            nn.Linear(self.num_channels, 512),
-            nn.ReLU(),
-            nn.Linear(512, self.token_dim)
-        )
+        if self.token_dim != 0:
+            self.token_features = nn.Sequential(
+                nn.Linear(self.num_channels, 512),
+                nn.ReLU(),
+                nn.Linear(512, self.token_dim)
+            )
         # MLP for local features f_i
         self.cluster_features = nn.Sequential(
             nn.Conv2d(self.num_channels, 512, 1),
@@ -77,43 +93,62 @@ class SALAD(nn.Module):
         )
         # MLP for score matrix S
         self.score = nn.Sequential(
-            nn.Conv2d(self.num_channels, 512, 1),
-            dropout,
-            nn.ReLU(),
-            nn.Conv2d(512, self.num_clusters, 1),
+                nn.Conv2d(self.num_channels, 512, 1),
+                dropout,
+                nn.ReLU(),
+                nn.Conv2d(512, self.num_clusters, 1),
         )
+        if divide > 1:
+            raise NotImplementedError()
         # Dustbin parameter z
-        self.dust_bin = nn.Parameter(torch.tensor(1.))
+        if dust_bin:
+            self.dust_bin = nn.Parameter(torch.tensor(1.))
+        else:
+            self.dust_bin = None
 
 
-    def forward(self, x):
+    def forward(self, x, domain_idx=None):
         """
         x (tuple): A tuple containing two elements, f and t. 
             (torch.Tensor): The feature tensors (t_i) [B, C, H // 14, W // 14].
             (torch.Tensor): The token tensor (t_{n+1}) [B, C].
+        domain_idx (torch.Tensor, optional): The domain index tensor [B]. Defaults to None.
 
         Returns:
             f (torch.Tensor): The global descriptor [B, m*l + g]
         """
-        x, t = x # Extract features and token
+        if len(x) == 3:
+            x, t, domain_desc = x
+        else:
+            x, t = x # Extract features and token
+            domain_desc = None
 
         f = self.cluster_features(x).flatten(2)
         p = self.score(x).flatten(2)
-        t = self.token_features(t)
-
+        if self.divide > 1:
+            raise NotImplementedError()
+        if self.token_dim != 0:
+            t = self.token_features(t)
+        assert p.shape[1] == self.num_clusters
         # Sinkhorn algorithm
         p = log_optimal_transport(p, self.dust_bin, 3)
         p = torch.exp(p)
         # Normalize to maintain mass
-        p = p[:, :-1, :]
+        if self.dust_bin is not None:
+            p = p[:, :-1, :]
 
 
         p = p.unsqueeze(1).repeat(1, self.cluster_dim, 1, 1)
         f = f.unsqueeze(2).repeat(1, 1, self.num_clusters, 1)
 
-        f = torch.cat([
-            nn.functional.normalize(t, p=2, dim=-1),
-            nn.functional.normalize((f * p).sum(dim=-1), p=2, dim=1).flatten(1)
-        ], dim=-1)
+        if self.token_dim == 0:
+            f = nn.functional.normalize((f * p).sum(dim=-1), p=2, dim=1).flatten(1)
+        else:
+            f = torch.cat([
+                nn.functional.normalize(t, p=2, dim=-1),
+                nn.functional.normalize((f * p).sum(dim=-1), p=2, dim=1).flatten(1)
+            ], dim=-1)
 
+        if domain_desc is not None:
+            return nn.functional.normalize(f, p=2, dim=-1), domain_desc
         return nn.functional.normalize(f, p=2, dim=-1)

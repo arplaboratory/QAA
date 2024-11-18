@@ -4,19 +4,21 @@ from PIL import Image, ImageFile, UnidentifiedImageError
 ImageFile.LOAD_TRUNCATED_IMAGES = True
 import torch
 from torch.utils.data import Dataset
-import torchvision.transforms as T
+import torchvision
+from torchvision import transforms as T
+from torchvision.transforms import v2
 import numpy as np
 import tqdm
 import os
-import faiss
-
 import concurrent.futures
 from scipy.spatial.distance import cdist, pdist, squareform
 import networkx
+import faiss
 
-default_transform = T.Compose([
-    T.ToTensor(),
-    T.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+default_transform = v2.Compose([
+    v2.ToImage(),
+    v2.ToDtype(torch.float32, scale=True),
+    v2.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
 ])
 
 # NOTE: Hard coded path to dataset folder 
@@ -26,10 +28,15 @@ if not Path(BASE_PATH).exists():
     raise FileNotFoundError(
         'BASE_PATH is hardcoded, please adjust to point to gsv_cities')
 
+def init_pool(cluster_descriptors_dict_input, city_df_input):
+    global cluster_descriptors_dict, city_df
+    cluster_descriptors_dict = cluster_descriptors_dict_input
+    city_df = city_df_input
+
 def load_city_df():
     # Load cities
     city_df = {}
-    cluster_info = np.load("cache/datasets/SF_XL/clusters.npy", allow_pickle=True).flat[0]
+    cluster_info = np.load("cache/datasets/SF_XL/clusters.npy", allow_pickle=True).flat[0] # From preprocess_dataset_cluster.sh
     data = [(key, cluster) for cluster, keys in cluster_info.items() for key in keys]
     df = pd.DataFrame(data, columns=["key", "class"])
     easting = df["key"].apply(lambda x: float(x.split('/')[-1].split('@')[1]))
@@ -38,27 +45,30 @@ def load_city_df():
     df.insert(1, 'easting', easting)
     df.insert(1, 'northing', northing)
     df.insert(1, 'group_id', group_id)
-    cluster = df.groupby('class').ngroup()
-    df.insert(1, 'unique_cluster', cluster)
     for city in df['group_id'].unique():
         # Database
-        city_df[city] = df.reset_index()
-        average_count = df.groupby('unique_cluster').size().mean()
+        subset_df = df.loc[df['group_id'] == city]
+        subset_df = subset_df.reset_index()
+        cluster = subset_df.groupby('class').ngroup()
+        subset_df.insert(1, 'unique_cluster', cluster)
+        city_df[city] = subset_df
+        average_count = subset_df.groupby('unique_cluster').size().mean()
         print(f"Average number of samples for each cluster for city {city}: {average_count}")
 
     return city_df
 
-def compute_cluster_descriptors(city_df, model, descriptor_size=8192 + 256, batch_size=64):
+def compute_cluster_descriptors(city_df, model, batch_size=32):
 
     class SFXLDataset(torch.utils.data.Dataset):
         def __init__(self, rows, city_path):
             self.rows = rows
             self.city_path = city_path
 
-            self.valid_transform = T.Compose([
-                T.Resize((322, 322), interpolation=T.InterpolationMode.BILINEAR),
-                T.ToTensor(),
-                T.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+            self.valid_transform = v2.Compose([
+                v2.ToImage(),
+                v2.Resize((322, 322), interpolation=T.InterpolationMode.BILINEAR),
+                v2.ToDtype(torch.float32, scale=True),
+                v2.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
             ])
 
         def __len__(self):
@@ -68,7 +78,7 @@ def compute_cluster_descriptors(city_df, model, descriptor_size=8192 + 256, batc
             row = self.rows.iloc[idx]
             path = Path(BASE_PATH) / row['key']
             try:
-                img = Image.open(path)
+                img = torchvision.io.read_image(str(path))
             except:
                 print(f'Image {path} could not be loaded')
                 img = Image.new('RGB', (322, 322))
@@ -77,6 +87,7 @@ def compute_cluster_descriptors(city_df, model, descriptor_size=8192 + 256, batc
 
     
     cluster_descriptors_dict = {}
+    model.eval()
     for city, df in tqdm.tqdm(city_df.items(), desc='Computing cluster descriptors'):
 
         # Create dataloader with one sample per cluster
@@ -90,34 +101,51 @@ def compute_cluster_descriptors(city_df, model, descriptor_size=8192 + 256, batc
             shuffle=False
         )
 
-        cluster_descriptors = torch.zeros((df.unique_cluster.max() + 1, descriptor_size))
+        descriptor_size = None
         res = faiss.StandardGpuResources()
 
         # Compute descriptors for each cluster
+        invalid_clusters = []
+        print("Computing descriptors for city", city)
         with torch.no_grad():
             for batch in tqdm.tqdm(dataloader):
                 img, clusters = batch
                 img = img.cuda()
-                descriptors = model(img)
-                cluster_descriptors[clusters] = descriptors.cpu()
+                with torch.autocast(device_type="cuda", dtype=torch.float16):
+                    if model.backbone.domain_prompt != "none":
+                        descriptors, domain_desc = model(img)
+                    else:
+                        descriptors = model(img)
+                if descriptor_size is None:
+                    descriptor_size = descriptors.shape[1]
+                    cluster_descriptors = [[] for _ in range(df.unique_cluster.max() + 1)]
+                for i in range(len(descriptors)):
+                    cluster_descriptors[clusters[i]] = descriptors[i].cpu()
+            for i in range(len(cluster_descriptors)):
+                if cluster_descriptors[i] == []:
+                    cluster_descriptors[i] = torch.ones(descriptor_size) * 1e6
+                    invalid_clusters.append(i)
+            cluster_descriptors = torch.stack(cluster_descriptors, dim=0)
+        print("Sorting cluster indices for city", city)
         index = faiss.IndexFlatL2(descriptor_size)
         index = faiss.index_cpu_to_gpu(res, 0, index)
         index.add(cluster_descriptors)
-        D, I = index.search(cluster_descriptors, 2048)
-        cluster_descriptors_dict[city] = (D, I)
+        _, I = index.search(cluster_descriptors, 64)
+        for i in invalid_clusters:
+            I[i] = torch.ones_like(I[i]) * -1
+        cluster_descriptors_dict[city] = I.cpu().numpy()
+        print("Finish for city", city)
+    model.train()
 
     return cluster_descriptors_dict
 
 
 def create_dataset_part(
-        cluster_descriptors_dict,
-        city_df,
         num_batches=100,
         batch_size=60,
         num_images_per_place=4,
         sampled_similar_places=15,
         same_place_threshold=20.0,
-        only_top_k=False,
     ):
 
     import os
@@ -135,7 +163,7 @@ def create_dataset_part(
 
             cities_to_sample = [c for c in cluster_descriptors_dict.keys()]
 
-            city = np.random.choice(cities_to_sample) # SF_XL has the same number of class per group
+            city = np.random.choice(cities_to_sample)
 
             # Don't sample already done in this batch
             while city in cities_this_batch:
@@ -144,23 +172,17 @@ def create_dataset_part(
 
 
             df = city_df[city]
-            distances, topk = cluster_descriptors_dict[city]
+            topk = cluster_descriptors_dict[city]
             
             # Sample a random cluster
             place_id = np.random.choice(df.unique_cluster.unique())
+            while topk[place_id][0] == -1:
+                place_id = np.random.choice(df.unique_cluster.unique())
 
-            if only_top_k:
-                topk_subset = np.delete(topk[place_id], 0)
-                other_places = topk_subset[:sampled_similar_places]
-            else:
-                topk_subset = np.delete(topk[place_id], 0)
-                distances = np.delete(distances[place_id], 0)
-                distances[distances != 0] = distances.max() - distances[distances != 0]
-                distances = distances / distances.sum()
-                distances = np.array(distances)
-
-                # Sample similar places
-                other_places = np.random.choice(topk_subset, size=sampled_similar_places, p=distances, replace=False)
+            # Compute similarity between the selected cluster and all the others
+            topk_subset = np.delete(topk[place_id], 0)
+            other_places = topk_subset[topk_subset != -1]
+            other_places = topk_subset[:sampled_similar_places]
             other_places = np.concatenate([np.array([place_id]), other_places])
 
             df = df[df['unique_cluster'].isin(other_places)]
@@ -207,9 +229,6 @@ class CliqueSFXLDataset(Dataset):
             num_images_per_place=4,
             sampled_similar_places=15,
             same_place_threshold=20.0,
-            only_top_k=False,
-            recompute_clusters=False,
-            shuffle_method="global",
             prefetch_factor=1,
     ):
         super(CliqueSFXLDataset, self).__init__()
@@ -223,9 +242,6 @@ class CliqueSFXLDataset(Dataset):
         self.num_images_per_place = num_images_per_place
         self.sampled_similar_places = sampled_similar_places
         self.same_place_threshold = same_place_threshold
-        self.recompute_clusters = recompute_clusters
-        self.only_top_k = only_top_k
-        self.shuffle_method = shuffle_method
         self.prefetch_factor = prefetch_factor
 
         self.create_dataset(
@@ -235,7 +251,6 @@ class CliqueSFXLDataset(Dataset):
             num_images_per_place=num_images_per_place,
             sampled_similar_places=sampled_similar_places,
             same_place_threshold=same_place_threshold,
-            only_top_k=only_top_k,
             prefetch_factor=prefetch_factor,
         )
         
@@ -246,7 +261,8 @@ class CliqueSFXLDataset(Dataset):
         img_idx = index % self.batch_size
          
         imgs = []
-        for img_name in self.data[batch_idx, img_idx]:
+        for index in range(self.num_images_per_place):
+            img_name = self.data[batch_idx, img_idx, index]
             img_path = self.base_path + img_name
             img = self.image_loader(img_path)
 
@@ -268,14 +284,14 @@ class CliqueSFXLDataset(Dataset):
     @staticmethod
     def image_loader(path):
         try:
-            return Image.open(path).convert('RGB')
+            return torchvision.io.read_image(path, mode=torchvision.io.image.ImageReadMode.RGB)
         except UnidentifiedImageError:
             print(f'Image {path} could not be loaded')
             return Image.new('RGB', (224, 224))
         
 
-    def reload(self, model=None):
-        if self.recompute_clusters:
+    def reload(self, model=None, recompute=False):
+        if recompute:
             self.create_dataset(
                 model=model,
                 num_batches=self.num_batches,
@@ -284,24 +300,15 @@ class CliqueSFXLDataset(Dataset):
                 num_images_per_place=self.num_images_per_place,
                 sampled_similar_places=self.sampled_similar_places,
                 same_place_threshold=self.same_place_threshold,
-                only_top_k=self.only_top_k,
                 prefetch_factor=self.prefetch_factor,
+                recompute=recompute,
             )
-        elif self.shuffle_method =="global":
-            self.data = self.data[np.random.permutation(self.data.shape[0])]
-        elif self.shuffle_method =="batch":
-            for i in range(self.data.shape[0]):
-                self.data[i] = self.data[i][np.random.permutation(self.data[i].shape[0])]
-            self.data = self.data[np.random.permutation(self.data.shape[0])]
-        elif self.shuffle_method =="image":
-            for i in range(self.data.shape[0]):
-                for j in  range(self.data[i].shape[0]):
-                    self.data[i][j] = self.data[i][j][np.random.permutation(self.data[i][j].shape[0])]
-            for i in range(self.data.shape[0]):
-                self.data[i] = self.data[i][np.random.permutation(self.data[i].shape[0])]
-            self.data = self.data[np.random.permutation(self.data.shape[0])]
         else:
-            raise ValueError("Invalid shuffle method")
+            self.data = self.data[np.random.permutation(self.data.shape[0])]
+            if self.prefetch_factor > 1:
+                for i in range(self.data.shape[0]):
+                    for j in  range(self.data[i].shape[0]):
+                        self.data[i][j] = self.data[i][j][np.random.permutation(self.data[i][j].shape[0])]
         
 
     def create_dataset(
@@ -313,8 +320,8 @@ class CliqueSFXLDataset(Dataset):
         num_images_per_place=4,
         sampled_similar_places=15,
         same_place_threshold=20.0,
-        only_top_k=False,
         prefetch_factor=1,
+        recompute=False,
     ):
 
         city_df = load_city_df()
@@ -324,29 +331,28 @@ class CliqueSFXLDataset(Dataset):
         # Compute cluster descriptors if model is provided
         if model is not None:
             cluster_descriptors_dict = compute_cluster_descriptors(city_df, model)
-            np.save(cluster_descriptors_path, cluster_descriptors_dict)
+            if not recompute: # recompute does not save
+                np.save(cluster_descriptors_path, cluster_descriptors_dict)
         elif os.path.isfile(cluster_descriptors_path):
             cluster_descriptors_dict = np.load(cluster_descriptors_path, allow_pickle=True).item()
         else:
             print('Model must be provided to compute cluster descriptors')
             print('- Computing descriptors using torch.hub DINOv2 SALAD')
-            model = torch.hub.load("serizba/salad", "dinov2_salad").eval().cuda()
+            model = torch.hub.load("serizba/salad", "dinov2_salad").cuda()
             cluster_descriptors_dict = compute_cluster_descriptors(city_df, model)
-            np.save(cluster_descriptors_path, cluster_descriptors_dict)
+            if not recompute: # recompute does not save
+                np.save(cluster_descriptors_path, cluster_descriptors_dict)
 
         # Create dataset in parallel
         all_images = []
-        with concurrent.futures.ProcessPoolExecutor(max_workers=num_processes) as executor:
+        with concurrent.futures.ProcessPoolExecutor(max_workers=num_processes, initializer=init_pool, initargs=(cluster_descriptors_dict, city_df)) as executor:
             tasks = [executor.submit(
                 create_dataset_part,
-                cluster_descriptors_dict,
-                city_df,
                 num_batches // num_processes,
                 batch_size,
                 num_images_per_place * prefetch_factor,
                 sampled_similar_places,
                 same_place_threshold,
-                only_top_k,
             ) for _ in range(num_processes)]
             
             # Collect results in all_images

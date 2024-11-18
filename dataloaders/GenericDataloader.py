@@ -1,6 +1,8 @@
 import pytorch_lightning as pl
 from torch.utils.data.dataloader import DataLoader
 from torchvision import transforms as T
+from torchvision.transforms import v2
+import torch
 import os
 
 from prettytable import PrettyTable
@@ -45,30 +47,35 @@ class GenericDataModule(pl.LightningDataModule):
         self.val_datasets_cfg = load_datasets_config(self.val_dataset_names)
         self.test_datasets_cfg = load_datasets_config(self.test_dataset_names)
         self.train_cfg_training = train_cfg_training
+        if self.train_cfg_training.recompute_clusters and self.train_cfg_training.recompute_interval!=0:
+            self.recompute_count = 0
         self.model = None
 
-        self.train_transform = T.Compose([
-            T.Resize(self.train_image_size, interpolation=T.InterpolationMode.BILINEAR),
-            T.RandAugment(num_ops=3, interpolation=T.InterpolationMode.BILINEAR),
-            T.ToTensor(),
-            T.Normalize(mean=self.mean_dataset, std=self.std_dataset),
-        ])
+        self.train_transform = v2.Compose([
+            v2.ToImage(),
+            v2.Resize(self.train_image_size, interpolation=T.InterpolationMode.BILINEAR),
+            v2.RandAugment(num_ops=3, interpolation=T.InterpolationMode.BILINEAR),
+            v2.ToDtype(torch.float32, scale=True),
+            v2.Normalize(mean=self.mean_dataset, std=self.std_dataset)])
 
-        self.valid_transform = T.Compose([
-            T.Resize(self.test_image_size, interpolation=T.InterpolationMode.BILINEAR),
-            T.ToTensor(),
-            T.Normalize(mean=self.mean_dataset, std=self.std_dataset)])
+        self.valid_transform = v2.Compose([
+            v2.ToImage(),
+            v2.Resize(self.test_image_size, interpolation=T.InterpolationMode.BILINEAR),
+            v2.ToDtype(torch.float32, scale=True),
+            v2.Normalize(mean=self.mean_dataset, std=self.std_dataset)])
         
-        self.test_transform = T.Compose([
-            T.Resize(self.test_image_size, interpolation=T.InterpolationMode.BILINEAR),
-            T.ToTensor(),
-            T.Normalize(mean=self.mean_dataset, std=self.std_dataset)])
+        self.test_transform = v2.Compose([
+            v2.ToImage(),
+            v2.Resize(self.test_image_size, interpolation=T.InterpolationMode.BILINEAR),
+            v2.ToDtype(torch.float32, scale=True),
+            v2.Normalize(mean=self.mean_dataset, std=self.std_dataset)])
         
-        self.test_grayscale_transform = T.Compose([
-            T.Grayscale(num_output_channels=3),
-            T.Resize(self.test_image_size, interpolation=T.InterpolationMode.BILINEAR),
-            T.ToTensor(),
-            T.Normalize(mean=self.mean_dataset, std=self.std_dataset)])
+        self.test_grayscale_transform = v2.Compose([
+            v2.ToImage(),
+            v2.Grayscale(num_output_channels=3),
+            v2.Resize(self.test_image_size, interpolation=T.InterpolationMode.BILINEAR),
+            v2.ToDtype(torch.float32, scale=True),
+            v2.Normalize(mean=self.mean_dataset, std=self.std_dataset)])
         
         self.train_loader_config_general = {
             'batch_size': self.train_batch_size,
@@ -87,14 +94,14 @@ class GenericDataModule(pl.LightningDataModule):
 
         self.valid_loader_config = {
             'batch_size': self.test_batch_size,
-            'num_workers': self.num_workers,
+            'num_workers': self.num_workers * 2,
             'drop_last': False,
             'pin_memory': True,
             'shuffle': False}
 
         self.test_loader_config = {
             'batch_size': self.test_batch_size,
-            'num_workers': self.num_workers,
+            'num_workers': self.num_workers * 2,
             'drop_last': False,
             'pin_memory': True,
             'shuffle': False}
@@ -104,7 +111,6 @@ class GenericDataModule(pl.LightningDataModule):
 
     def setup(self, stage):
         if stage == 'fit':
-            self.first_setup = True
             # load train dataloader (pitts_train, msls_train, ...etc)
             self.train_datasets = []
             for dataset_name in self.train_dataset_names:
@@ -114,8 +120,8 @@ class GenericDataModule(pl.LightningDataModule):
                     self.train_datasets.append(GSVCitiesDataset(
                                                 split="train",
                                                 cities=GSV_params.training.GSV_TRAIN_CITIES,
-                                                img_per_place=GSV_params.training.img_per_place,
-                                                min_img_per_place=GSV_params.training.min_img_per_place,
+                                                img_per_place=self.train_cfg_training.img_per_place,
+                                                min_img_per_place=self.train_cfg_training.img_per_place*self.train_cfg_training.prefetch_factor,
                                                 random_sample_from_each_place=GSV_params.training.random_sample_from_each_place,
                                                 transform=self.train_transform))
                     if GSV_params.training.show_data_stats:
@@ -125,9 +131,10 @@ class GenericDataModule(pl.LightningDataModule):
                                                 split="train", 
                                                 transform=self.train_transform,
                                                 batch_size=self.train_batch_size,
-                                                only_top_k=self.train_cfg_training.only_top_k,
-                                                recompute_clusters=self.train_cfg_training.recompute_clusters,
-                                                shuffle_method=self.train_cfg_training.shuffle_method,
+                                                num_images_per_place=self.train_cfg_training.img_per_place,
+                                                num_batches=self.train_cfg_training.num_batches,
+                                                sampled_similar_places=self.train_cfg_training.sampled_similar_places,
+                                                num_processes=self.train_cfg_training.num_processes,
                                                 prefetch_factor=self.train_cfg_training.prefetch_factor,
                                                 **self.train_datasets_cfg["mapillary_sls"].training.clique_args))
                 elif dataset_name == "SF_XL":
@@ -135,9 +142,10 @@ class GenericDataModule(pl.LightningDataModule):
                                                 split="train",
                                                 transform=self.train_transform,
                                                 batch_size=self.train_batch_size,
-                                                only_top_k=self.train_cfg_training.only_top_k,
-                                                recompute_clusters=self.train_cfg_training.recompute_clusters,
-                                                shuffle_method=self.train_cfg_training.shuffle_method,
+                                                num_images_per_place=self.train_cfg_training.img_per_place,
+                                                num_batches=self.train_cfg_training.num_batches,
+                                                sampled_similar_places=self.train_cfg_training.sampled_similar_places,
+                                                num_processes=self.train_cfg_training.num_processes,
                                                 prefetch_factor=self.train_cfg_training.prefetch_factor,
                                                 **self.train_datasets_cfg["SF_XL"].training.clique_args))
                 else:
@@ -146,8 +154,6 @@ class GenericDataModule(pl.LightningDataModule):
                                                 split="train", 
                                                 transform=self.train_transform,
                                                 batch_size=self.train_batch_size,
-                                                only_top_k=self.train_cfg_training.only_top_k,
-                                                recompute_clusters=self.train_cfg_training.recompute_clusters,
                                                 **self.train_datasets_cfg[dataset_name].training.clique_args))
                 print(f'Dataset {dataset_name} loaded: Length = {len(self.train_datasets[-1])}')
 
@@ -159,6 +165,7 @@ class GenericDataModule(pl.LightningDataModule):
                     self.val_datasets.append(MapillaryDataset(split="val", input_transform=self.valid_transform))
                 else:
                     self.val_datasets.append(GenericDataset(dataset_name=dataset_name, split="val", input_transform=self.valid_transform))
+            wandb.config.update({'train_datasets': self.train_datasets_cfg, 'val_datasets': self.val_datasets_cfg, 'test_datasets': self.test_datasets_cfg})
 
         elif stage=="test":
             # load test sets (pitts_val, msls_val, ...etc)
@@ -167,31 +174,46 @@ class GenericDataModule(pl.LightningDataModule):
                 assert self.test_datasets_cfg[dataset_name].test.available
                 if dataset_name == "mapillary_sls":
                     self.test_datasets.append(MapillaryTestDataset(split="test", input_transform=self.test_transform))
+                elif dataset_name == "svox":
+                    svox_query_suffix = ["", "_night", "_overcast", "_rain", "_snow", "_sun"]
+                    for query_suffix in svox_query_suffix:
+                        self.test_datasets.append(GenericDataset(dataset_name=dataset_name+query_suffix, split="test", input_transform=self.test_transform, backup_transform=self.test_grayscale_transform))
                 else:
                     self.test_datasets.append(GenericDataset(dataset_name=dataset_name, split="test", input_transform=self.test_transform, backup_transform=self.test_grayscale_transform))
-    
-        wandb.config.update({'train_datasets': self.train_datasets_cfg, 'val_datasets': self.val_datasets_cfg, 'test_datasets': self.test_datasets_cfg})
+
+        elif stage=="validate":
+            # load test sets (pitts_val, msls_val, ...etc)
+            self.val_datasets = []
+            for dataset_name in self.val_dataset_names:
+                assert self.val_datasets_cfg[dataset_name].validation.available
+                if dataset_name == "mapillary_sls":
+                    self.val_datasets.append(MapillaryDataset(split="val", input_transform=self.valid_transform))
+                else:
+                    self.val_datasets.append(GenericDataset(dataset_name=dataset_name, split="val", input_transform=self.valid_transform))
 
     def reload(self, dataset_name, index):
         if dataset_name == "GSV":
+            print("SHUFFLE")
             GSV_params = self.train_datasets_cfg["GSV"]
             self.train_datasets[index] = GSVCitiesDataset(split="train",
                                                         cities=GSV_params.training.GSV_TRAIN_CITIES,
-                                                        img_per_place=GSV_params.training.img_per_place,
-                                                        min_img_per_place=GSV_params.training.min_img_per_place,
+                                                        img_per_place=self.train_cfg_training.img_per_place,
+                                                        min_img_per_place=self.train_cfg_training.img_per_place,
                                                         random_sample_from_each_place=GSV_params.training.random_sample_from_each_place,
                                                         transform=self.train_transform)
         else:
-            self.train_datasets[index].reload(model=self.model)
+            if self.train_cfg_training.recompute_clusters and self.train_cfg_training.recompute_interval!=0 and self.recompute_count == self.train_cfg_training.recompute_interval:
+                print("RECOMPUTE")
+                self.train_datasets[index].reload(model=self.model, recompute=True)
+            else:
+                print("SHUFFLE")
+                self.train_datasets[index].reload(model=self.model, recompute=False)
 
     def train_dataloader(self):
         train_dataloaders = {}
         for index, train_dataset_name in enumerate(self.train_dataset_names):
-            if not self.first_setup:
-                print("Reloading to shuffle")
-                self.reload(train_dataset_name, index) # Following reload routine to shuffle cities
-            else:
-                print("First setup: No reloading")
+            print("Reloading to shuffle")
+            self.reload(train_dataset_name, index) # Following reload routine to shuffle cities
             train_dataset = self.train_datasets[index]
             if train_dataset_name == "GSV":
                 train_dataloaders[train_dataset_name] = DataLoader(
@@ -199,8 +221,11 @@ class GenericDataModule(pl.LightningDataModule):
             else:
                 train_dataloaders[train_dataset_name] = DataLoader(
                     dataset=train_dataset, **self.train_loader_config_general)
+        if self.train_cfg_training.recompute_clusters and self.train_cfg_training.recompute_interval!=0 and self.recompute_count == self.train_cfg_training.recompute_interval:
+            self.recompute_count = 1
+        elif self.train_cfg_training.recompute_clusters and self.train_cfg_training.recompute_interval!=0:
+            self.recompute_count += 1
         print(f"Train dataloaders: {train_dataloaders}")
-        self.first_setup = False
         return train_dataloaders
 
     def val_dataloader(self):
@@ -236,7 +261,7 @@ class GenericDataModule(pl.LightningDataModule):
         table.align['Value'] = "l"
         table.header = False
         table.add_row(
-            ["Batch size (PxK)", f"{self.train_batch_size}x{GSV_params.training.img_per_place}"])
+            ["Batch size (PxK)", f"{self.train_batch_size}x{self.train_cfg_training.img_per_place}"])
         table.add_row(
             ["# of iterations", f"{GSV_dataset.__len__()//self.train_batch_size}"])
         table.add_row(["Image size", f"{self.train_image_size}"])

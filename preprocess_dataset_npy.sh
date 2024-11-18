@@ -3,64 +3,65 @@
 overlay_path="datasets_sqf/sped.sqf"
 singularity exec --overlay $overlay_path:ro \
                  /scratch/work/public/singularity/cuda12.1.1-cudnn8.9.0-devel-ubuntu22.04.2.sif \
-                 /bin/bash -c "source ~/.bashrc; conda activate UniVG; python3 dataloaders/GenerateDatasetNpy.py --dataset_name SPED"
+                 /bin/bash -c "source ~/.bashrc; conda activate UniVPR; python3 dataloaders/GenerateDatasetNpy.py --dataset_name SPED"
 
 overlay_path="datasets_sqf/eynsham.sqf"
 singularity exec --overlay $overlay_path:ro \
                  /scratch/work/public/singularity/cuda12.1.1-cudnn8.9.0-devel-ubuntu22.04.2.sif \
-                 /bin/bash -c "source ~/.bashrc; conda activate UniVG; python3 dataloaders/GenerateDatasetNpy.py --dataset_name eynsham"
+                 /bin/bash -c "source ~/.bashrc; conda activate UniVPR; python3 dataloaders/GenerateDatasetNpy.py --dataset_name eynsham"
 
 overlay_path="datasets_sqf/amstertime.sqf"
 singularity exec --overlay $overlay_path:ro \
                  /scratch/work/public/singularity/cuda12.1.1-cudnn8.9.0-devel-ubuntu22.04.2.sif \
-                 /bin/bash -c "source ~/.bashrc; conda activate UniVG; python3 dataloaders/GenerateDatasetNpy.py --dataset_name amstertime"
+                 /bin/bash -c "source ~/.bashrc; conda activate UniVPR; python3 dataloaders/GenerateDatasetNpy.py --dataset_name amstertime"
 
 overlay_path="datasets_sqf/tokyo247.sqf"
 singularity exec --overlay $overlay_path:ro \
                  /scratch/work/public/singularity/cuda12.1.1-cudnn8.9.0-devel-ubuntu22.04.2.sif \
-                 /bin/bash -c "source ~/.bashrc; conda activate UniVG; python3 dataloaders/GenerateDatasetNpy.py --dataset_name tokyo247"
+                 /bin/bash -c "source ~/.bashrc; conda activate UniVPR; python3 dataloaders/GenerateDatasetNpy.py --dataset_name tokyo247"
 
 overlay_path="datasets_sqf/pitts30k.sqf"
 singularity exec --overlay $overlay_path:ro \
                  /scratch/work/public/singularity/cuda12.1.1-cudnn8.9.0-devel-ubuntu22.04.2.sif \
-                 /bin/bash -c "source ~/.bashrc; conda activate UniVG; python3 dataloaders/GenerateDatasetNpy.py --dataset_name pitts30k --split train; python3 dataloaders/GenerateDatasetNpy.py --dataset_name pitts30k --split val; python3 dataloaders/GenerateDatasetNpy.py --dataset_name pitts30k --split test;"
+                 /bin/bash -c "source ~/.bashrc; conda activate UniVPR; python3 dataloaders/GenerateDatasetNpy.py --dataset_name pitts30k --split train; python3 dataloaders/GenerateDatasetNpy.py --dataset_name pitts30k --split val; python3 dataloaders/GenerateDatasetNpy.py --dataset_name pitts30k --split test;"
 
 overlay_path="datasets_sqf/pitts250k.sqf"
 singularity exec --overlay $overlay_path:ro \
                  /scratch/work/public/singularity/cuda12.1.1-cudnn8.9.0-devel-ubuntu22.04.2.sif \
-                 /bin/bash -c "source ~/.bashrc; conda activate UniVG; python3 dataloaders/GenerateDatasetNpy.py --dataset_name pitts250k --split train; python3 dataloaders/GenerateDatasetNpy.py --dataset_name pitts250k --split val; python3 dataloaders/GenerateDatasetNpy.py --dataset_name pitts250k --split test;"
+                 /bin/bash -c "source ~/.bashrc; conda activate UniVPR; python3 dataloaders/GenerateDatasetNpy.py --dataset_name pitts250k --split train; python3 dataloaders/GenerateDatasetNpy.py --dataset_name pitts250k --split val; python3 dataloaders/GenerateDatasetNpy.py --dataset_name pitts250k --split test;"
 
 overlay_path="datasets_sqf/nordland.sqf"
 singularity exec --overlay $overlay_path:ro \
                  /scratch/work/public/singularity/cuda12.1.1-cudnn8.9.0-devel-ubuntu22.04.2.sif \
-                 /bin/bash -c "source ~/.bashrc; conda activate UniVG; python3 dataloaders/GenerateDatasetNpy.py --dataset_name nordland"
+                 /bin/bash -c "source ~/.bashrc; conda activate UniVPR; python3 dataloaders/GenerateDatasetNpy.py --dataset_name nordland"
 
-overlay_path="datasets_sqf/nordland_subset.sqf"
-singularity exec --overlay $overlay_path:ro \
-                 /scratch/work/public/singularity/cuda12.1.1-cudnn8.9.0-devel-ubuntu22.04.2.sif \
-                 /bin/bash -c "source ~/.bashrc; conda activate UniVG; python3 dataloaders/GenerateDatasetNpy.py --dataset_name nordland_subset"
+# # We use GT from GSV-cities specific for this dataset because the dataset has different preprocessing
+# overlay_path="datasets_sqf/nordland_subset.sqf"
+# singularity exec --overlay $overlay_path:ro \
+#                  /scratch/work/public/singularity/cuda12.1.1-cudnn8.9.0-devel-ubuntu22.04.2.sif \
+#                  /bin/bash -c "source ~/.bashrc; conda activate UniVPR; python3 dataloaders/GenerateDatasetNpy.py --dataset_name nordland_subset"
 
 overlay_path="datasets_sqf/svox.sqf"
 singularity exec --overlay $overlay_path:ro \
                  /scratch/work/public/singularity/cuda12.1.1-cudnn8.9.0-devel-ubuntu22.04.2.sif \
-                 /bin/bash -c "source ~/.bashrc; conda activate UniVG; python3 dataloaders/GenerateDatasetNpy.py --dataset_name svox --split train; python3 dataloaders/GenerateDatasetNpy.py --dataset_name svox --split val; python3 dataloaders/GenerateDatasetNpy.py --dataset_name svox --split test"
+                 /bin/bash -c "source ~/.bashrc; conda activate UniVPR; python3 dataloaders/GenerateDatasetNpy.py --dataset_name svox --split train; python3 dataloaders/GenerateDatasetNpy.py --dataset_name svox --split val; python3 dataloaders/GenerateDatasetNpy.py --dataset_name svox --split test"
 
 overlay_path="datasets_sqf/mapillary_sls.sqf"
 singularity exec --overlay $overlay_path:ro \
                  /scratch/work/public/singularity/cuda12.1.1-cudnn8.9.0-devel-ubuntu22.04.2.sif \
-                 /bin/bash -c "source ~/.bashrc; conda activate UniVG; python3 dataloaders/GenerateDatasetNpy.py --dataset_name mapillary_sls --split val; python3 dataloaders/GenerateDatasetNpy.py --dataset_name mapillary_sls --split test"
+                 /bin/bash -c "source ~/.bashrc; conda activate UniVPR; python3 dataloaders/GenerateDatasetNpy.py --dataset_name mapillary_sls --split val; python3 dataloaders/GenerateDatasetNpy.py --dataset_name mapillary_sls --split test"
 
 overlay_path="datasets_sqf/SF_XL_train.sqf"
 singularity exec --overlay $overlay_path:ro \
                  /scratch/work/public/singularity/cuda12.1.1-cudnn8.9.0-devel-ubuntu22.04.2.sif \
-                 /bin/bash -c "source ~/.bashrc; conda activate UniVG; python3 dataloaders/GenerateDatasetNpy.py --dataset_name SF_XL --split train"
+                 /bin/bash -c "source ~/.bashrc; conda activate UniVPR; python3 dataloaders/GenerateDatasetNpy.py --dataset_name SF_XL --split train"
 
 overlay_path="datasets_sqf/SF_XL_val.sqf"
 singularity exec --overlay $overlay_path:ro \
                  /scratch/work/public/singularity/cuda12.1.1-cudnn8.9.0-devel-ubuntu22.04.2.sif \
-                 /bin/bash -c "source ~/.bashrc; conda activate UniVG; python3 dataloaders/GenerateDatasetNpy.py --dataset_name SF_XL --split val"
+                 /bin/bash -c "source ~/.bashrc; conda activate UniVPR; python3 dataloaders/GenerateDatasetNpy.py --dataset_name SF_XL --split val"
 
 overlay_path="datasets_sqf/SF_XL_test.sqf"
 singularity exec --overlay $overlay_path:ro \
                  /scratch/work/public/singularity/cuda12.1.1-cudnn8.9.0-devel-ubuntu22.04.2.sif \
-                 /bin/bash -c "source ~/.bashrc; conda activate UniVG; python3 dataloaders/GenerateDatasetNpy.py --dataset_name SF_XL --split test"
+                 /bin/bash -c "source ~/.bashrc; conda activate UniVPR; python3 dataloaders/GenerateDatasetNpy.py --dataset_name SF_XL --split test"

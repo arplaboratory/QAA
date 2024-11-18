@@ -15,7 +15,7 @@ if __name__ == '__main__':
     args = args.parse_args()
     # we load the training configuration
     train_cfg = load_config(args.config)
-    wandb_logger = WandbLogger(name=args.config.split('/')[-1].split('.')[0], project="UniVG")
+    wandb_logger = WandbLogger(name=args.config.split('/')[-1].split('.')[0], project="UniVPR")
     datamodule = GenericDataModule(
         train_batch_size=train_cfg.training.train_batch_size,
         test_batch_size=train_cfg.training.test_batch_size,
@@ -45,7 +45,10 @@ if __name__ == '__main__':
         loss_name=train_cfg.training.loss["name"],
         miner_name=train_cfg.training.miner["name"], # example: TripletMarginMiner, MultiSimilarityMiner, PairMarginMiner
         miner_margin=train_cfg.training.miner["margin"],
-        faiss_gpu=train_cfg.training.faiss_gpu
+        faiss_gpu=train_cfg.training.faiss_gpu,
+        cross_loss=train_cfg.training.cross_loss,
+        cross_loss_weight=train_cfg.training.cross_loss_weight,
+        recompute_desc=train_cfg.training.recompute_desc,
     )
 
     # model params saving using Pytorch Lightning
@@ -76,9 +79,11 @@ if __name__ == '__main__':
         callbacks=[checkpoint_cb, lr_monitor],# we only run the checkpointing callback (you can add more)
         reload_dataloaders_every_n_epochs=1, # we reload the dataset to shuffle the order
         log_every_n_steps=20,
-        logger=wandb_logger
+        logger=wandb_logger,
     )
 
     # we call the trainer, we give it the model and the datamodule
+    # trainer.validate(model=model, datamodule=datamodule)
     trainer.fit(model=model, datamodule=datamodule)
+    trainer.validate(model=model, datamodule=datamodule, ckpt_path="best")
     trainer.test(model=model, datamodule=datamodule, ckpt_path="best")

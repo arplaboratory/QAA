@@ -4,23 +4,31 @@ from PIL import Image, ImageFile, UnidentifiedImageError
 ImageFile.LOAD_TRUNCATED_IMAGES = True
 import torch
 from torch.utils.data import Dataset
-import torchvision.transforms as T
+import torchvision
+from torchvision import transforms as T
+from torchvision.transforms import v2
 import numpy as np
 import tqdm
 import os
 from sklearn.neighbors import NearestNeighbors
-
 import concurrent.futures
 from scipy.spatial.distance import cdist, pdist, squareform
 import networkx
+import faiss
 
-default_transform = T.Compose([
-    T.ToTensor(),
-    T.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+default_transform = v2.Compose([
+    v2.ToImage(),
+    v2.ToDtype(torch.float32, scale=True),
+    v2.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
 ])
 
 # NOTE: Hard coded path to dataset folder 
 NPY_ROOT = 'cache/datasets/'
+
+def init_pool(cluster_descriptors_dict_input, city_df_input):
+    global cluster_descriptors_dict, city_df
+    cluster_descriptors_dict = cluster_descriptors_dict_input
+    city_df = city_df_input
 
 def construct_df(dataset_name, split, same_place_threshold):
     city_df = {}
@@ -65,7 +73,7 @@ def compute_cluster_descriptors(city_df, model, dataset_name, same_place_thresho
             row = self.rows.iloc[idx]
             path = f'{row["key"]}'
             try:
-                img = Image.open(path)
+                img = torchvision.io.read_image(path, mode=torchvision.io.image.ImageReadMode.RGB)
             except:
                 print(f'Image {path} could not be loaded')
                 img = Image.new('RGB', (322, 322))
@@ -148,29 +156,32 @@ def compute_cluster_descriptors(city_df, model, dataset_name, same_place_thresho
         )
 
         cluster_descriptors = torch.zeros((df.unique_cluster.max() + 1, descriptor_size)).cuda()
+        res = faiss.StandardGpuResources()
 
         # Compute descriptors for each cluster
+        model.eval()
         with torch.no_grad():
             for batch in dataloader:
-                img, _, clusters = batch
+                img, clusters = batch
                 img = img.cuda()
                 descriptors = model(img)
                 cluster_descriptors[clusters] = descriptors
-
-        cluster_descriptors_dict[city] = cluster_descriptors.cpu().numpy()
+        index = faiss.IndexFlatL2(descriptor_size)
+        index = faiss.index_cpu_to_gpu(res, 0, index)
+        index.add(cluster_descriptors)
+        _, I = index.search(cluster_descriptors, 64)
+        cluster_descriptors_dict[city] = I.cpu()
+        model.train()
 
     return cluster_descriptors_dict
 
 
 def create_dataset_part(
-        cluster_descriptors_dict,
-        city_df,
         num_batches=100,
         batch_size=60,
         num_images_per_place=4,
         sampled_similar_places=15,
         same_place_threshold=20.0,
-        only_top_k=False,
     ):
 
     import os
@@ -178,49 +189,31 @@ def create_dataset_part(
     np.random.seed((os.getpid() * int(time.time())) % 123456789)
 
     images = np.zeros((num_batches, batch_size, num_images_per_place), dtype=object)
-    cities_to_sample = [c for c in cluster_descriptors_dict.keys()]
-    city = cities_to_sample[0]
-    df = city_df[city]
-    descriptor = cluster_descriptors_dict[city]
 
     for i in tqdm.tqdm(range(num_batches)):
 
         batch_idx = 0
-        valid = np.ones(len(df['unique_cluster'].unique()))
         while batch_idx < batch_size:
+
+            cities_to_sample = [c for c in cluster_descriptors_dict.keys()]
+
+
+
+            df = city_df
+            topk = cluster_descriptors_dict
             
             # Sample a random cluster
-            available_clusters = df['unique_cluster'].unique()[valid == 1]
-            available_descriptor = descriptor[available_clusters]
-            place_id_idx = np.random.choice(len(available_clusters))
-            place_id = available_clusters[place_id_idx]
+            place_id = np.random.choice(df.unique_cluster.unique())
 
             # Compute similarity between the selected cluster and all the others
-            distances = cdist(available_descriptor[place_id_idx, None, :], available_descriptor)[0]
-            # Normalize distances as probabilities (where min distance is max probability)
-            if only_top_k:
-                distances = np.delete(distances, place_id_idx)
-                other_places = np.delete(available_clusters, place_id_idx)
-
-                # Sample similar places
-                topk = np.argsort(distances)[:sampled_similar_places]
-                other_places = other_places[topk]
-            else:
-                distances[distances != 0] = distances.max() - distances[distances != 0]
-                distances = distances / distances.sum()
-
-                # Sample similar places
-                sample_idx = np.random.choice(len(available_clusters) - 1, sampled_similar_places, p=distances, replace=False)
-                other_places = other_places[sample_idx]
+            topk_subset = np.delete(topk[place_id], 0)
+            other_places = topk_subset[:sampled_similar_places]
             other_places = np.concatenate([np.array([place_id]), other_places])
 
-            invalid_idx = np.where(np.isin(df['unique_cluster'].unique(), other_places, assume_unique=True))[0]
-            valid[invalid_idx] = 0
-
-            current_df = df[df['unique_cluster'].isin(other_places)]
+            df = df[df['unique_cluster'].isin(other_places)]
 
             # Create adjacency matrix from UTM coordinates (two places are connected if they are closer than same_place_threshold)
-            utms = squareform(pdist(current_df[['easting', 'northing']].values)) < same_place_threshold
+            utms = squareform(pdist(df[['easting', 'northing']].values)) < same_place_threshold
 
             while batch_idx < batch_size:
 
@@ -262,9 +255,6 @@ class CliqueGenericDataset(Dataset):
             sampled_similar_places=15,
             same_place_threshold=20.0,
             cluster_desc_threshold_percentage=0.1,
-            only_top_k=False,
-            recompute_clusters=False,
-            shuffle_method="global",
             prefetch_factor=1,
     ):
         super(CliqueGenericDataset, self).__init__()
@@ -279,9 +269,6 @@ class CliqueGenericDataset(Dataset):
         self.sampled_similar_places = sampled_similar_places
         self.same_place_threshold = same_place_threshold
         self.cluster_desc_threshold_percentage = cluster_desc_threshold_percentage
-        self.recompute_clusters = recompute_clusters
-        self.only_top_k = only_top_k
-        self.shuffle_method = shuffle_method
         self.prefetch_factor = prefetch_factor
 
         self.create_dataset(
@@ -292,7 +279,6 @@ class CliqueGenericDataset(Dataset):
             sampled_similar_places=sampled_similar_places,
             same_place_threshold=same_place_threshold,
             cluster_desc_threshold_percentage=cluster_desc_threshold_percentage,
-            only_top_k=only_top_k,
             prefetch_factor=prefetch_factor,
         )
         
@@ -325,14 +311,14 @@ class CliqueGenericDataset(Dataset):
     @staticmethod
     def image_loader(path):
         try:
-            return Image.open(path).convert('RGB')
+            return torchvision.io.read_image(path, mode=torchvision.io.image.ImageReadMode.RGB)
         except UnidentifiedImageError:
             print(f'Image {path} could not be loaded')
             return Image.new('RGB', (224, 224))
         
 
-    def reload(self, model=None):
-        if self.recompute_clusters:
+    def reload(self, model=None, recompute=False):
+        if recompute:
             self.create_dataset(
                 model=model,
                 num_batches=self.num_batches,
@@ -342,24 +328,11 @@ class CliqueGenericDataset(Dataset):
                 sampled_similar_places=self.sampled_similar_places,
                 same_place_threshold=self.same_place_threshold,
                 cluster_desc_threshold_percentage=self.cluster_desc_threshold_percentage,
-                only_top_k=self.only_top_k,
                 prefetch_factor=self.prefetch_factor,
+                recompute=recompute,
             )
-        elif self.shuffle_method =="global":
-            self.data = self.data[np.random.permutation(self.data.shape[0])]
-        elif self.shuffle_method =="batch":
-            for i in range(self.data.shape[0]):
-                self.data[i] = self.data[i][np.random.permutation(self.data[i].shape[0])]
-            self.data = self.data[np.random.permutation(self.data.shape[0])]
-        elif self.shuffle_method =="image":
-            for i in range(self.data.shape[0]):
-                for j in  range(self.data[i].shape[0]):
-                    self.data[i][j] = self.data[i][j][np.random.permutation(self.data[i][j].shape[0])]
-            for i in range(self.data.shape[0]):
-                self.data[i] = self.data[i][np.random.permutation(self.data[i].shape[0])]
-            self.data = self.data[np.random.permutation(self.data.shape[0])]
         else:
-            raise ValueError("Invalid shuffle method")
+            self.data = self.data[np.random.permutation(self.data.shape[0])]
         
 
     def create_dataset(
@@ -372,7 +345,8 @@ class CliqueGenericDataset(Dataset):
         sampled_similar_places=15,
         same_place_threshold=20.0,
         cluster_desc_threshold_percentage=0.1,
-        only_top_k=False,
+        prefetch_factor=1,
+        recompute=False,
     ):
 
         city_df = construct_df(self.dataset_name, self.split, same_place_threshold)
@@ -382,29 +356,28 @@ class CliqueGenericDataset(Dataset):
         # Compute cluster descriptors if model is provided
         if model is not None:
             cluster_descriptors_dict = compute_cluster_descriptors(city_df, model, self.dataset_name, same_place_threshold, cluster_desc_threshold_percentage)
-            np.save(cluster_descriptors_path, cluster_descriptors_dict)
-        elif os.path.isfile(cluster_descriptors_path):
+            if not recompute: # recompute does not save
+                np.save(cluster_descriptors_path, cluster_descriptors_dict)
+        elif os.path.isfile(cluster_descriptors_path) and not recompute:
             cluster_descriptors_dict = np.load(cluster_descriptors_path, allow_pickle=True).item()
         else:
             print('Model must be provided to compute cluster descriptors')
             print('- Computing descriptors using torch.hub DINOv2 SALAD')
-            model = torch.hub.load("serizba/salad", "dinov2_salad").eval().cuda()
+            model = torch.hub.load("serizba/salad", "dinov2_salad").cuda()
             cluster_descriptors_dict = compute_cluster_descriptors(city_df, model, self.dataset_name, same_place_threshold, cluster_desc_threshold_percentage)
-            np.save(cluster_descriptors_path, cluster_descriptors_dict)
+            if not recompute: # recompute does not save
+                np.save(cluster_descriptors_path, cluster_descriptors_dict)
 
         # Create dataset in parallel
         all_images = []
-        with concurrent.futures.ProcessPoolExecutor(max_workers=num_processes) as executor:
+        with concurrent.futures.ProcessPoolExecutor(max_workers=num_processes, initializer=init_pool, initargs=(cluster_descriptors_dict, city_df)) as executor:
             tasks = [executor.submit(
                 create_dataset_part,
-                cluster_descriptors_dict,
-                city_df,
                 num_batches // num_processes,
                 batch_size,
-                num_images_per_place,
+                num_images_per_place * prefetch_factor,
                 sampled_similar_places,
                 same_place_threshold,
-                only_top_k,
             ) for _ in range(num_processes)]
             
             # Collect results in all_images

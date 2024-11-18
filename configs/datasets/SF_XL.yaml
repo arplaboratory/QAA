@@ -3,9 +3,6 @@ training:
   available: True
   clique_args:
     same_place_threshold: 25.0
-    num_batches: 4000
-    num_processes: 10
-    sampled_similar_places: 15
 validation:
   available: True
 test:
