@@ -25,6 +25,7 @@ overlay_path_SF_XL_test="datasets_sqf/SF_XL_test.sqf"
 overlay_path_SF_XL_train="datasets_sqf/SF_XL_train.sqf"
 
 singularity exec --nv \
+                --bind /etc/pki/ca-trust/extracted/pem/ \
                 --overlay $overlay_path_gsv:ro \
                 --overlay $overlay_path_pitts30k:ro \
                 --overlay $overlay_path_pitts250k:ro \
