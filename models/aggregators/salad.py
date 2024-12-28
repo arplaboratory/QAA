@@ -107,7 +107,7 @@ class SALAD(nn.Module):
             self.dust_bin = None
 
 
-    def forward(self, x, domain_idx=None):
+    def forward(self, x, domain_idx=None, visualize=False):
         """
         x (tuple): A tuple containing two elements, f and t. 
             (torch.Tensor): The feature tensors (t_i) [B, C, H // 14, W // 14].
