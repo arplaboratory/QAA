@@ -196,13 +196,20 @@ def create_dataset_part(
                 if np.sum(degrees >= num_images_per_place) == 0:
                     break
                 
-                # Get indices of nodes with enough degree
+                # Sample one high-degree node randomly
                 high_degree_indices = np.where(degrees >= num_images_per_place)[0]
+                sampled_node = np.random.choice(high_degree_indices)
                 
-                # Remove low-degree nodes from adjacency matrix
+                # Get neighbors of sampled node
+                neighbor_nodes = np.where(utms[sampled_node])[0]
+                
+                # Create mask for sampled node and its neighbors
                 mask = np.zeros(len(utms), dtype=bool)
-                mask[high_degree_indices] = True
+                mask[np.append(sampled_node, neighbor_nodes)] = True
+                
+                # Filter adjacency matrix to only include sampled node and neighbors
                 utms_filtered = utms[mask][:, mask]
+                
                 # Find cliques in filtered graph
                 for c in networkx.find_cliques(networkx.Graph(utms_filtered)):
                     if len(c) >= num_images_per_place:

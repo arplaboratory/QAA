@@ -53,27 +53,27 @@ class GenericDataModule(pl.LightningDataModule):
 
         self.train_transform = v2.Compose([
             v2.ToImage(),
-            v2.Resize(self.train_image_size, interpolation=T.InterpolationMode.BILINEAR),
+            v2.Resize(self.train_image_size, interpolation=T.InterpolationMode.BILINEAR, antialias=True),
             v2.RandAugment(num_ops=3, interpolation=T.InterpolationMode.BILINEAR),
             v2.ToDtype(torch.float32, scale=True),
             v2.Normalize(mean=self.mean_dataset, std=self.std_dataset)])
 
         self.valid_transform = v2.Compose([
             v2.ToImage(),
-            v2.Resize(self.test_image_size, interpolation=T.InterpolationMode.BILINEAR),
+            v2.Resize(self.test_image_size, interpolation=T.InterpolationMode.BILINEAR, antialias=True),
             v2.ToDtype(torch.float32, scale=True),
             v2.Normalize(mean=self.mean_dataset, std=self.std_dataset)])
         
         self.test_transform = v2.Compose([
             v2.ToImage(),
-            v2.Resize(self.test_image_size, interpolation=T.InterpolationMode.BILINEAR),
+            v2.Resize(self.test_image_size, interpolation=T.InterpolationMode.BILINEAR, antialias=True),
             v2.ToDtype(torch.float32, scale=True),
             v2.Normalize(mean=self.mean_dataset, std=self.std_dataset)])
         
         self.test_grayscale_transform = v2.Compose([
             v2.ToImage(),
             v2.Grayscale(num_output_channels=3),
-            v2.Resize(self.test_image_size, interpolation=T.InterpolationMode.BILINEAR),
+            v2.Resize(self.test_image_size, interpolation=T.InterpolationMode.BILINEAR, antialias=True),
             v2.ToDtype(torch.float32, scale=True),
             v2.Normalize(mean=self.mean_dataset, std=self.std_dataset)])
         
