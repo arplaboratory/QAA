@@ -155,40 +155,39 @@ def create_dataset_part(
     images = np.zeros((num_batches, batch_size, num_images_per_place), dtype=object)
 
     for i in tqdm.tqdm(range(num_batches)):
-
-        cities_this_batch = []
+        # Reset used samples tracking for each batch
+        used_samples = {city: set() for city in cluster_descriptors_dict.keys()}
 
         batch_idx = 0
         while batch_idx < batch_size:
-
             cities_to_sample = [c for c in cluster_descriptors_dict.keys()]
-
             city = np.random.choice(cities_to_sample)
 
-            # Don't sample already done in this batch
-            while city in cities_this_batch:
-                city = np.random.choice(cities_to_sample)
-            cities_this_batch.append(city)
-
-
             df = city_df[city]
+
+            # Filter out samples already used in this batch
+            available_indices = df.index[~df.index.isin(used_samples[city])]
+            if len(available_indices) < num_images_per_place:
+                continue
+
+            df = df.loc[available_indices]
             topk = cluster_descriptors_dict[city]
             
-            # Sample a random cluster
+            # Sample a random cluster from the filtered dataframe
             place_id = np.random.choice(df.unique_cluster.unique())
             while topk[place_id][0] == -1:
                 place_id = np.random.choice(df.unique_cluster.unique())
 
-            # Compute similarity between the selected cluster and all the others
             topk_subset = np.delete(topk[place_id], 0)
             other_places = topk_subset[topk_subset != -1]
             other_places = topk_subset[:sampled_similar_places]
             other_places = np.concatenate([np.array([place_id]), other_places])
 
-            df = df[df['unique_cluster'].isin(other_places)]
+            # Get subset of dataframe for selected clusters
+            df_subset = df[df['unique_cluster'].isin(other_places)]
 
             # Create adjacency matrix from UTM coordinates (two places are connected if they are closer than same_place_threshold)
-            utms = squareform(pdist(df[['easting', 'northing']].values)) < same_place_threshold
+            utms = squareform(pdist(df_subset[['easting', 'northing']].values)) < same_place_threshold
 
             while batch_idx < batch_size:
 
@@ -203,12 +202,15 @@ def create_dataset_part(
                 neighbors = np.unique(np.where(utms[clique, :])[1])
 
                 # Append place to batch
-                rows = df.iloc[list(clique)]
+                rows = df_subset.iloc[list(clique)]
                 images[i, batch_idx] = rows['key'].values
                 batch_idx += 1
 
+                # Add clique and neighbors to used_samples
+                used_samples[city].update(df_subset.iloc[clique].index)
+                used_samples[city].update(df_subset.iloc[neighbors].index)
+
                 # Remove selected place and its neighbors from the graph
-                # (just removing the edges is enough)
                 utms[:, clique] = False
                 utms[clique, :] = False
                 utms[neighbors, :] = False
@@ -268,7 +270,7 @@ class CliqueSFXLDataset(Dataset):
 
             if self.transform is not None:
                 img = self.transform(img)
-
+            img = v2.ToDtype(torch.float16, scale=True)(img)
             imgs.append(img)
 
         # NOTE: contrary to image classification where __getitem__ returns only one image 
