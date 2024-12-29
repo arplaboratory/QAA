@@ -161,69 +161,78 @@ def create_dataset_part(
     np.random.seed((os.getpid() * int(time.time())) % 123456789)
 
     images = np.zeros((num_batches, batch_size, num_images_per_place), dtype=object)
+    # Pre-compute city weights based on dataset size
+    city_weights = {city: len(df) for city, df in city_df.items()}
+    total_samples = sum(city_weights.values())
+    city_weights = {city: count/total_samples for city, count in city_weights.items()}
+    cities = list(city_weights.keys())
+    weights = [city_weights[city] for city in cities]
 
     for i in tqdm.tqdm(range(num_batches)):
-        # Reset used samples tracking for each batch
-        used_samples = {city: set() for city in cluster_descriptors_dict.keys()}
-
         batch_idx = 0
+        cities_this_batch = []
         while batch_idx < batch_size:
-            cities_to_sample = [c for c in cluster_descriptors_dict.keys()]
-            city = np.random.choice(cities_to_sample)
-
+            # Sample city based on size-weighted probability
+            city = np.random.choice(cities, p=weights)
+            # Don't sample already done in this batch
+            while city in cities_this_batch:
+                city = np.random.choice(cities, p=weights)
+            cities_this_batch.append(city)
+            
             df = city_df[city]
-
-            # Filter out samples already used in this batch
-            available_indices = df.index[~df.index.isin(used_samples[city])]
-            if len(available_indices) < num_images_per_place:
-                continue
-
-            df = df.loc[available_indices]
             topk = cluster_descriptors_dict[city]
             
-            # Sample a random cluster from the filtered dataframe
-            place_id = np.random.choice(df.unique_cluster.unique())
-            while topk[place_id][0] == -1:
-                place_id = np.random.choice(df.unique_cluster.unique())
+            # Sample valid clusters only
+            valid_clusters = df.unique_cluster.unique()
+            valid_clusters = valid_clusters[topk[valid_clusters][:, 0] != -1]
+            if len(valid_clusters) == 0:
+                continue
 
-            topk_subset = np.delete(topk[place_id], 0)
-            other_places = topk_subset[topk_subset != -1]
+            place_id = np.random.choice(valid_clusters)
+            topk_subset = topk[place_id]
             other_places = topk_subset[:sampled_similar_places]
-            other_places = np.concatenate([np.array([place_id]), other_places])
+            other_places = other_places[other_places != -1]  # Remove invalid
 
             # Get subset of dataframe for selected clusters
             df_subset = df[df['unique_cluster'].isin(other_places)]
 
-            # Create adjacency matrix from UTM coordinates (two places are connected if they are closer than same_place_threshold)
+            # Create adjacency matrix from UTM coordinates
             utms = squareform(pdist(df_subset[['easting', 'northing']].values)) < same_place_threshold
-
             while batch_idx < batch_size:
-
-                # Find a clique of at least num_images_per_place
-                for c in networkx.find_cliques(networkx.Graph(utms)):
+                degrees = np.sum(utms, axis=0)
+                # if there is no node with enough degree, return None
+                if np.sum(degrees >= num_images_per_place) == 0:
+                    break
+                
+                # Get indices of nodes with enough degree
+                high_degree_indices = np.where(degrees >= num_images_per_place)[0]
+                
+                # Remove low-degree nodes from adjacency matrix
+                mask = np.zeros(len(utms), dtype=bool)
+                mask[high_degree_indices] = True
+                utms_filtered = utms[mask][:, mask]
+                # Find cliques in filtered graph
+                for c in networkx.find_cliques(networkx.Graph(utms_filtered)):
                     if len(c) >= num_images_per_place:
-                        clique = np.random.choice(c, num_images_per_place, replace=False)
+                        # Map filtered indices back to original indices
+                        original_indices = np.arange(len(utms))[mask][c]
+                        clique = np.random.choice(original_indices, num_images_per_place, replace=False)
                         break
                 else:
                     break
-
+                
                 neighbors = np.unique(np.where(utms[clique, :])[1])
 
                 # Append place to batch
                 rows = df_subset.iloc[list(clique)]
-                images[i, batch_idx] = rows['key'].values
+                images[i, batch_idx] = np.char.add(np.char.add(np.where(rows['query'].values, f'{city}/query/images/', f'{city}/database/images/').astype('<U100'), rows['key'].values.astype('<U100')), '.jpg')
                 batch_idx += 1
-
-                # Add clique and neighbors to used_samples
-                used_samples[city].update(df_subset.iloc[clique].index)
-                used_samples[city].update(df_subset.iloc[neighbors].index)
 
                 # Remove selected place and its neighbors from the graph
                 utms[:, clique] = False
                 utms[clique, :] = False
                 utms[neighbors, :] = False
                 utms[:, neighbors] = False
-
     return images
 
 
