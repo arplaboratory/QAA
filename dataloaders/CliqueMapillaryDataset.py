@@ -14,7 +14,7 @@ import concurrent.futures
 from scipy.spatial.distance import cdist, pdist, squareform
 import networkx
 import faiss
-
+import time
 default_transform = v2.Compose([
     v2.ToImage(),
     v2.ToDtype(torch.float32, scale=True),
@@ -294,7 +294,6 @@ class CliqueMapillaryDataset(Dataset):
 
             if self.transform is not None:
                 img = self.transform(img)
-            img = v2.ToDtype(torch.float16, scale=True)(img)
             imgs.append(img)
 
         # NOTE: contrary to image classification where __getitem__ returns only one image 

@@ -5,3 +5,4 @@ from .mixvpr import MixVPR
 from .salad import SALAD
 from .qaa import QAA
 from .conditioned_qaa import ConditionedQAA
+from .boq import BoQ

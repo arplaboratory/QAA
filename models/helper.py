@@ -86,3 +86,12 @@ def get_aggregator(agg_arch='ConvAP', agg_config={}):
         if 'num_queries' in agg_config:
             del agg_config['num_queries']
         return aggregators.SALAD(**agg_config)
+    
+    elif 'boq' == agg_arch.lower():
+        assert 'num_channels' in agg_config
+        assert 'num_clusters' in agg_config
+        assert 'cluster_dim' in agg_config
+        assert 'token_dim' in agg_config
+        if 'num_queries' in agg_config:
+            del agg_config['num_queries']
+        return aggregators.BoQ() # Use default configs for baseline comparison

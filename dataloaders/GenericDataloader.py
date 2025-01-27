@@ -29,7 +29,8 @@ class GenericDataModule(pl.LightningDataModule):
                  mean_std=IMAGENET_MEAN_STD,
                  batch_sampler=None,
                  dataset_names=None,
-                 train_cfg_training=None
+                 train_cfg_training=None,
+                 mixed_precision=False,
                  ):
         super().__init__()
         self.train_batch_size = train_batch_size
@@ -55,26 +56,26 @@ class GenericDataModule(pl.LightningDataModule):
             v2.ToImage(),
             v2.Resize(self.train_image_size, interpolation=T.InterpolationMode.BILINEAR, antialias=True),
             v2.RandAugment(num_ops=3, interpolation=T.InterpolationMode.BILINEAR),
-            v2.ToDtype(torch.float32, scale=True),
+            v2.ToDtype(torch.float16, scale=True) if mixed_precision else v2.ToDtype(torch.float32, scale=True),
             v2.Normalize(mean=self.mean_dataset, std=self.std_dataset)])
 
         self.valid_transform = v2.Compose([
             v2.ToImage(),
             v2.Resize(self.test_image_size, interpolation=T.InterpolationMode.BILINEAR, antialias=True),
-            v2.ToDtype(torch.float32, scale=True),
+            v2.ToDtype(torch.float16, scale=True) if mixed_precision else v2.ToDtype(torch.float32, scale=True),
             v2.Normalize(mean=self.mean_dataset, std=self.std_dataset)])
         
         self.test_transform = v2.Compose([
             v2.ToImage(),
             v2.Resize(self.test_image_size, interpolation=T.InterpolationMode.BILINEAR, antialias=True),
-            v2.ToDtype(torch.float32, scale=True),
+            v2.ToDtype(torch.float16, scale=True) if mixed_precision else v2.ToDtype(torch.float32, scale=True),
             v2.Normalize(mean=self.mean_dataset, std=self.std_dataset)])
         
         self.test_grayscale_transform = v2.Compose([
             v2.ToImage(),
             v2.Grayscale(num_output_channels=3),
             v2.Resize(self.test_image_size, interpolation=T.InterpolationMode.BILINEAR, antialias=True),
-            v2.ToDtype(torch.float32, scale=True),
+            v2.ToDtype(torch.float16, scale=True) if mixed_precision else v2.ToDtype(torch.float32, scale=True),
             v2.Normalize(mean=self.mean_dataset, std=self.std_dataset)])
         
         self.train_loader_config_general = {

@@ -44,6 +44,7 @@ class VPRModel(pl.LightningModule):
         
         #---- Train hyperparameters
         lr=0.03, 
+        backbone_lr=0.03,
         optimizer='sgd',
         weight_decay=1e-3,
         momentum=0.9,
@@ -75,6 +76,7 @@ class VPRModel(pl.LightningModule):
 
         # Train hyperparameters
         self.lr = float(lr)
+        self.backbone_lr = float(backbone_lr)
         self.optimizer = optimizer
         self.weight_decay = float(weight_decay)
         self.momentum = float(momentum)
@@ -100,6 +102,10 @@ class VPRModel(pl.LightningModule):
         # ----------------------------------
         # get the backbone and the aggregator
         self.backbone = helper.get_backbone(backbone_arch, backbone_config)
+        if agg_arch == "QueriesSALAD":
+            agg_arch = "QAA"
+        if agg_arch == "ConditionedQueriesSALAD":
+            agg_arch = "ConditionedQAA"
         self.aggregator = helper.get_aggregator(agg_arch, agg_config)
 
         # For validation in Lightning v2.0.0
@@ -136,7 +142,6 @@ class VPRModel(pl.LightningModule):
                 print(f"Add params: aggregator - queries_feature")
             else:
                 raise NotImplementedError()
-        print(len(params))
         if hasattr(self.backbone, "domain_prompt_model"):
             params.append({'params': self.backbone.domain_prompt_model.parameters()})
             print(f"Add params: domain_prompt_model")
@@ -154,7 +159,7 @@ class VPRModel(pl.LightningModule):
             print(f"Add params: shared_prompt_mlp")
         if self.backbone_config['num_trainable_blocks'] > 0:
             for i, blk in enumerate(self.backbone.model.blocks[-self.backbone_config['num_trainable_blocks']:]):
-                params.append({'params': blk.parameters()})
+                params.append({'params': blk.parameters(), 'lr': self.backbone_lr})
                 print (f"Add params: Trainable block {len(self.backbone.model.blocks) - self.backbone_config['num_trainable_blocks'] + i}")
         else:
             print("All blocks are frozen")

@@ -111,7 +111,6 @@ class GSVCitiesDataset(Dataset):
 
             if self.transform is not None:
                 img = self.transform(img)
-            img = v2.ToDtype(torch.float16, scale=True)(img)
             imgs.append(img)
 
         # NOTE: contrary to image classification where __getitem__ returns only one image 

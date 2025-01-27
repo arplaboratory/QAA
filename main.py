@@ -24,6 +24,7 @@ if __name__ == '__main__':
         num_workers=train_cfg.training.num_workers,
         dataset_names=train_cfg.datasets,
         train_cfg_training=train_cfg.training,
+        mixed_precision=True,
     )
     
     model = VPRModel(
@@ -33,6 +34,7 @@ if __name__ == '__main__':
         agg_arch=train_cfg.model.agg_arch,
         agg_config=train_cfg.model.agg_config,
         lr=train_cfg.training.optimizer["lr"],
+        backbone_lr=train_cfg.training.optimizer["backbone_lr"] if "backbone_lr" in train_cfg.training.optimizer else train_cfg.training.optimizer["lr"],
         optimizer=train_cfg.training.optimizer["name"],
         weight_decay=train_cfg.training.optimizer["weight_decay"], # 0.001 for sgd and 0 for adam,
         momentum=train_cfg.training.optimizer["momentum"],
