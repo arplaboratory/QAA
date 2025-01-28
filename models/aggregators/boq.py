@@ -1,4 +1,5 @@
 import torch
+from torch import nn
 class BoQBlock(torch.nn.Module):
     def __init__(self, in_dim, num_queries, nheads=8):
         super(BoQBlock, self).__init__()
@@ -33,7 +34,7 @@ class BoQBlock(torch.nn.Module):
 
 
 class BoQ(torch.nn.Module):
-    def __init__(self, in_channels=1024, proj_channels=512, num_queries=32, num_layers=2, row_dim=32):
+    def __init__(self, in_channels=768, proj_channels=384, num_queries=64, num_layers=2, row_dim=32):
         super().__init__()
         self.proj_c = torch.nn.Conv2d(in_channels, proj_channels, kernel_size=3, padding=1)
         self.norm_input = torch.nn.LayerNorm(proj_channels)
@@ -44,8 +45,13 @@ class BoQ(torch.nn.Module):
         
         self.fc = torch.nn.Linear(num_layers*num_queries, row_dim)
         
-    def forward(self, x):
+    def forward(self, x, domain_idx=None, visualize=None):
         # reduce input dimension using 3x3 conv when using ResNet
+        if len(x) == 3:
+            x, t, domain_desc = x
+        else:
+            x, t = x # Extract features and token
+            domain_desc = None
         x = self.proj_c(x)
         x = x.flatten(2).permute(0, 2, 1)
         x = self.norm_input(x)
@@ -60,5 +66,8 @@ class BoQ(torch.nn.Module):
         out = torch.cat(outs, dim=1)
         out = self.fc(out.permute(0, 2, 1))
         out = out.flatten(1)
-        out = torch.nn.functional.normalize(out, p=2, dim=-1)
-        return out, attns
+        if domain_desc is not None:
+            return nn.functional.normalize(out, p=2, dim=-1), domain_desc
+        if visualize:
+            raise NotImplementedError()
+        return nn.functional.normalize(out, p=2, dim=-1)
