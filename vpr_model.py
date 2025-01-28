@@ -123,7 +123,7 @@ class VPRModel(pl.LightningModule):
     
     # configure the optimizer 
     def configure_optimizers(self):
-        if self.aggregator.freeze == "none":
+        if not hasattr(self.aggregator, "freeze") or self.aggregator.freeze == "none":
             params = [{'params': self.aggregator.parameters()}]
             print(f"Add params: aggregator")
         else:
