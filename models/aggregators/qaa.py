@@ -58,15 +58,14 @@ class QAA(nn.Module):
         # MLP for local features f_i
         # MLP for score matrix S
         if self_attn == "both" or self_attn == "score":
-            self.queries_score = QuerySelfAttn(self.num_clusters, self.num_queries, nheads=score_nheads, self_attn=True)
+            self.queries_score = QuerySelfAttn(self.num_channels, self.num_queries, nheads=score_nheads, self_attn=True)
         else:
-            self.queries_score = QuerySelfAttn(self.num_clusters, self.num_queries, nheads=score_nheads, self_attn=False)
+            self.queries_score = QuerySelfAttn(self.num_channels, self.num_queries, nheads=score_nheads, self_attn=False)
         if self_attn == "both" or self_attn == "feature":
             self.queries_feature = QuerySelfAttn(self.cluster_dim, self.num_queries, nheads=feature_nheads, self_attn=True)
         else:
             self.queries_feature = QuerySelfAttn(self.cluster_dim, self.num_queries, nheads=feature_nheads, self_attn=False)
-        self.score = QueryCrossAttn(self.num_clusters, self.num_clusters, nheads=score_nheads)
-        self.proj_c = torch.nn.Conv2d(self.num_channels, self.num_clusters, kernel_size=3, padding=1)
+        self.score = QueryCrossAttn(self.num_channels, self.num_clusters, nheads=score_nheads)
         if divide > 1:
             raise NotImplementedError()
         # Dustbin parameter z
@@ -91,7 +90,6 @@ class QAA(nn.Module):
         else:
             x, t = x # Extract features and token
             domain_desc = None
-        x = self.proj_c(x)
         f = self.queries_feature().permute(0, 2, 1).repeat(x.shape[0], 1, 1)
         q = self.queries_score().repeat(x.shape[0], 1, 1)
         p, p_attn = self.score(x, q)

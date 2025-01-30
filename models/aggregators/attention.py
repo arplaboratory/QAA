@@ -49,8 +49,8 @@ class QueryCrossAttn(torch.nn.Module):
         self.norm_out = torch.nn.LayerNorm(in_dim)
         self.linear1 = torch.nn.Linear(in_dim, 4*in_dim, bias=True)
         self.activation = torch.nn.ReLU(inplace=True)
-        self.linear2 = torch.nn.Linear(4*in_dim, in_dim, bias=True)
-        self.norm2_out = torch.nn.LayerNorm(in_dim)
+        self.linear2 = torch.nn.Linear(4*in_dim, output_dim, bias=True)
+        self.norm2_out = torch.nn.LayerNorm(output_dim)
 
     def forward(self, x, q):
         x_flatten = x.flatten(2).permute(0, 2, 1)
@@ -58,7 +58,7 @@ class QueryCrossAttn(torch.nn.Module):
         out, attn = self.cross_attn(q, x_flatten, x_flatten)
         out = q + out
         out = self.norm_out(out)
-        out = out + self.linear2(self.activation(self.linear1(out)))
+        out = self.linear2(self.activation(self.linear1(out)))
         out = self.norm2_out(out)
         out = out.permute(0, 2, 1)
         return out, attn
