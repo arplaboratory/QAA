@@ -24,9 +24,11 @@ class ConditionedQAA(nn.Module):
             divide_ratio=[1,1,1,0],
             divide=1,
             num_queries=32,
-            self_attn=True,
+            self_attn="both",
             dust_bin=True,
             freeze="none",
+            feature_nheads=4,
+            score_nheads=4,
         ) -> None:
         super().__init__()
 
@@ -55,10 +57,18 @@ class ConditionedQAA(nn.Module):
             )
         # MLP for local features f_i
         # MLP for score matrix S
-        self.queries_score = QuerySelfAttn(self.num_channels, self.num_queries, nheads=self.num_channels // 64, self_attn=self_attn)
-        self.queries_feature = QuerySelfAttn(self.num_channels, self.num_queries, nheads=self.num_channels // 64, self_attn=self_attn)
-        self.score = QueryCrossAttn(self.num_channels, self.num_clusters, nheads=self.num_channels // 64)
-        self.cluster_feature = QueryCrossAttn(self.num_channels, self.cluster_dim, nheads=self.num_channels // 64)
+        if self_attn == "both" or self_attn == "score":
+            self.queries_score = QuerySelfAttn(self.num_clusters, self.num_queries, nheads=score_nheads, self_attn=True)
+        else:
+            self.queries_score = QuerySelfAttn(self.num_clusters, self.num_queries, nheads=score_nheads, self_attn=False)
+        if self_attn == "both" or self_attn == "feature":
+            self.queries_feature = QuerySelfAttn(self.cluster_dim, self.num_queries, nheads=feature_nheads, self_attn=True)
+        else:
+            self.queries_feature = QuerySelfAttn(self.cluster_dim, self.num_queries, nheads=feature_nheads, self_attn=False)
+        self.score = QueryCrossAttn(self.num_clusters, self.num_clusters, nheads=score_nheads)
+        self.cluster_feature = QueryCrossAttn(self.cluster_dim, self.cluster_dim, nheads=feature_nheads)
+        self.proj_s = torch.nn.Conv2d(self.num_channels, self.num_clusters, kernel_size=3, padding=1)
+        self.proj_f = torch.nn.Conv2d(self.num_channels, self.cluster_dim, kernel_size=3, padding=1)
         if divide > 1:
             raise NotImplementedError()
         # Dustbin parameter z
@@ -83,11 +93,12 @@ class ConditionedQAA(nn.Module):
         else:
             x, t = x # Extract features and token
             domain_desc = None
-
+        x_s = self.proj_s(x)
+        x_f = self.proj_f(x)
         f = self.queries_feature().repeat(x.shape[0], 1, 1)
         q = self.queries_score().repeat(x.shape[0], 1, 1)
-        f, f_attn = self.cluster_feature(x, f)
-        p, p_attn = self.score(x, q)
+        f, f_attn = self.cluster_feature(x_f, f)
+        p, p_attn = self.score(x_s, q)
         if self.divide > 1:
             raise NotImplementedError()
         if self.token_dim != 0:
@@ -115,5 +126,5 @@ class ConditionedQAA(nn.Module):
         if domain_desc is not None:
             return nn.functional.normalize(f, p=2, dim=-1), domain_desc
         if visualize:
-            return nn.functional.normalize(f, p=2, dim=-1), p_attn
+            return nn.functional.normalize(f, p=2, dim=-1), p_attn, p
         return nn.functional.normalize(f, p=2, dim=-1)
