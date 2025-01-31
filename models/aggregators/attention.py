@@ -42,7 +42,7 @@ class QuerySelfAttn(torch.nn.Module):
             return q
         
 class QueryCrossAttn(torch.nn.Module):
-    def __init__(self, in_dim, output_dim, nheads=8, arch="conv", skip=False, out_norm=True):
+    def __init__(self, in_dim, output_dim, nheads=8, arch="conv", skip="none", out_norm=True):
         super(QueryCrossAttn, self).__init__()
         
         self.cross_attn = torch.nn.MultiheadAttention(in_dim, num_heads=nheads, batch_first=True)
@@ -74,27 +74,27 @@ class QueryCrossAttn(torch.nn.Module):
         x_flatten = x.flatten(2).permute(0, 2, 1)
         
         out, attn = self.cross_attn(q, x_flatten, x_flatten)
-        if self.skip:
+        if self.skip == "full" or self.skip == "cross":
             out = q + out
         out = self.norm_out(out)
         if self.arch == "conv":
             cache = out
             out = self.conv(out.permute(0, 2, 1)).permute(0, 2, 1)
-            if self.skip:
+            if self.skip == "full":
                 out = cache + out
             if self.out_norm:
                 out = self.norm2_out(out)
         elif self.arch == "linear":
             cache = out
             out = self.linear2(self.activation(self.linear1(out)))
-            if self.skip:
+            if self.skip == "full":
                 out = cache + out
             if self.out_norm:
                 out = self.norm2_out(out)
         elif self.arch == "linearproj":
             cache = out
             out = self.linear2(self.activation(self.linear1(out)))
-            if self.skip:
+            if self.skip == "full":
                 out = cache + out
             out = self.norm2_out(out)
             out = self.linear3(out)

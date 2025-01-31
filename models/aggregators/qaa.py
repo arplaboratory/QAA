@@ -31,7 +31,7 @@ class QAA(nn.Module):
             score_nheads=4,
             attn_arch="conv",
             proj_early=False,
-            skip_connection=False,
+            skip_connection="none",
             out_norm=True,
         ) -> None:
         super().__init__()
