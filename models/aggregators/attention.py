@@ -56,7 +56,7 @@ class QueryCrossAttn(torch.nn.Module):
         x_flatten = x.flatten(2).permute(0, 2, 1)
         
         out, attn = self.cross_attn(q, x_flatten, x_flatten)
-        out = q + out
+        # out = q + out
         out = self.norm_out(out)
         out = self.linear2(self.activation(self.linear1(out)))
         out = self.norm2_out(out)
