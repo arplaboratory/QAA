@@ -42,23 +42,31 @@ class QuerySelfAttn(torch.nn.Module):
             return q
         
 class QueryCrossAttn(torch.nn.Module):
-    def __init__(self, in_dim, output_dim, nheads=8):
+    def __init__(self, in_dim, output_dim, nheads=8, arch="conv"):
         super(QueryCrossAttn, self).__init__()
         
         self.cross_attn = torch.nn.MultiheadAttention(in_dim, num_heads=nheads, batch_first=True)
         self.norm_out = torch.nn.LayerNorm(in_dim)
-        self.linear1 = torch.nn.Linear(in_dim, 4*in_dim, bias=True)
-        self.activation = torch.nn.ReLU(inplace=True)
-        self.linear2 = torch.nn.Linear(4*in_dim, output_dim, bias=True)
+        self.arch = arch
+        if self.arch == "conv":
+            self.conv = torch.nn.Conv1d(in_dim, output_dim, 1)
+        elif self.arch == "linear":
+            self.linear1 = torch.nn.Linear(in_dim, 4*in_dim, bias=True)
+            self.activation = torch.nn.ReLU(inplace=True)
+            self.linear2 = torch.nn.Linear(4*in_dim, output_dim, bias=True)
+        else:
+            raise NotImplementedError()
         self.norm2_out = torch.nn.LayerNorm(output_dim)
 
     def forward(self, x, q):
         x_flatten = x.flatten(2).permute(0, 2, 1)
         
         out, attn = self.cross_attn(q, x_flatten, x_flatten)
-        # out = q + out
         out = self.norm_out(out)
-        out = self.linear2(self.activation(self.linear1(out)))
+        if self.arch == "conv":
+            out = self.conv(out.permute(0, 2, 1)).permute(0, 2, 1)
+        elif self.arch == "linear":
+            out = self.linear2(self.activation(self.linear1(out)))
         out = self.norm2_out(out)
         out = out.permute(0, 2, 1)
         return out, attn

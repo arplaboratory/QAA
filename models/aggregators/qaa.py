@@ -29,6 +29,7 @@ class QAA(nn.Module):
             freeze="none",
             feature_nheads=4,
             score_nheads=4,
+            attn_arch="conv",
         ) -> None:
         super().__init__()
 
@@ -65,7 +66,7 @@ class QAA(nn.Module):
             self.queries_feature = QuerySelfAttn(self.cluster_dim, self.num_queries, nheads=feature_nheads, self_attn_flag=True)
         else:
             self.queries_feature = QuerySelfAttn(self.cluster_dim, self.num_queries, nheads=feature_nheads, self_attn_flag=False)
-        self.score = QueryCrossAttn(self.num_channels, self.num_clusters, nheads=score_nheads)
+        self.score = QueryCrossAttn(self.num_channels, self.num_clusters, nheads=score_nheads, arch=attn_arch)
         if divide > 1:
             raise NotImplementedError()
         # Dustbin parameter z
@@ -90,6 +91,7 @@ class QAA(nn.Module):
         else:
             x, t = x # Extract features and token
             domain_desc = None
+        
         f = self.queries_feature().permute(0, 2, 1).repeat(x.shape[0], 1, 1)
         q = self.queries_score().repeat(x.shape[0], 1, 1)
         p, p_attn = self.score(x, q)
