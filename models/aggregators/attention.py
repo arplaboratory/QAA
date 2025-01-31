@@ -2,13 +2,13 @@ import torch
 import torch.nn as nn
 
 class QuerySelfAttn(torch.nn.Module):
-    def __init__(self, in_dim, num_queries, nheads=8, self_attn=True):
+    def __init__(self, in_dim, num_queries, nheads=8, self_attn_flag=True):
         super(QuerySelfAttn, self).__init__()
         
         self.queries = torch.nn.Parameter(torch.randn(1, num_queries, in_dim))
-        self.self_attn = self_attn
+        self.self_attn_flag = self_attn_flag
         
-        if self.self_attn:
+        if self.self_attn_flag:
             # the following two lines are used during training only, you can cache their output in eval.
             self.self_attn = torch.nn.MultiheadAttention(in_dim, num_heads=nheads, batch_first=True)
         self.norm_q = torch.nn.LayerNorm(in_dim)
@@ -20,7 +20,7 @@ class QuerySelfAttn(torch.nn.Module):
         # q = self.queries.repeat(B, 1, 1)
         if detach:
             q, q_detach = self.queries, self.queries.detach()
-            if self.self_attn:
+            if self.self_attn_flag:
                 # the following two lines are used during training.
                 # for stability purposes 
                 q = q + self.self_attn(q, q, q)[0]
@@ -32,7 +32,7 @@ class QuerySelfAttn(torch.nn.Module):
             return q, q_detach
         else:
             q = self.queries
-            if self.self_attn:
+            if self.self_attn_flag:
                 # the following two lines are used during training.
                 # for stability purposes 
                 q = q + self.self_attn(q, q, q)[0]
