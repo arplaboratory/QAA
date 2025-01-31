@@ -42,13 +42,14 @@ class QuerySelfAttn(torch.nn.Module):
             return q
         
 class QueryCrossAttn(torch.nn.Module):
-    def __init__(self, in_dim, output_dim, nheads=8, arch="conv", skip=False):
+    def __init__(self, in_dim, output_dim, nheads=8, arch="conv", skip=False, out_norm=True):
         super(QueryCrossAttn, self).__init__()
         
         self.cross_attn = torch.nn.MultiheadAttention(in_dim, num_heads=nheads, batch_first=True)
         self.norm_out = torch.nn.LayerNorm(in_dim)
         self.arch = arch
         self.skip = skip
+        self.out_norm = out_norm
         if self.arch == "conv":
             self.conv = torch.nn.Conv1d(in_dim, output_dim, 1)
             self.norm2_out = torch.nn.LayerNorm(output_dim)
@@ -81,13 +82,15 @@ class QueryCrossAttn(torch.nn.Module):
             out = self.conv(out.permute(0, 2, 1)).permute(0, 2, 1)
             if self.skip:
                 out = cache + out
-            out = self.norm2_out(out)
+            if self.out_norm:
+                out = self.norm2_out(out)
         elif self.arch == "linear":
             cache = out
             out = self.linear2(self.activation(self.linear1(out)))
             if self.skip:
                 out = cache + out
-            out = self.norm2_out(out)
+            if self.out_norm:
+                out = self.norm2_out(out)
         elif self.arch == "linearproj":
             cache = out
             out = self.linear2(self.activation(self.linear1(out)))
@@ -95,7 +98,8 @@ class QueryCrossAttn(torch.nn.Module):
                 out = cache + out
             out = self.norm2_out(out)
             out = self.linear3(out)
-            out = self.norm3_out(out)
+            if self.out_norm:
+                out = self.norm3_out(out)
         elif self.arch == "none": # Only use when the dim is projected
             pass
         out = out.permute(0, 2, 1)
