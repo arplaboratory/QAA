@@ -58,13 +58,13 @@ class QAA(nn.Module):
         # MLP for local features f_i
         # MLP for score matrix S
         if self_attn == "both" or self_attn == "score":
-            self.queries_score = QuerySelfAttn(self.num_channels, self.num_queries, nheads=score_nheads, self_attn=True)
+            self.queries_score = QuerySelfAttn(self.num_channels, self.num_queries, nheads=score_nheads, self_attn_flag=True)
         else:
-            self.queries_score = QuerySelfAttn(self.num_channels, self.num_queries, nheads=score_nheads, self_attn=False)
+            self.queries_score = QuerySelfAttn(self.num_channels, self.num_queries, nheads=score_nheads, self_attn_flag=False)
         if self_attn == "both" or self_attn == "feature":
-            self.queries_feature = QuerySelfAttn(self.cluster_dim, self.num_queries, nheads=feature_nheads, self_attn=True)
+            self.queries_feature = QuerySelfAttn(self.cluster_dim, self.num_queries, nheads=feature_nheads, self_attn_flag=True)
         else:
-            self.queries_feature = QuerySelfAttn(self.cluster_dim, self.num_queries, nheads=feature_nheads, self_attn=False)
+            self.queries_feature = QuerySelfAttn(self.cluster_dim, self.num_queries, nheads=feature_nheads, self_attn_flag=False)
         self.score = QueryCrossAttn(self.num_channels, self.num_clusters, nheads=score_nheads)
         if divide > 1:
             raise NotImplementedError()
