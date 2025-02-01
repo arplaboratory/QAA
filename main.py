@@ -5,6 +5,7 @@ import argparse
 from vpr_model import VPRModel
 from utils.load_cfg import load_config, load_datasets_config
 from dataloaders.GenericDataloader import GenericDataModule
+import torch
 
 import ssl
 ssl._create_default_https_context = ssl._create_unverified_context # For downloading the pretrained models
@@ -84,6 +85,13 @@ if __name__ == '__main__':
         logger=wandb_logger,
     )
 
+    from lightning.fabric.utilities.throughput import measure_flops
+    with torch.device("cuda"):
+        model = model.cuda()
+        x = torch.randn(1, 3, 322, 322).cuda()
+    model_fwd = lambda: model(x)
+    fwd_flops = measure_flops(model, model_fwd)/ 1e9
+    print(str(fwd_flops) + " GLOPS")
     # we call the trainer, we give it the model and the datamodule
     # trainer.validate(model=model, datamodule=datamodule)
     trainer.fit(model=model, datamodule=datamodule)
