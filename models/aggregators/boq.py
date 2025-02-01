@@ -34,7 +34,7 @@ class BoQBlock(torch.nn.Module):
 
 
 class BoQ(torch.nn.Module):
-    def __init__(self, in_channels=768, proj_channels=384, num_queries=64, num_layers=2, row_dim=22): # Make row_dim = 22 to fit 8448
+    def __init__(self, in_channels=768, proj_channels=384, num_queries=64, num_layers=2, row_dim=32):
         super().__init__()
         self.proj_c = torch.nn.Conv2d(in_channels, proj_channels, kernel_size=3, padding=1)
         self.norm_input = torch.nn.LayerNorm(proj_channels)
