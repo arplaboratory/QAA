@@ -173,10 +173,10 @@ def create_dataset_part(
         cities_this_batch = []
         while batch_idx < batch_size:
             # Sample city based on size-weighted probability
-            city = np.random.choice(cities, p=weights)
+            city = np.random.choice(cities)
             # Don't sample already done in this batch
             while city in cities_this_batch:
-                city = np.random.choice(cities, p=weights)
+                city = np.random.choice(cities)
             cities_this_batch.append(city)
             
             df = city_df[city]
