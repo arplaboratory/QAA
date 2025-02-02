@@ -33,6 +33,7 @@ class QAA(nn.Module):
             proj_early=False,
             skip_connection="none",
             out_norm=True,
+            double_cross=False,
         ) -> None:
         super().__init__()
 
@@ -79,7 +80,7 @@ class QAA(nn.Module):
                 self.queries_score = QuerySelfAttn(self.num_clusters, self.num_queries, nheads=score_nheads, self_attn_flag=True)
             else:
                 self.queries_score = QuerySelfAttn(self.num_clusters, self.num_queries, nheads=score_nheads, self_attn_flag=False)
-            self.score = QueryCrossAttn(self.num_clusters, self.num_clusters, nheads=score_nheads, arch=attn_arch, skip=skip_connection, out_norm=out_norm)
+            self.score = QueryCrossAttn(self.num_clusters, self.num_clusters, nheads=score_nheads, arch=attn_arch, skip=skip_connection, out_norm=out_norm, double_cross=double_cross)
             self.proj = torch.nn.Conv2d(self.num_channels, self.num_clusters, kernel_size=3, padding=1)
         if divide > 1:
             raise NotImplementedError()

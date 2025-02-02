@@ -42,7 +42,7 @@ class QuerySelfAttn(torch.nn.Module):
             return q
         
 class QueryCrossAttn(torch.nn.Module):
-    def __init__(self, in_dim, output_dim, nheads=8, arch="conv", skip="none", out_norm=True):
+    def __init__(self, in_dim, output_dim, nheads=8, arch="conv", skip="none", out_norm=True, double_cross=False):
         super(QueryCrossAttn, self).__init__()
         
         self.cross_attn = torch.nn.MultiheadAttention(in_dim, num_heads=nheads, batch_first=True)
@@ -50,6 +50,7 @@ class QueryCrossAttn(torch.nn.Module):
         self.arch = arch
         self.skip = skip
         self.out_norm = out_norm
+        self.double_cross = double_cross
         if self.arch == "conv":
             self.conv = torch.nn.Conv1d(in_dim, output_dim, 1)
             self.norm2_out = torch.nn.LayerNorm(output_dim)
@@ -69,6 +70,8 @@ class QueryCrossAttn(torch.nn.Module):
             pass
         else:
             raise NotImplementedError()
+        if self.double_cross:
+            self.cross_attn2 = torch.nn.MultiheadAttention(in_dim, num_heads=nheads, batch_first=True)
 
     def forward(self, x, q):
         x_flatten = x.flatten(2).permute(0, 2, 1)
@@ -76,6 +79,10 @@ class QueryCrossAttn(torch.nn.Module):
         out, attn = self.cross_attn(q, x_flatten, x_flatten)
         if self.skip == "full" or self.skip == "cross":
             out = q + out
+        if self.double_cross:
+            out, attn = self.cross_attn(out, x_flatten, x_flatten)
+            if self.skip == "full" or self.skip == "cross":
+                out = q + out
         out = self.norm_out(out)
         if self.arch == "conv":
             cache = out
