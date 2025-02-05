@@ -19,7 +19,7 @@ model:
     num_channels: 768
     num_clusters: 64
     cluster_dim: 128
-    token_dim: 256
+    token_dim: 0
     dropout: 0.3
     freeze: "none"
     divide_ratio: [1, 1, 1, 0]
