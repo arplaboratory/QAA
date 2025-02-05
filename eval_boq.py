@@ -3,6 +3,7 @@ import argparse
 
 from utils.load_cfg import load_config
 from dataloaders.GenericDataloader import GenericDataModule
+from vpr_model import VPRModel
 import utils
 import torch
 
@@ -155,7 +156,9 @@ if __name__ == '__main__':
         x = torch.randn(1, 3, 322, 322).cuda()
     model_fwd = lambda: model(x)
     fwd_flops = measure_flops(model, model_fwd)/ 1e9
-    print(fwd_flops+"GFLOPS")
+    model_backbone_fwd = lambda: model.backbone(x)
+    backbone_flops = measure_flops(model, model_backbone_fwd)/ 1e9
+    print(f"Model: {fwd_flops} GFLOPS, Backbone: {backbone_flops}, Agg: {fwd_flops-backbone_flops}")
 
     # we call the trainer, we give it the model and the datamodule
     trainer.test(model=model, datamodule=datamodule)

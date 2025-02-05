@@ -14,17 +14,22 @@ model:
     divide_ratio: [1, 1, 1, 0]
     divide: 1
     multi_scale: "1"
-  agg_arch: QAA
+  agg_arch: ConditionedQAA
   agg_config:
     num_channels: 768
-    num_clusters: 64
-    cluster_dim: 128
+    num_clusters: 16
+    cluster_dim: 512
     token_dim: 0
     dropout: 0.3
     freeze: "none"
     divide_ratio: [1, 1, 1, 0]
     divide: 1
-    num_queries: 128
+    num_queries: 512
+    attn_arch: "conv"
+    proj_early: False
+    skip_connection: "cross"
+    feature_nheads: 16
+    score_nheads: 16
 
 datasets:
   train_datasets: 
@@ -63,6 +68,7 @@ training:
   optimizer:
     name: AdamW
     lr: 1e-5
+    backbone_lr: 8e-6
     weight_decay: 1e-3
     momentum: 0.9
   scheduler:
@@ -78,9 +84,9 @@ training:
     name: 'MultiSimilarityMiner'
     margin: 0.1
   faiss_gpu: False
-  recompute_clusters: False
+  recompute_clusters: True
   prefetch_factor: 1
-  recompute_desc: False
+  recompute_desc: True
   recompute_interval: 4
   cross_loss: False
   cross_loss_weight: 1.0

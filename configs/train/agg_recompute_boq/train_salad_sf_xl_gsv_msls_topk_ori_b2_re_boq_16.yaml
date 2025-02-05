@@ -14,17 +14,17 @@ model:
     divide_ratio: [1, 1, 1, 0]
     divide: 1
     multi_scale: "1"
-  agg_arch: QAA
+  agg_arch: BoQ
   agg_config:
     num_channels: 768
-    num_clusters: 128
-    cluster_dim: 64
+    num_clusters: 64
+    cluster_dim: 128
     token_dim: 256
     dropout: 0.3
     freeze: "none"
     divide_ratio: [1, 1, 1, 0]
     divide: 1
-    num_queries: 128
+    num_queries: 16
 
 datasets:
   train_datasets: 

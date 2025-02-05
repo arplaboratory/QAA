@@ -24,7 +24,7 @@ model:
     freeze: "none"
     divide_ratio: [1, 1, 1, 0]
     divide: 1
-    num_queries: 128
+    num_queries: 256
 
 datasets:
   train_datasets: 

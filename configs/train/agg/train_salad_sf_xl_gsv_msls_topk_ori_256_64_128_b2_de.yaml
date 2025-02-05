@@ -17,14 +17,14 @@ model:
   agg_arch: QAA
   agg_config:
     num_channels: 768
-    num_clusters: 16
-    cluster_dim: 512
+    num_clusters: 64
+    cluster_dim: 128
     token_dim: 0
     dropout: 0.3
     freeze: "none"
     divide_ratio: [1, 1, 1, 0]
     divide: 1
-    num_queries: 64
+    num_queries: 256
     attn_arch: "conv"
     proj_early: False
     skip_connection: "cross"
@@ -84,9 +84,9 @@ training:
     name: 'MultiSimilarityMiner'
     margin: 0.1
   faiss_gpu: False
-  recompute_clusters: True
+  recompute_clusters: False
   prefetch_factor: 1
-  recompute_desc: True
+  recompute_desc: False
   recompute_interval: 4
   cross_loss: False
   cross_loss_weight: 1.0

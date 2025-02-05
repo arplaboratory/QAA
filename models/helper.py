@@ -94,4 +94,4 @@ def get_aggregator(agg_arch='ConvAP', agg_config={}):
         assert 'token_dim' in agg_config
         if 'num_queries' in agg_config:
             del agg_config['num_queries']
-        return aggregators.BoQ() # Use default configs for baseline comparison
+        return aggregators.BoQ(num_queries=agg_config["num_queries"]) # Use default configs for baseline comparison, only change the num_queries

@@ -29,6 +29,11 @@ class ConditionedQAA(nn.Module):
             freeze="none",
             feature_nheads=4,
             score_nheads=4,
+            attn_arch="conv",
+            proj_early=False,
+            skip_connection="none",
+            out_norm=True,
+            double_cross=False,
         ) -> None:
         super().__init__()
 
@@ -39,6 +44,9 @@ class ConditionedQAA(nn.Module):
         self.freeze = freeze
         self.divide = divide
         self.divide_ratio = divide_ratio
+        self.proj_early = proj_early
+        if self.proj_early:
+            assert attn_arch == "none"
         if self.divide > 1:
             raise NotImplementedError()
         self.num_queries = num_queries
@@ -57,16 +65,30 @@ class ConditionedQAA(nn.Module):
             )
         # MLP for local features f_i
         # MLP for score matrix S
-        if self_attn == "both" or self_attn == "score":
-            self.queries_score = QuerySelfAttn(self.num_channels, self.num_queries, nheads=score_nheads, self_attn_flag=True)
+        if not self.proj_early:
+            if self_attn == "both" or self_attn == "score":
+                self.queries_score = QuerySelfAttn(self.num_channels, self.num_queries, nheads=score_nheads, self_attn_flag=True)
+            else:
+                self.queries_score = QuerySelfAttn(self.num_channels, self.num_queries, nheads=score_nheads, self_attn_flag=False)
+            if self_attn == "both" or self_attn == "feature":
+                self.queries_feature = QuerySelfAttn(self.num_channels, self.num_queries, nheads=feature_nheads, self_attn_flag=True)
+            else:
+                self.queries_feature = QuerySelfAttn(self.num_channels, self.num_queries, nheads=feature_nheads, self_attn_flag=False)
+            self.score = QueryCrossAttn(self.num_channels, self.num_clusters, nheads=score_nheads)
+            self.cluster_feature = QueryCrossAttn(self.num_channels, self.cluster_dim, nheads=feature_nheads)
         else:
-            self.queries_score = QuerySelfAttn(self.num_channels, self.num_queries, nheads=score_nheads, self_attn_flag=False)
-        if self_attn == "both" or self_attn == "feature":
-            self.queries_feature = QuerySelfAttn(self.num_channels, self.num_queries, nheads=feature_nheads, self_attn_flag=True)
-        else:
-            self.queries_feature = QuerySelfAttn(self.num_channels, self.num_queries, nheads=feature_nheads, self_attn_flag=False)
-        self.score = QueryCrossAttn(self.num_channels, self.num_clusters, nheads=score_nheads)
-        self.cluster_feature = QueryCrossAttn(self.num_channels, self.cluster_dim, nheads=feature_nheads)
+            if self_attn == "both" or self_attn == "score":
+                self.queries_score = QuerySelfAttn(self.num_clusters, self.num_queries, nheads=score_nheads, self_attn_flag=True)
+            else:
+                self.queries_score = QuerySelfAttn(self.num_clusters, self.num_queries, nheads=score_nheads, self_attn_flag=False)
+            if self_attn == "both" or self_attn == "feature":
+                self.queries_feature = QuerySelfAttn(self.cluster_dim, self.num_queries, nheads=feature_nheads, self_attn_flag=True)
+            else:
+                self.queries_feature = QuerySelfAttn(self.cluster_dim, self.num_queries, nheads=feature_nheads, self_attn_flag=False)
+            self.proj_score = torch.nn.Conv2d(self.num_channels, self.num_clusters, kernel_size=3, padding=1)
+            self.proj_feature = torch.nn.Conv2d(self.num_channels, self.cluster_dim, kernel_size=3, padding=1)
+            self.score = QueryCrossAttn(self.num_clusters, self.num_clusters, nheads=score_nheads)
+            self.cluster_feature = QueryCrossAttn(self.cluster_dim, self.cluster_dim, nheads=feature_nheads)
         if divide > 1:
             raise NotImplementedError()
         # Dustbin parameter z
@@ -92,10 +114,16 @@ class ConditionedQAA(nn.Module):
             x, t = x # Extract features and token
             domain_desc = None
         
+        if self.proj_early:
+            x_f = self.proj_feature(x)
+            x_p = self.proj_score(x)
+        else:
+            x_f = x
+            x_p = x
         f = self.queries_feature().repeat(x.shape[0], 1, 1)
         q = self.queries_score().repeat(x.shape[0], 1, 1)
-        f, f_attn = self.cluster_feature(x, f)
-        p, p_attn = self.score(x, q)
+        f, f_attn = self.cluster_feature(x_f, f)
+        p, p_attn = self.score(x_p, q)
         if self.divide > 1:
             raise NotImplementedError()
         if self.token_dim != 0:

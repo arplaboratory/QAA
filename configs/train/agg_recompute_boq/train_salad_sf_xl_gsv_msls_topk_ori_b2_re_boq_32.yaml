@@ -14,11 +14,11 @@ model:
     divide_ratio: [1, 1, 1, 0]
     divide: 1
     multi_scale: "1"
-  agg_arch: QAA
+  agg_arch: BoQ
   agg_config:
     num_channels: 768
-    num_clusters: 32
-    cluster_dim: 256
+    num_clusters: 64
+    cluster_dim: 128
     token_dim: 256
     dropout: 0.3
     freeze: "none"
