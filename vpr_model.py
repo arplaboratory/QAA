@@ -340,6 +340,38 @@ class VPRModel(pl.LightningModule):
         self.batch_acc = []
         # self.log_img_first_iter = False
 
+    def _visualize_batch(self, dataset_name, batch_idx, places, score):
+        if not os.path.isdir(f'vis/{dataset_name}'):
+            os.mkdir(f'vis/{dataset_name}')
+        os.mkdir(f'vis/{dataset_name}/{batch_idx}')
+        attn_map = (attn_map - attn_map.min())/(attn_map.max() - attn_map.min())
+        attn_map = attn_map.view(-1, self.aggregator.num_queries, places.shape[-2]//14, places.shape[-1]//14)
+        attn_map = F.interpolate(attn_map, size=(places.shape[-2], places.shape[-1]), mode='bilinear', align_corners=True)
+        for i in range(len(places)):
+            ndarr = inv_base_transform(places[i]).mul(255).add_(0.5).clamp_(0, 255).permute(1, 2, 0).to("cpu", torch.uint8).numpy()
+            im = Image.fromarray(ndarr)
+            im.save(f'vis/{dataset_name}/{batch_idx}/place_{i}.png')
+            for j in range(len(attn_map[i])):
+                ndarr_attn = attn_map[i][j].unsqueeze(0).mul(255).add_(0.5).clamp_(0, 255).permute(1, 2, 0).to("cpu", torch.uint8).numpy()
+                plt.figure()
+                plt.imshow(ndarr)
+                plt.imshow(ndarr_attn, alpha=0.5, cmap='jet')
+                plt.axis('off')
+                plt.savefig(f'vis/{dataset_name}/{batch_idx}/attn_map_{i}_{j}.png', bbox_inches='tight', transparent="True", pad_inches=0)
+                plt.close()
+            # Calculate the similarity matrix between scores of current place and current place
+            plt.figure()
+            plt.imshow(torch.matmul(score[i][0].T, score[i][0]).cpu().numpy(), cmap='viridis')
+            plt.axis('off')
+            plt.savefig(f'vis/{dataset_name}/{batch_idx}/score_sim_matrix_{i}.png', bbox_inches='tight', transparent="True", pad_inches=0)
+            plt.close()
+            # Calculate the similarity matrix between scores of 0-th place and current place
+            plt.figure()
+            plt.imshow(torch.matmul(score[i][0].T, score[0][0]).cpu().numpy(), cmap='viridis')
+            plt.axis('off')
+            plt.savefig(f'vis/{dataset_name}/{batch_idx}/score_0_sim_matrix_{i}.png', bbox_inches='tight', transparent="True", pad_inches=0)
+            plt.close()
+    
     # For validation, we will also iterate step by step over the validation set
     # this is the way Pytorch Lghtning is made. All about modularity, folks.
     def validation_step(self, batch, batch_idx, dataloader_idx=None):
@@ -349,36 +381,7 @@ class VPRModel(pl.LightningModule):
         elif self.visualize:
             descriptors, attn_map, score = self(places)
             dataset_name = self.trainer.datamodule.val_datasets[dataloader_idx].dataset_name
-            if not os.path.isdir(f'vis/{dataset_name}'):
-                os.mkdir(f'vis/{dataset_name}')
-            os.mkdir(f'vis/{dataset_name}/{batch_idx}')
-            attn_map = (attn_map - attn_map.min())/(attn_map.max() - attn_map.min())
-            attn_map = attn_map.view(-1, self.aggregator.num_queries, places.shape[-2]//14, places.shape[-1]//14)
-            attn_map = F.interpolate(attn_map, size=(places.shape[-2], places.shape[-1]), mode='bilinear', align_corners=True)
-            for i in range(len(places)):
-                ndarr = inv_base_transform(places[i]).mul(255).add_(0.5).clamp_(0, 255).permute(1, 2, 0).to("cpu", torch.uint8).numpy()
-                im = Image.fromarray(ndarr)
-                im.save(f'vis/{dataset_name}/{batch_idx}/place_{i}.png')
-                for j in range(len(attn_map[i])):
-                    ndarr_attn = attn_map[i][j].unsqueeze(0).mul(255).add_(0.5).clamp_(0, 255).permute(1, 2, 0).to("cpu", torch.uint8).numpy()
-                    plt.figure()
-                    plt.imshow(ndarr)
-                    plt.imshow(ndarr_attn, alpha=0.5, cmap='jet')
-                    plt.axis('off')
-                    plt.savefig(f'vis/{dataset_name}/{batch_idx}/attn_map_{i}_{j}.png', bbox_inches='tight', transparent="True", pad_inches=0)
-                    plt.close()
-                # Calculate the similarity matrix between scores of current place and current place
-                plt.figure()
-                plt.imshow(torch.matmul(score[i][0].T, score[i][0]).cpu().numpy(), cmap='viridis')
-                plt.axis('off')
-                plt.savefig(f'vis/{dataset_name}/{batch_idx}/score_sim_matrix_{i}.png', bbox_inches='tight', transparent="True", pad_inches=0)
-                plt.close()
-                # Calculate the similarity matrix between scores of 0-th place and current place
-                plt.figure()
-                plt.imshow(torch.matmul(score[i][0].T, score[0][0]).cpu().numpy(), cmap='viridis')
-                plt.axis('off')
-                plt.savefig(f'vis/{dataset_name}/{batch_idx}/score_0_sim_matrix_{i}.png', bbox_inches='tight', transparent="True", pad_inches=0)
-                plt.close()
+            self._visualize_batch(dataset_name, batch_idx, places, score)
         else:
             descriptors = self(places)
         if dataloader_idx is None: # Only one val dataset
@@ -464,36 +467,7 @@ class VPRModel(pl.LightningModule):
         elif self.visualize:
             descriptors, attn_map, score = self(places)
             dataset_name = self.trainer.datamodule.test_datasets[dataloader_idx].dataset_name
-            if not os.path.isdir(f'vis/{dataset_name}'):
-                os.mkdir(f'vis/{dataset_name}')
-            os.mkdir(f'vis/{dataset_name}/{batch_idx}')
-            attn_map = (attn_map - attn_map.min())/(attn_map.max() - attn_map.min())
-            attn_map = attn_map.view(-1, self.aggregator.num_queries, places.shape[-2]//14, places.shape[-1]//14)
-            attn_map = F.interpolate(attn_map, size=(places.shape[-2], places.shape[-1]), mode='bilinear', align_corners=True)
-            for i in range(len(places)):
-                ndarr = inv_base_transform(places[i]).mul(255).add_(0.5).clamp_(0, 255).permute(1, 2, 0).to("cpu", torch.uint8).numpy()
-                im = Image.fromarray(ndarr)
-                im.save(f'vis/{dataset_name}/{batch_idx}/place_{i}.png')
-                for j in range(len(attn_map[i])):
-                    ndarr_attn = attn_map[i][j].unsqueeze(0).mul(255).add_(0.5).clamp_(0, 255).permute(1, 2, 0).to("cpu", torch.uint8).numpy()
-                    plt.figure()
-                    plt.imshow(ndarr)
-                    plt.imshow(ndarr_attn, alpha=0.5, cmap='jet')
-                    plt.axis('off')
-                    plt.savefig(f'vis/{dataset_name}/{batch_idx}/attn_map_{i}_{j}.png', bbox_inches='tight', transparent="True", pad_inches=0)
-                    plt.close()
-                # Calculate the similarity matrix between scores of current place and current place
-                plt.figure()
-                plt.imshow(torch.matmul(score[i][0].T, score[i][0]).cpu().numpy(), cmap='viridis')
-                plt.axis('off')
-                plt.savefig(f'vis/{dataset_name}/{batch_idx}/score_sim_matrix_{i}.png', bbox_inches='tight', transparent="True", pad_inches=0)
-                plt.close()
-                # Calculate the similarity matrix between scores of 0-th place and current place
-                plt.figure()
-                plt.imshow(torch.matmul(score[i][0].T, score[0][0]).cpu().numpy(), cmap='viridis')
-                plt.axis('off')
-                plt.savefig(f'vis/{dataset_name}/{batch_idx}/score_0_sim_matrix_{i}.png', bbox_inches='tight', transparent="True", pad_inches=0)
-                plt.close()
+            self._visualize_batch(dataset_name, batch_idx, places, score)
         else:
             descriptors = self(places)
         if dataloader_idx is None: # Only one val dataset
