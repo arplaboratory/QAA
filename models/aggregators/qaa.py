@@ -91,7 +91,7 @@ class QAA(nn.Module):
             self.dust_bin = None
 
 
-    def forward(self, x, domain_idx=None, visualize=False):
+    def forward(self, x, domain_idx=None, visualize=False, decorrelation="none"):
         """
         x (tuple): A tuple containing two elements, f and t. 
             (torch.Tensor): The feature tensors (t_i) [B, C, H // 14, W // 14].
@@ -109,8 +109,10 @@ class QAA(nn.Module):
         
         if self.proj_early:
             x = self.proj(x)
-        f = self.queries_feature().permute(0, 2, 1).repeat(x.shape[0], 1, 1)
-        q = self.queries_score().repeat(x.shape[0], 1, 1)
+        f_raw = self.queries_feature()
+        f = f_raw.permute(0, 2, 1).repeat(x.shape[0], 1, 1)
+        q_raw = self.queries_score()
+        q = q_raw.repeat(x.shape[0], 1, 1)
         p, p_attn = self.score(x, q)
         if self.divide > 1:
             raise NotImplementedError()
@@ -140,4 +142,6 @@ class QAA(nn.Module):
             return nn.functional.normalize(f, p=2, dim=-1), domain_desc
         if visualize:
             return nn.functional.normalize(f, p=2, dim=-1), p_attn, p
+        if decorrelation != "none":
+            return nn.functional.normalize(f, p=2, dim=-1), q_raw, f_raw
         return nn.functional.normalize(f, p=2, dim=-1)

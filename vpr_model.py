@@ -63,6 +63,9 @@ class VPRModel(pl.LightningModule):
         cross_loss=False,
         cross_loss_weight=1.0,
         recompute_desc=False,
+        decorrelation="none",
+        decorrelation_loss_weight=1.0,
+        decorrelation_off_lambda=0.005,
     ):
         super().__init__()
 
@@ -98,6 +101,9 @@ class VPRModel(pl.LightningModule):
         self.cross_loss = cross_loss
         self.cross_loss_weight = cross_loss_weight
         self.recompute_desc = recompute_desc
+        self.decorrelation = decorrelation
+        self.decorrelation_loss_weight = decorrelation_loss_weight
+        self.decorrelation_off_lambda = decorrelation_off_lambda
         
         # ----------------------------------
         # get the backbone and the aggregator
@@ -118,7 +124,10 @@ class VPRModel(pl.LightningModule):
         x = self.backbone(x, domain_idx=domain_idx)
         if self.visualize and "Queries" not in self.agg_arch:
             raise NotImplementedError()
-        x = self.aggregator(x, domain_idx=domain_idx, visualize=self.visualize)
+        if self.decorrelation == "none":
+            x = self.aggregator(x, domain_idx=domain_idx, visualize=self.visualize)
+        else:
+            x = self.aggregator(x, domain_idx=domain_idx, visualize=self.visualize, decorrelation=self.decorrelation)
         return x
     
     # configure the optimizer 
@@ -287,6 +296,8 @@ class VPRModel(pl.LightningModule):
         # Feed forward the batch to the model
         if self.backbone.domain_prompt != "none":
             descriptors, domain_desc = self(images, domain_idx)
+        elif self.decorrelation != "none":
+            descriptors, query_p, query_f = self(images, domain_idx)
         else:
             descriptors = self(images, domain_idx) # Here we are calling the method forward that we defined above
 
@@ -330,6 +341,14 @@ class VPRModel(pl.LightningModule):
             else:
                 prev_BS_N += BS*N
         
+        if self.decorrelation != "none":
+            if self.decorrelation == "score":
+                loss += self.decorrelation_loss_weight * self.barlow_loss_rows(query_p, lambda_offdiag=self.decorrelation_off_lambda)
+            elif self.decorrelation == "feature":
+                loss += self.decorrelation_loss_weight * self.barlow_loss_rows(query_f, lambda_offdiag=self.decorrelation_off_lambda)
+            elif self.decorrelation == "both":
+                loss += self.decorrelation_loss_weight * self.barlow_loss_rows(query_p, lambda_offdiag=self.decorrelation_off_lambda)
+                loss += self.decorrelation_loss_weight * self.barlow_loss_rows(query_f, lambda_offdiag=self.decorrelation_off_lambda)
         self.log('loss', loss.item(), logger=True, prog_bar=True)
         if self.cross_loss:
             self.log('domain_loss', domain_loss.item(), logger=True, prog_bar=True)
@@ -596,3 +615,33 @@ class VPRModel(pl.LightningModule):
         plt.axis('off')
         plt.savefig(f'vis//sim_matrix_score.png', bbox_inches='tight', transparent="True", pad_inches=0)
         plt.close()
+
+    def barlow_loss_rows(self, score, lambda_offdiag=0.005):
+        """
+        Barlow-style decorrelation among columns
+        of a (L, D) matrix. If L is your 'batch size' and
+        D is your 'feature dimension', this penalizes 
+        correlation among the D columns across the L samples.
+        """
+        score = score.squeeze(0)
+        L, D = score.shape
+        
+        # Center (optional) so the mean of each dimension is 0
+        score_centered = score - score.mean(dim=0, keepdim=True)
+        
+        # Covariance/correlation matrix: D x D
+        C = (score_centered.T @ score_centered) / L
+        
+        # On-diagonal: want ~ 1
+        on_diag = torch.diagonal(C).add_(-1).pow_(2).sum()
+        
+        # Off-diagonal: want ~ 0
+        off_diag = self.off_diagonal(C).pow_(2).sum()
+        
+        return on_diag + lambda_offdiag * off_diag
+
+    def off_diagonal(self, x):
+        """Return flattened view of off-diagonal elements of a square matrix."""
+        n, m = x.shape
+        assert n == m
+        return x.flatten()[:-1].view(n - 1, n + 1)[:, 1:].flatten()

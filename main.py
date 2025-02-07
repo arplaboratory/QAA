@@ -52,6 +52,9 @@ if __name__ == '__main__':
         cross_loss=train_cfg.training.cross_loss,
         cross_loss_weight=train_cfg.training.cross_loss_weight,
         recompute_desc=train_cfg.training.recompute_desc,
+        decorrelation=train_cfg.training.decorrelation,
+        decorrelation_loss_weight=train_cfg.training.decorrelation_loss_weight,
+        decorrelation_off_lambda=train_cfg.training.decorrelation_off_lambda,
     )
 
     # model params saving using Pytorch Lightning
