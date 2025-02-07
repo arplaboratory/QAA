@@ -124,7 +124,7 @@ class VPRModel(pl.LightningModule):
         x = self.backbone(x, domain_idx=domain_idx)
         if self.visualize and "Queries" not in self.agg_arch:
             raise NotImplementedError()
-        if self.decorrelation == "none":
+        if self.decorrelation == "none" or domain_idx == None:
             x = self.aggregator(x, domain_idx=domain_idx, visualize=self.visualize)
         else:
             x = self.aggregator(x, domain_idx=domain_idx, visualize=self.visualize, decorrelation=self.decorrelation)
