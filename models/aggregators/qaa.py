@@ -90,6 +90,13 @@ class QAA(nn.Module):
         else:
             self.dust_bin = None
 
+    def cache_query(self):
+        self.cached_query_score = self.queries_score()
+        self.cached_query_feature = self.queries_feature()
+
+    def clean_cache(self):
+        del self.cached_query_score
+        del self.cached_query_feature
 
     def forward(self, x, domain_idx=None, visualize=False, decorrelation="none"):
         """
@@ -109,9 +116,9 @@ class QAA(nn.Module):
         
         if self.proj_early:
             x = self.proj(x)
-        f_raw = self.queries_feature()
+        f_raw = self.queries_feature() if not hasattr(self, "cached_query_feature") else self.cached_query_feature
         f = f_raw.permute(0, 2, 1).repeat(x.shape[0], 1, 1)
-        q_raw = self.queries_score()
+        q_raw = self.queries_score() if not hasattr(self, "cached_query_score") else self.cached_query_score
         q = q_raw.repeat(x.shape[0], 1, 1)
         p, p_attn = self.score(x, q)
         if self.divide > 1:
