@@ -151,6 +151,5 @@ if __name__ == '__main__':
         log_every_n_steps=20,
     )
 
-    measure_flop(model)
     # we call the trainer, we give it the model and the datamodule
     trainer.test(model=model, datamodule=datamodule)

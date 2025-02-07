@@ -89,7 +89,6 @@ if __name__ == '__main__':
         logger=wandb_logger,
     )
 
-    measure_flop(model)
     # we call the trainer, we give it the model and the datamodule
     # trainer.validate(model=model, datamodule=datamodule)
     trainer.fit(model=model, datamodule=datamodule)

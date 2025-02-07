@@ -6,6 +6,7 @@ import torch.nn.functional as F
 import os
 
 import utils
+from utils.measure_flop import measure_flop
 from models import helper
 from dataloaders.GenericDataloader import IMAGENET_MEAN_STD
 from PIL import Image
@@ -118,6 +119,7 @@ class VPRModel(pl.LightningModule):
         self.val_outputs = []
         self.log_img_first_iter = False
         self.visualize = False
+        measure_flop(self)
         
     # the forward pass of the lightning model
     def forward(self, x, domain_idx=None):
@@ -418,6 +420,8 @@ class VPRModel(pl.LightningModule):
         self.current_dataloader_idx = 0
         if self.visualize:            
             self.visualize_queries()
+        if self.agg_arch == "QAA":
+            self.aggregator.cache_query()
     
     def on_validation_epoch_end(self):
         """this return descriptors in their order
@@ -444,6 +448,9 @@ class VPRModel(pl.LightningModule):
         else:
             print("Use existing descriptors for recomputing if recomputing is enabled")
             self.trainer.datamodule.model = None
+
+        if self.agg_arch == "QAA":
+            self.aggregator.clean_cache()
 
     def val_calculate_recall(self, dataloader_idx):
         # Clean memory once one dataset finished
@@ -504,6 +511,8 @@ class VPRModel(pl.LightningModule):
         self.current_dataloader_idx = 0
         if self.visualize:            
             self.visualize_queries()
+        if self.agg_arch == "QAA":
+            self.aggregator.cache_query()
     
     def on_test_epoch_end(self):
         """this return descriptors in their order
@@ -525,6 +534,9 @@ class VPRModel(pl.LightningModule):
         # reset the outputs list
         self.test_outputs = []
         self.results_list = []
+
+        if self.agg_arch == "QAA":
+            self.aggregator.clean_cache()
 
     def test_calculate_recall(self, dataloader_idx):
         # Clean memory once one dataset finished
