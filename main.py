@@ -4,6 +4,7 @@ import argparse
 
 from vpr_model import VPRModel
 from utils.load_cfg import load_config, load_datasets_config
+from utils.measure_flop import measure_flop
 from dataloaders.GenericDataloader import GenericDataModule
 import torch
 
@@ -88,15 +89,7 @@ if __name__ == '__main__':
         logger=wandb_logger,
     )
 
-    from lightning.fabric.utilities.throughput import measure_flops
-    with torch.device("cuda"):
-        model = model.cuda()
-        x = torch.randn(1, 3, 322, 322).cuda()
-    model_fwd = lambda: model(x)
-    fwd_flops = measure_flops(model, model_fwd)/ 1e9
-    model_backbone_fwd = lambda: model.backbone(x)
-    backbone_flops = measure_flops(model, model_backbone_fwd)/ 1e9
-    print(f"Model: {fwd_flops} GFLOPS, Backbone: {backbone_flops}, Agg: {fwd_flops-backbone_flops}")
+    measure_flop(model)
     # we call the trainer, we give it the model and the datamodule
     # trainer.validate(model=model, datamodule=datamodule)
     trainer.fit(model=model, datamodule=datamodule)
