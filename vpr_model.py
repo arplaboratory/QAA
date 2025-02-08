@@ -61,8 +61,6 @@ class VPRModel(pl.LightningModule):
         miner_name='MultiSimilarityMiner', 
         miner_margin=0.1,
         faiss_gpu=False,
-        cross_loss=False,
-        cross_loss_weight=1.0,
         recompute_desc=False,
         decorrelation="none",
         decorrelation_loss_weight=1.0,
@@ -99,8 +97,6 @@ class VPRModel(pl.LightningModule):
         self.batch_acc = [] # we will keep track of the % of trivial pairs/triplets at the loss level 
 
         self.faiss_gpu = faiss_gpu
-        self.cross_loss = cross_loss
-        self.cross_loss_weight = cross_loss_weight
         self.recompute_desc = recompute_desc
         self.decorrelation = decorrelation
         self.decorrelation_loss_weight = decorrelation_loss_weight
@@ -320,26 +316,6 @@ class VPRModel(pl.LightningModule):
                 desc = descriptors[prev_BS_N:prev_BS_N+BS*N]
                 lab = labels[prev_BS_N:prev_BS_N+BS*N]
             loss += self.loss_function(desc, lab)
-            if self.cross_loss:
-                if self.backbone.multi_adapt == "none":
-                    if i == 0:
-                        desc = domain_desc[:BS*N]
-                        lab = labels[:BS*N]
-                    else:
-                        desc = domain_desc[prev_BS_N:prev_BS_N+BS*N]
-                        lab = labels[prev_BS_N:prev_BS_N+BS*N]
-                    domain_loss = self.loss_function(desc, lab)
-                else:
-                    domain_loss = 0
-                    for j in range(len(domain_desc)):
-                        if i == 0:
-                            desc = domain_desc[j][:BS*N]
-                            lab = labels[:BS*N]
-                        else:
-                            desc = domain_desc[j][prev_BS_N:prev_BS_N+BS*N]
-                            lab = labels[prev_BS_N:prev_BS_N+BS*N]
-                        domain_loss += self.loss_function(desc, lab)
-                loss += self.cross_loss_weight * domain_loss
             if i == 0:
                 prev_BS_N = BS*N
             else:
@@ -354,8 +330,6 @@ class VPRModel(pl.LightningModule):
                 loss += self.decorrelation_loss_weight * self.barlow_loss_rows(query_p, lambda_offdiag=self.decorrelation_off_lambda)
                 loss += self.decorrelation_loss_weight * self.barlow_loss_rows(query_f, lambda_offdiag=self.decorrelation_off_lambda)
         self.log('loss', loss.item(), logger=True, prog_bar=True)
-        if self.cross_loss:
-            self.log('domain_loss', domain_loss.item(), logger=True, prog_bar=True)
         return {'loss': loss}
     
     def on_train_epoch_end(self):
