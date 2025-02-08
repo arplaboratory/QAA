@@ -138,8 +138,10 @@ class VPRModel(pl.LightningModule):
             params = [{'params': self.aggregator.parameters()}]
             print(f"Add params: aggregator")
         else:
-            params = [{'params': self.aggregator.token_features.parameters()}]
-            print(f"Add params: aggregator - token_features")
+            params = []
+            if hasattr(self.aggregator, "token_features"):
+                params = params + [{'params': self.aggregator.token_features.parameters()}]
+                print(f"Add params: aggregator - token_features")
             params = params + [{'params': self.aggregator.score.parameters()}]
             print(f"Add params: aggregator - score")
             if hasattr(self.aggregator, "cluster_feature"):
