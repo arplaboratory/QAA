@@ -14,6 +14,15 @@ class QuerySelfAttn(torch.nn.Module):
         self.norm_q = torch.nn.LayerNorm(in_dim)
         #####
 
+    def adjust_queries(self, num_queries):
+        if num_queries > self.queries.shape[1]:
+            expand_ratio = self.queries.shape[1] // num_queries + 1
+            new_queries = self.queries.repeat(1, expand_ratio, 1)
+            new_queries = new_queries[:, :num_queries, :]
+        else:
+            new_queries = self.queries[:, :num_queries, :]
+        self.queries = nn.Parameter(new_queries)
+
     def forward(self, detach=False):
         # B = x.size(0)
 

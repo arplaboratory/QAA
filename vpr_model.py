@@ -115,8 +115,11 @@ class VPRModel(pl.LightningModule):
         self.val_outputs = []
         self.log_img_first_iter = False
         self.visualize = False
-        measure_flop(self)
-        
+    
+    def setup(self, stage):
+        if stage == "fit" or stage == "test" or stage == "validate":
+            measure_flop(self)
+
     # the forward pass of the lightning model
     def forward(self, x, domain_idx=None):
         x = self.backbone(x, domain_idx=domain_idx)
@@ -138,8 +141,9 @@ class VPRModel(pl.LightningModule):
             if hasattr(self.aggregator, "token_features"):
                 params = params + [{'params': self.aggregator.token_features.parameters()}]
                 print(f"Add params: aggregator - token_features")
-            params = params + [{'params': self.aggregator.score.parameters()}]
-            print(f"Add params: aggregator - score")
+            if self.aggregator.freeze != "score_prediction":
+                params = params + [{'params': self.aggregator.score.parameters()}]
+                print(f"Add params: aggregator - score")
             if hasattr(self.aggregator, "cluster_feature"):
                 params = params + [{'params': self.aggregator.cluster_feature.parameters()}]
                 print(f"Add params: aggregator - feature_cross_attn")
@@ -147,6 +151,11 @@ class VPRModel(pl.LightningModule):
                 params = params + [{'params': self.aggregator.queries_score.parameters()}]
                 print(f"Add params: aggregator - queries_score")
             elif self.aggregator.freeze == "score":
+                params = params + [{'params': self.aggregator.queries_feature.parameters()}]
+                print(f"Add params: aggregator - queries_feature")
+            elif self.aggregator.freeze == "score_prediction":
+                params = params + [{'params': self.aggregator.queries_score.parameters()}]
+                print(f"Add params: aggregator - queries_score")
                 params = params + [{'params': self.aggregator.queries_feature.parameters()}]
                 print(f"Add params: aggregator - queries_feature")
             else:
@@ -633,3 +642,15 @@ class VPRModel(pl.LightningModule):
         n, m = x.shape
         assert n == m
         return x.flatten()[:-1].view(n - 1, n + 1)[:, 1:].flatten()
+
+    def freeze_backbone(self):
+        self.backbone_config['num_trainable_blocks'] = 0
+        print("Freeze Backbone")
+
+    def freeze_all(self):
+        self.freeze_backbone()
+        self.aggregator.freeze = "score_prediction"
+        print("Freeze Score Prediction")
+
+    def adjust_queries(self, num_queries):
+        self.aggregator.adjust_queries(num_queries)

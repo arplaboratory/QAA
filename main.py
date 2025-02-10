@@ -4,7 +4,6 @@ import argparse
 
 from vpr_model import VPRModel
 from utils.load_cfg import load_config, load_datasets_config
-from utils.measure_flop import measure_flop
 from dataloaders.GenericDataloader import GenericDataModule
 import torch
 
@@ -17,7 +16,7 @@ if __name__ == '__main__':
     args = args.parse_args()
     # we load the training configuration
     train_cfg = load_config(args.config)
-    wandb_logger = WandbLogger(name=args.config.split('/')[-1].split('.')[0], project="UniVPR")
+    wandb_logger = WandbLogger(name=args.config.split('/')[-1].split('.')[0], project="UniVPR-2025")
     datamodule = GenericDataModule(
         train_batch_size=train_cfg.training.train_batch_size,
         test_batch_size=train_cfg.training.test_batch_size,
@@ -29,32 +28,44 @@ if __name__ == '__main__':
         mixed_precision=True,
     )
     
-    model = VPRModel(
-        #---- Encoder
-        backbone_arch=train_cfg.model.backbone_arch,
-        backbone_config=train_cfg.model.backbone_config,
-        agg_arch=train_cfg.model.agg_arch,
-        agg_config=train_cfg.model.agg_config,
-        lr=train_cfg.training.optimizer["lr"],
-        backbone_lr=train_cfg.training.optimizer["backbone_lr"] if "backbone_lr" in train_cfg.training.optimizer else train_cfg.training.optimizer["lr"],
-        optimizer=train_cfg.training.optimizer["name"],
-        weight_decay=train_cfg.training.optimizer["weight_decay"], # 0.001 for sgd and 0 for adam,
-        momentum=train_cfg.training.optimizer["momentum"],
-        lr_sched=train_cfg.training.scheduler["name"],
-        lr_sched_args = train_cfg.training.scheduler["args"],
+    if not hasattr(train_cfg.training, "load"):
+        print("Training from scratch")
+        model = VPRModel(
+            #---- Encoder
+            backbone_arch=train_cfg.model.backbone_arch,
+            backbone_config=train_cfg.model.backbone_config,
+            agg_arch=train_cfg.model.agg_arch,
+            agg_config=train_cfg.model.agg_config,
+            lr=train_cfg.training.optimizer["lr"],
+            backbone_lr=train_cfg.training.optimizer["backbone_lr"] if "backbone_lr" in train_cfg.training.optimizer else train_cfg.training.optimizer["lr"],
+            optimizer=train_cfg.training.optimizer["name"],
+            weight_decay=train_cfg.training.optimizer["weight_decay"], # 0.001 for sgd and 0 for adam,
+            momentum=train_cfg.training.optimizer["momentum"],
+            lr_sched=train_cfg.training.scheduler["name"],
+            lr_sched_args = train_cfg.training.scheduler["args"],
 
-        #----- Loss functions
-        # example: ContrastiveLoss, TripletMarginLoss, MultiSimilarityLoss,
-        # FastAPLoss, CircleLoss, SupConLoss,
-        loss_name=train_cfg.training.loss["name"],
-        miner_name=train_cfg.training.miner["name"], # example: TripletMarginMiner, MultiSimilarityMiner, PairMarginMiner
-        miner_margin=train_cfg.training.miner["margin"],
-        faiss_gpu=train_cfg.training.faiss_gpu,
-        recompute_desc=train_cfg.training.recompute_desc,
-        decorrelation=train_cfg.training.decorrelation,
-        decorrelation_loss_weight=train_cfg.training.decorrelation_loss_weight,
-        decorrelation_off_lambda=train_cfg.training.decorrelation_off_lambda,
-    )
+            #----- Loss functions
+            # example: ContrastiveLoss, TripletMarginLoss, MultiSimilarityLoss,
+            # FastAPLoss, CircleLoss, SupConLoss,
+            loss_name=train_cfg.training.loss["name"],
+            miner_name=train_cfg.training.miner["name"], # example: TripletMarginMiner, MultiSimilarityMiner, PairMarginMiner
+            miner_margin=train_cfg.training.miner["margin"],
+            faiss_gpu=train_cfg.training.faiss_gpu,
+            recompute_desc=train_cfg.training.recompute_desc,
+            decorrelation=train_cfg.training.decorrelation,
+            decorrelation_loss_weight=train_cfg.training.decorrelation_loss_weight,
+            decorrelation_off_lambda=train_cfg.training.decorrelation_off_lambda,
+        )
+    else:
+        model = VPRModel.load_from_checkpoint(train_cfg.training.load)
+        print(f"Loading Model: {train_cfg.training.load}")
+        if train_cfg.training.finetune_method == "freeze_backbone":
+            model.freeze_backbone()
+        elif train_cfg.training.finetune_method == "freeze_all":
+            model.freeze_all()
+        elif train_cfg.training.finetune_method == "train_all":
+            pass
+        model.adjust_queries(train_cfg.model.agg_config["num_queries"])    
 
     # model params saving using Pytorch Lightning
     # we save the best 3 models accoring to Recall@1 on pittsburg val

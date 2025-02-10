@@ -98,6 +98,11 @@ class QAA(nn.Module):
         del self.cached_query_score
         del self.cached_query_feature
 
+    def adjust_queries(self, num_queries):
+        # Need to adjust both score and feature queries:
+        self.queries_score.adjust_queries(num_queries)
+        self.queries_feature.adjust_queries(num_queries)
+
     def forward(self, x, domain_idx=None, visualize=False, decorrelation="none"):
         """
         x (tuple): A tuple containing two elements, f and t. 
