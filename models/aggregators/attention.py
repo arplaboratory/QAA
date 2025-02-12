@@ -16,7 +16,7 @@ class QuerySelfAttn(torch.nn.Module):
 
     def adjust_queries(self, num_queries):
         if num_queries > self.queries.shape[1]:
-            expand_ratio = self.queries.shape[1] // num_queries + 1
+            expand_ratio = num_queries // self.queries.shape[1] + 1
             new_queries = self.queries.repeat(1, expand_ratio, 1)
             new_queries = new_queries[:, :num_queries, :]
         else:

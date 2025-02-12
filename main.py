@@ -57,7 +57,9 @@ if __name__ == '__main__':
             decorrelation_off_lambda=train_cfg.training.decorrelation_off_lambda,
         )
     else:
-        model = VPRModel.load_from_checkpoint(train_cfg.training.load)
+        model = VPRModel.load_from_checkpoint(train_cfg.training.load,
+                                              lr=train_cfg.training.optimizer["lr"],
+                                              backbone_lr=train_cfg.training.optimizer["backbone_lr"] if "backbone_lr" in train_cfg.training.optimizer else train_cfg.training.optimizer["lr"],)
         print(f"Loading Model: {train_cfg.training.load}")
         if train_cfg.training.finetune_method == "freeze_backbone":
             model.freeze_backbone()
