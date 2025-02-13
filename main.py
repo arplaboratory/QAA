@@ -59,7 +59,10 @@ if __name__ == '__main__':
     else:
         model = VPRModel.load_from_checkpoint(train_cfg.training.load,
                                               lr=train_cfg.training.optimizer["lr"],
-                                              backbone_lr=train_cfg.training.optimizer["backbone_lr"] if "backbone_lr" in train_cfg.training.optimizer else train_cfg.training.optimizer["lr"],)
+                                              backbone_lr=train_cfg.training.optimizer["backbone_lr"] if "backbone_lr" in train_cfg.training.optimizer else train_cfg.training.optimizer["lr"],
+                                              decorrelation=train_cfg.training.decorrelation,
+                                              decorrelation_loss_weight=train_cfg.training.decorrelation_loss_weight,
+                                              decorrelation_off_lambda=train_cfg.training.decorrelation_off_lambda,)
         print(f"Loading Model: {train_cfg.training.load}")
         if train_cfg.training.finetune_method == "freeze_backbone":
             model.freeze_backbone()
@@ -67,7 +70,7 @@ if __name__ == '__main__':
             model.freeze_all()
         elif train_cfg.training.finetune_method == "train_all":
             pass
-        model.adjust_queries(train_cfg.model.agg_config["num_queries"])    
+        model.adjust_queries(train_cfg.model.agg_config["num_queries"])
 
     # model params saving using Pytorch Lightning
     # we save the best 3 models accoring to Recall@1 on pittsburg val
