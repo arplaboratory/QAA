@@ -34,6 +34,7 @@ class QAA(nn.Module):
             skip_connection="none",
             out_norm=True,
             double_cross=False,
+            proj_dim=384,
         ) -> None:
         super().__init__()
 
@@ -45,8 +46,7 @@ class QAA(nn.Module):
         self.divide = divide
         self.divide_ratio = divide_ratio
         self.proj_early = proj_early
-        if self.proj_early:
-            assert attn_arch == "none"
+        self.proj_dim = proj_dim
         if self.divide > 1:
             raise NotImplementedError()
         self.num_queries = num_queries
@@ -77,11 +77,11 @@ class QAA(nn.Module):
             self.score = QueryCrossAttn(self.num_channels, self.num_clusters, nheads=score_nheads, arch=attn_arch)
         else:
             if self_attn == "both" or self_attn == "score":
-                self.queries_score = QuerySelfAttn(self.num_clusters, self.num_queries, nheads=score_nheads, self_attn_flag=True)
+                self.queries_score = QuerySelfAttn(self.proj_dim, self.num_queries, nheads=score_nheads, self_attn_flag=True)
             else:
-                self.queries_score = QuerySelfAttn(self.num_clusters, self.num_queries, nheads=score_nheads, self_attn_flag=False)
-            self.score = QueryCrossAttn(self.num_clusters, self.num_clusters, nheads=score_nheads, arch=attn_arch, skip=skip_connection, out_norm=out_norm, double_cross=double_cross)
-            self.proj = torch.nn.Conv2d(self.num_channels, self.num_clusters, kernel_size=3, padding=1)
+                self.queries_score = QuerySelfAttn(self.proj_dim, self.num_queries, nheads=score_nheads, self_attn_flag=False)
+            self.score = QueryCrossAttn(self.proj_dim, self.num_clusters, nheads=score_nheads, arch=attn_arch, skip=skip_connection, out_norm=out_norm, double_cross=double_cross)
+            self.proj = torch.nn.Conv2d(self.num_channels, self.proj_dim, 1)
         if divide > 1:
             raise NotImplementedError()
         # Dustbin parameter z
