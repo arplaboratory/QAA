@@ -28,7 +28,7 @@ model:
 
 datasets:
   train_datasets: 
-    - SF_XL
+    - GSV
   val_datasets: 
     - pitts30k
     - pitts250k
@@ -48,7 +48,7 @@ datasets:
     - eynsham
   target_val_dataset: mapillary_sls
 training:
-  num_epochs: 64
+  num_epochs: 80
   train_batch_size: 30
   test_batch_size: 256
   img_per_place: 4
@@ -61,6 +61,7 @@ training:
   optimizer:
     name: AdamW
     lr: 1e-5
+    backbone_lr: 8e-6
     weight_decay: 1e-3
     momentum: 0.9
   scheduler:
@@ -68,7 +69,7 @@ training:
     args:
       gamma: 0.1
       milestones:
-        - 64
+        - 80
       total_iters: 4000
   loss:
     name: 'MultiSimilarityLoss'
@@ -76,9 +77,10 @@ training:
     name: 'MultiSimilarityMiner'
     margin: 0.1
   faiss_gpu: False
-  recompute_clusters: False
+  recompute_clusters: True
   prefetch_factor: 1
-  recompute_desc: False
+  recompute_desc: True
   recompute_interval: 4
-  cross_loss: False
-  cross_loss_weight: 1.0
+  decorrelation: "none"
+  decorrelation_loss_weight: 1.0
+  decorrelation_off_lambda: 0.005
