@@ -119,7 +119,8 @@ class VPRModel(pl.LightningModule):
     def setup(self, stage):
         if stage == "fit" or stage == "test" or stage == "validate":
             measure_flop(self)
-            self.logger.experiment.log({"actual_num_queries": self.aggregator.queries_score.queries.shape[1]})
+            if self.agg_arch == "QAA":
+                self.logger.experiment.log({"actual_num_queries": self.aggregator.queries_score.queries.shape[1]})
 
     # the forward pass of the lightning model
     def forward(self, x, domain_idx=None):
