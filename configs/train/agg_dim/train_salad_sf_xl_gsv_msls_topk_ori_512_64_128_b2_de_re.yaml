@@ -21,10 +21,10 @@ model:
     cluster_dim: 128
     token_dim: 0
     dropout: 0.3
-    freeze: "feature"
+    freeze: "none"
     divide_ratio: [1, 1, 1, 0]
     divide: 1
-    num_queries: 256
+    num_queries: 128
     attn_arch: "conv"
     proj_early: False
     skip_connection: "cross"
@@ -55,7 +55,7 @@ datasets:
     - eynsham
   target_val_dataset: mapillary_sls
 training:
-  num_epochs: 64
+  num_epochs: 80
   train_batch_size: 30
   test_batch_size: 256
   img_per_place: 4
@@ -76,7 +76,7 @@ training:
     args:
       gamma: 0.1
       milestones:
-        - 64
+        - 80
       total_iters: 4000
   loss:
     name: 'MultiSimilarityLoss'
@@ -88,5 +88,6 @@ training:
   prefetch_factor: 1
   recompute_desc: True
   recompute_interval: 4
-  cross_loss: False
-  cross_loss_weight: 1.0
+  decorrelation: "feature"
+  decorrelation_lambda_std: 25.0
+  decorrelation_lambda_cov: 1.0
