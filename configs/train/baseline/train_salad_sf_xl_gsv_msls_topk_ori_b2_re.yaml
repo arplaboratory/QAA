@@ -24,7 +24,7 @@ model:
     freeze: "none"
     divide_ratio: [1, 1, 1, 0]
     divide: 1
-    num_queries: 256
+    num_queries: 64
 
 datasets:
   train_datasets: 
@@ -84,5 +84,5 @@ training:
   recompute_desc: True
   recompute_interval: 4
   decorrelation: "feature"
-  decorrelation_lambda_std: 1.0
+  decorrelation_lambda_std: 25.0
   decorrelation_lambda_cov: 1.0
