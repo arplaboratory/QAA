@@ -53,8 +53,8 @@ if __name__ == '__main__':
             faiss_gpu=train_cfg.training.faiss_gpu,
             recompute_desc=train_cfg.training.recompute_desc,
             decorrelation=train_cfg.training.decorrelation,
-            decorrelation_loss_weight=train_cfg.training.decorrelation_loss_weight,
-            decorrelation_off_lambda=train_cfg.training.decorrelation_off_lambda,
+            decorrelation_lambda_std=train_cfg.training.decorrelation_lambda_std,
+            decorrelation_lambda_cov=train_cfg.training.decorrelation_lambda_cov,
         )
     else:
         model = VPRModel.load_from_checkpoint(train_cfg.training.load,

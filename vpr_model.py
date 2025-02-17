@@ -63,8 +63,8 @@ class VPRModel(pl.LightningModule):
         faiss_gpu=False,
         recompute_desc=False,
         decorrelation="none",
-        decorrelation_loss_weight=1.0,
-        decorrelation_off_lambda=0.005,
+        decorrelation_lambda_std=1.0,
+        decorrelation_lambda_cov=1.0,
     ):
         super().__init__()
 
@@ -99,8 +99,8 @@ class VPRModel(pl.LightningModule):
         self.faiss_gpu = faiss_gpu
         self.recompute_desc = recompute_desc
         self.decorrelation = decorrelation
-        self.decorrelation_loss_weight = decorrelation_loss_weight
-        self.decorrelation_off_lambda = decorrelation_off_lambda
+        self.decorrelation_lambda_std = decorrelation_lambda_std
+        self.decorrelation_lambda_cov = decorrelation_lambda_cov
         
         # ----------------------------------
         # get the backbone and the aggregator
@@ -334,12 +334,12 @@ class VPRModel(pl.LightningModule):
         
         if self.decorrelation != "none":
             if self.decorrelation == "score":
-                loss += self.decorrelation_loss_weight * self.barlow_loss_rows(query_p, lambda_offdiag=self.decorrelation_off_lambda)
+                loss += self.variance_covariance_rows(query_p, lambda_std=self.decorrelation_lambda_std, lambda_cov=self.decorrelation_lambda_cov)
             elif self.decorrelation == "feature":
-                loss += self.decorrelation_loss_weight * self.barlow_loss_rows(query_f, lambda_offdiag=self.decorrelation_off_lambda)
+                loss += self.variance_covariance_rows(query_f, lambda_std=self.decorrelation_lambda_std, lambda_cov=self.decorrelation_lambda_cov)
             elif self.decorrelation == "both":
-                loss += self.decorrelation_loss_weight * self.barlow_loss_rows(query_p, lambda_offdiag=self.decorrelation_off_lambda)
-                loss += self.decorrelation_loss_weight * self.barlow_loss_rows(query_f, lambda_offdiag=self.decorrelation_off_lambda)
+                loss += self.variance_covariance_rows(query_p, lambda_std=self.decorrelation_lambda_std, lambda_cov=self.decorrelation_lambda_cov)
+                loss += self.variance_covariance_rows(query_f, lambda_std=self.decorrelation_lambda_std, lambda_cov=self.decorrelation_lambda_cov)
         self.log('loss', loss.item(), logger=True, prog_bar=True)
         return {'loss': loss}
     
@@ -615,29 +615,31 @@ class VPRModel(pl.LightningModule):
         plt.savefig(f'vis//sim_matrix_score.png', bbox_inches='tight', transparent="True", pad_inches=0)
         plt.close()
 
-    def barlow_loss_rows(self, score, lambda_offdiag=0.005):
+    def variance_covariance_rows(self, x, lambda_std=1.0, lambda_cov=1.0):
         """
-        Barlow-style decorrelation among columns
-        of a (L, D) matrix. If L is your 'batch size' and
+        variance_covariance-style decorrelation among columns
+        of a (L, D) matrix. If L is your 'query size' and
         D is your 'feature dimension', this penalizes 
         correlation among the D columns across the L samples.
         """
-        score = score.squeeze(0)
-        L, D = score.shape
+        x = x.squeeze(0)
+        L, D = x.shape
         
-        # Center (optional) so the mean of each dimension is 0
-        score_centered = score - score.mean(dim=0, keepdim=True)
-        
-        # Covariance/correlation matrix: D x D
-        C = (score_centered.T @ score_centered) / L
-        
-        # On-diagonal: want ~ 1
-        on_diag = torch.diagonal(C).add_(-1).pow_(2).sum()
-        
-        # Off-diagonal: want ~ 0
-        off_diag = self.off_diagonal(C).pow_(2).sum()
-        
-        return on_diag + lambda_offdiag * off_diag
+        x = x - x.mean(dim=0)
+
+        std_x = torch.sqrt(x.var(dim=0) + 0.0001)
+        std_loss = torch.mean(F.relu(1 - std_x))
+
+        cov_x = (x.T @ x) / (L - 1)
+        cov_loss = off_diagonal(cov_x).pow_(2).sum().div(D)
+
+        loss = (
+              lambda_std * std_loss
+            + lambda_cov * cov_loss
+        )
+        print(std_loss)
+        print(cov_loss)
+        return loss
 
     def off_diagonal(self, x):
         """Return flattened view of off-diagonal elements of a square matrix."""
