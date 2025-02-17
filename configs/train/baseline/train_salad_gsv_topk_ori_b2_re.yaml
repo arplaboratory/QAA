@@ -81,6 +81,6 @@ training:
   prefetch_factor: 1
   recompute_desc: True
   recompute_interval: 4
-  decorrelation: "none"
-  decorrelation_loss_weight: 1.0
-  decorrelation_off_lambda: 0.005
+  decorrelation: "feature"
+  decorrelation_lambda_std: 1.0
+  decorrelation_lambda_cov: 1.0
