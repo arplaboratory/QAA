@@ -30,11 +30,9 @@ class QAA(nn.Module):
             feature_nheads=4,
             score_nheads=4,
             attn_arch="conv",
-            proj_early=False,
             skip_connection="none",
             out_norm=True,
             self_attn_out_norm=True,
-            proj_dim=384,
         ) -> None:
         super().__init__()
 
@@ -45,8 +43,6 @@ class QAA(nn.Module):
         self.freeze = freeze
         self.divide = divide
         self.divide_ratio = divide_ratio
-        self.proj_early = proj_early
-        self.proj_dim = proj_dim
         if self.divide > 1:
             raise NotImplementedError()
         self.num_queries = num_queries
@@ -69,19 +65,11 @@ class QAA(nn.Module):
             self.queries_feature = QuerySelfAttn(self.cluster_dim, self.num_queries, nheads=feature_nheads, self_attn_flag=True, self_attn_out_norm=self_attn_out_norm)
         else:
             self.queries_feature = QuerySelfAttn(self.cluster_dim, self.num_queries, nheads=feature_nheads, self_attn_flag=False, self_attn_out_norm=self_attn_out_norm)
-        if not self.proj_early:
-            if self_attn == "both" or self_attn == "score":
-                self.queries_score = QuerySelfAttn(self.num_channels, self.num_queries, nheads=score_nheads, self_attn_flag=True, self_attn_out_norm=self_attn_out_norm)
-            else:
-                self.queries_score = QuerySelfAttn(self.num_channels, self.num_queries, nheads=score_nheads, self_attn_flag=False, self_attn_out_norm=self_attn_out_norm)
-            self.score = QueryCrossAttn(self.num_channels, self.num_clusters, nheads=score_nheads, arch=attn_arch)
+        if self_attn == "both" or self_attn == "score":
+            self.queries_score = QuerySelfAttn(self.num_channels, self.num_queries, nheads=score_nheads, self_attn_flag=True, self_attn_out_norm=self_attn_out_norm)
         else:
-            if self_attn == "both" or self_attn == "score":
-                self.queries_score = QuerySelfAttn(self.proj_dim, self.num_queries, nheads=score_nheads, self_attn_flag=True, self_attn_out_norm=self_attn_out_norm)
-            else:
-                self.queries_score = QuerySelfAttn(self.proj_dim, self.num_queries, nheads=score_nheads, self_attn_flag=False, self_attn_out_norm=self_attn_out_norm)
-            self.score = QueryCrossAttn(self.proj_dim, self.num_clusters, nheads=score_nheads, arch=attn_arch, skip=skip_connection, out_norm=out_norm)
-            self.proj = nn.Conv2d(self.num_channels, self.proj_dim, 1)
+            self.queries_score = QuerySelfAttn(self.num_channels, self.num_queries, nheads=score_nheads, self_attn_flag=False, self_attn_out_norm=self_attn_out_norm)
+        self.score = QueryCrossAttn(self.num_channels, self.num_clusters, nheads=score_nheads, arch=attn_arch, skip=skip_connection, out_norm=out_norm)
         if divide > 1:
             raise NotImplementedError()
         # Dustbin parameter z
@@ -119,8 +107,6 @@ class QAA(nn.Module):
             x, t = x # Extract features and token
             domain_desc = None
         
-        if self.proj_early:
-            x = self.proj(x)
         f_raw = self.queries_feature() if not hasattr(self, "cached_query_feature") else self.cached_query_feature
         f = f_raw.permute(0, 2, 1).repeat(x.shape[0], 1, 1)
         q_raw = self.queries_score() if not hasattr(self, "cached_query_score") else self.cached_query_score
