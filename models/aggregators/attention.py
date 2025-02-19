@@ -2,11 +2,12 @@ import torch
 import torch.nn as nn
 
 class QuerySelfAttn(torch.nn.Module):
-    def __init__(self, in_dim, num_queries, nheads=8, self_attn_flag=True):
+    def __init__(self, in_dim, num_queries, nheads=8, self_attn_flag=True, self_attn_out_norm=True):
         super(QuerySelfAttn, self).__init__()
         
         self.queries = torch.nn.Parameter(torch.randn(1, num_queries, in_dim))
         self.self_attn_flag = self_attn_flag
+        self.self_attn_out_norm = self_attn_out_norm
         
         if self.self_attn_flag:
             # the following two lines are used during training only, you can cache their output in eval.
@@ -34,8 +35,9 @@ class QuerySelfAttn(torch.nn.Module):
                 # for stability purposes 
                 q = q + self.self_attn(q, q, q)[0]
                 q_detach = q_detach + self.self_attn(q_detach, q_detach, q_detach)[0]
-            q = self.norm_q(q)
-            q_detach = self.norm_q(q_detach)
+            if self.self_attn_out_norm:
+                q = self.norm_q(q)
+                q_detach = self.norm_q(q_detach)
             #######
             
             return q, q_detach
@@ -45,7 +47,8 @@ class QuerySelfAttn(torch.nn.Module):
                 # the following two lines are used during training.
                 # for stability purposes 
                 q = q + self.self_attn(q, q, q)[0]
-            q = self.norm_q(q)
+            if self.self_attn_out_norm:
+                q = self.norm_q(q)
             #######
             
             return q

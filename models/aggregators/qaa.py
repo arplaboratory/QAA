@@ -33,7 +33,7 @@ class QAA(nn.Module):
             proj_early=False,
             skip_connection="none",
             out_norm=True,
-            double_cross=False,
+            self_attn_out_norm=True,
             proj_dim=384,
         ) -> None:
         super().__init__()
@@ -66,22 +66,22 @@ class QAA(nn.Module):
         # MLP for local features f_i
         # MLP for score matrix S
         if self_attn == "both" or self_attn == "feature":
-            self.queries_feature = QuerySelfAttn(self.cluster_dim, self.num_queries, nheads=feature_nheads, self_attn_flag=True)
+            self.queries_feature = QuerySelfAttn(self.cluster_dim, self.num_queries, nheads=feature_nheads, self_attn_flag=True, self_attn_out_norm=self_attn_out_norm)
         else:
-            self.queries_feature = QuerySelfAttn(self.cluster_dim, self.num_queries, nheads=feature_nheads, self_attn_flag=False)
+            self.queries_feature = QuerySelfAttn(self.cluster_dim, self.num_queries, nheads=feature_nheads, self_attn_flag=False, self_attn_out_norm=self_attn_out_norm)
         if not self.proj_early:
             if self_attn == "both" or self_attn == "score":
-                self.queries_score = QuerySelfAttn(self.num_channels, self.num_queries, nheads=score_nheads, self_attn_flag=True)
+                self.queries_score = QuerySelfAttn(self.num_channels, self.num_queries, nheads=score_nheads, self_attn_flag=True, self_attn_out_norm=self_attn_out_norm)
             else:
-                self.queries_score = QuerySelfAttn(self.num_channels, self.num_queries, nheads=score_nheads, self_attn_flag=False)
+                self.queries_score = QuerySelfAttn(self.num_channels, self.num_queries, nheads=score_nheads, self_attn_flag=False, self_attn_out_norm=self_attn_out_norm)
             self.score = QueryCrossAttn(self.num_channels, self.num_clusters, nheads=score_nheads, arch=attn_arch)
         else:
             if self_attn == "both" or self_attn == "score":
-                self.queries_score = QuerySelfAttn(self.proj_dim, self.num_queries, nheads=score_nheads, self_attn_flag=True)
+                self.queries_score = QuerySelfAttn(self.proj_dim, self.num_queries, nheads=score_nheads, self_attn_flag=True, self_attn_out_norm=self_attn_out_norm)
             else:
-                self.queries_score = QuerySelfAttn(self.proj_dim, self.num_queries, nheads=score_nheads, self_attn_flag=False)
-            self.score = QueryCrossAttn(self.proj_dim, self.num_clusters, nheads=score_nheads, arch=attn_arch, skip=skip_connection, out_norm=out_norm, double_cross=double_cross)
-            self.proj = torch.nn.Conv2d(self.num_channels, self.proj_dim, 1)
+                self.queries_score = QuerySelfAttn(self.proj_dim, self.num_queries, nheads=score_nheads, self_attn_flag=False, self_attn_out_norm=self_attn_out_norm)
+            self.score = QueryCrossAttn(self.proj_dim, self.num_clusters, nheads=score_nheads, arch=attn_arch, skip=skip_connection, out_norm=out_norm)
+            self.proj = nn.Conv2d(self.num_channels, self.proj_dim, 1)
         if divide > 1:
             raise NotImplementedError()
         # Dustbin parameter z

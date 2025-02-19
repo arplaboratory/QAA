@@ -63,8 +63,11 @@ class VPRModel(pl.LightningModule):
         faiss_gpu=False,
         recompute_desc=False,
         decorrelation="none",
-        decorrelation_lambda_std=1.0,
+        decorrelation_lambda_std=25.0,
         decorrelation_lambda_cov=1.0,
+        decorrelation_lambda_total=1.0,
+        decorrelation_var_target=1.0,
+        decorrelation_var_ctl=False,
     ):
         super().__init__()
 
@@ -101,6 +104,9 @@ class VPRModel(pl.LightningModule):
         self.decorrelation = decorrelation
         self.decorrelation_lambda_std = decorrelation_lambda_std
         self.decorrelation_lambda_cov = decorrelation_lambda_cov
+        self.decorrelation_lambda_total = decorrelation_lambda_total
+        self.decorrelation_var_ctl = decorrelation_var_ctl
+        self.decorrelation_var_target = decorrelation_var_target
         
         # ----------------------------------
         # get the backbone and the aggregator
@@ -334,12 +340,12 @@ class VPRModel(pl.LightningModule):
         
         if self.decorrelation != "none":
             if self.decorrelation == "score":
-                loss += self.variance_covariance_rows(query_p, lambda_std=self.decorrelation_lambda_std, lambda_cov=self.decorrelation_lambda_cov)
+                loss += self.decorrelation_lambda_total * self.variance_covariance_rows(query_p, lambda_std=self.decorrelation_lambda_std, lambda_cov=self.decorrelation_lambda_cov, var_ctl=self.decorrelation_var_ctl, d=self.decorrelation_var_target)
             elif self.decorrelation == "feature":
-                loss += self.variance_covariance_rows(query_f, lambda_std=self.decorrelation_lambda_std, lambda_cov=self.decorrelation_lambda_cov)
+                loss += self.decorrelation_lambda_total * self.variance_covariance_rows(query_f, lambda_std=self.decorrelation_lambda_std, lambda_cov=self.decorrelation_lambda_cov, var_ctl=self.decorrelation_var_ctl, d=self.decorrelation_var_target)
             elif self.decorrelation == "both":
-                loss += self.variance_covariance_rows(query_p, lambda_std=self.decorrelation_lambda_std, lambda_cov=self.decorrelation_lambda_cov)
-                loss += self.variance_covariance_rows(query_f, lambda_std=self.decorrelation_lambda_std, lambda_cov=self.decorrelation_lambda_cov)
+                loss += self.decorrelation_lambda_total * self.variance_covariance_rows(query_p, lambda_std=self.decorrelation_lambda_std, lambda_cov=self.decorrelation_lambda_cov, var_ctl=self.decorrelation_var_ctl, d=self.decorrelation_var_target)
+                loss += self.decorrelation_lambda_total * self.variance_covariance_rows(query_f, lambda_std=self.decorrelation_lambda_std, lambda_cov=self.decorrelation_lambda_cov, var_ctl=self.decorrelation_var_ctl, d=self.decorrelation_var_target)
         self.log('loss', loss.item(), logger=True, prog_bar=True)
         return {'loss': loss}
     
@@ -615,7 +621,7 @@ class VPRModel(pl.LightningModule):
         plt.savefig(f'vis//sim_matrix_score.png', bbox_inches='tight', transparent="True", pad_inches=0)
         plt.close()
 
-    def variance_covariance_rows(self, x, lambda_std=1.0, lambda_cov=1.0):
+    def variance_covariance_rows(self, x, lambda_std=1.0, lambda_cov=1.0, d=1.0, var_ctl=False):
         """
         variance_covariance-style decorrelation among columns
         of a (L, D) matrix. If L is your 'query size' and
@@ -628,7 +634,10 @@ class VPRModel(pl.LightningModule):
         x = x - x.mean(dim=0)
 
         std_x = torch.sqrt(x.var(dim=0) + 0.0001)
-        std_loss = torch.mean(F.relu(1 - std_x))
+        if var_ctl:
+            std_loss = torch.mean((std_x - d).pow(2))
+        else:
+            std_loss = torch.mean(F.relu(d - std_x))
 
         cov_x = (x.T @ x) / (L - 1)
         cov_loss = off_diagonal(cov_x).pow_(2).sum().div(D)

@@ -55,14 +55,20 @@ if __name__ == '__main__':
             decorrelation=train_cfg.training.decorrelation,
             decorrelation_lambda_std=train_cfg.training.decorrelation_lambda_std,
             decorrelation_lambda_cov=train_cfg.training.decorrelation_lambda_cov,
+            decorrelation_lambda_total=train_cfg.training.decorrelation_lambda_total,
+            decorrelation_var_target=train_cfg.training.decorrelation_var_target,
+            decorrelation_var_ctl=train_cfg.training.decorrelation_var_ctl,
         )
     else:
         model = VPRModel.load_from_checkpoint(train_cfg.training.load,
                                               lr=train_cfg.training.optimizer["lr"],
                                               backbone_lr=train_cfg.training.optimizer["backbone_lr"] if "backbone_lr" in train_cfg.training.optimizer else train_cfg.training.optimizer["lr"],
                                               decorrelation=train_cfg.training.decorrelation,
-                                              decorrelation_loss_weight=train_cfg.training.decorrelation_loss_weight,
-                                              decorrelation_off_lambda=train_cfg.training.decorrelation_off_lambda,)
+                                              decorrelation_lambda_std=train_cfg.training.decorrelation_lambda_std,
+                                              decorrelation_lambda_cov=train_cfg.training.decorrelation_lambda_cov,
+                                              decorrelation_lambda_total=train_cfg.training.decorrelation_lambda_total,
+                                              decorrelation_var_target=train_cfg.training.decorrelation_var_target,
+                                              decorrelation_var_ctl=train_cfg.training.decorrelation_var_ctl,)
         print(f"Loading Model: {train_cfg.training.load}")
         if train_cfg.training.finetune_method == "freeze_backbone":
             model.freeze_backbone()
