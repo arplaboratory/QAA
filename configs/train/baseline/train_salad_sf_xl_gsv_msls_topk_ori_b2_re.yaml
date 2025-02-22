@@ -86,3 +86,6 @@ training:
   decorrelation: "none"
   decorrelation_lambda_std: 25.0
   decorrelation_lambda_cov: 1.0
+  decorrelation_lambda_total: 1.0
+  decorrelation_var_ctl: False
+  decorrelation_var_target: 1.0

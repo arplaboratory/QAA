@@ -14,21 +14,30 @@ model:
     divide_ratio: [1, 1, 1, 0]
     divide: 1
     multi_scale: "1"
-  agg_arch: SALAD
+  agg_arch: QAA
   agg_config:
     num_channels: 768
     num_clusters: 64
     cluster_dim: 128
-    token_dim: 256
+    token_dim: 0
     dropout: 0.3
     freeze: "none"
     divide_ratio: [1, 1, 1, 0]
     divide: 1
-    num_queries: 64
+    num_queries: 256
+    attn_arch: "conv"
+    skip_connection: "none"
+    feature_nheads: 16
+    score_nheads: 16
+    self_attn_out_norm: False
+    out_norm: False
+    score_norm: "softmax"
 
 datasets:
   train_datasets: 
     - SF_XL
+    - GSV
+    - mapillary_sls
   val_datasets: 
     - pitts30k
     - pitts250k
