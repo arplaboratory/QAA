@@ -3,6 +3,25 @@ import torch.nn as nn
 from .attention import QuerySelfAttn, QueryCrossAttn
 from .salad import log_optimal_transport
 
+def print_tensor_stats(name, tensor):
+    """Helper function to print basic statistics of a given tensor."""
+    if tensor is None:
+        print(f"{name} is None.")
+        return
+    if not isinstance(tensor, torch.Tensor):
+        print(f"{name} is not a torch.Tensor: {type(tensor)}")
+        return
+    # Safely compute stats only if the tensor has elements
+    if tensor.numel() == 0:
+        print(f"{name} has no elements.")
+        return
+    print(
+        f"{name}: shape={tuple(tensor.shape)}, "
+        f"mean={tensor.mean().item():.4f}, "
+        f"std={tensor.std().item():.4f}, "
+        f"min={tensor.min().item():.4f}, "
+        f"max={tensor.max().item():.4f}"
+    )
 
 class QAA(nn.Module):
     """
@@ -33,6 +52,7 @@ class QAA(nn.Module):
             skip_connection="none",
             out_norm=True,
             self_attn_out_norm=True,
+            score_norm="ot",
         ) -> None:
         super().__init__()
 
@@ -46,6 +66,7 @@ class QAA(nn.Module):
         if self.divide > 1:
             raise NotImplementedError()
         self.num_queries = num_queries
+        self.score_norm = score_norm
         
         if dropout > 0:
             dropout = nn.Dropout(dropout)
@@ -112,19 +133,28 @@ class QAA(nn.Module):
         q_raw = self.queries_score() if not hasattr(self, "cached_query_score") else self.cached_query_score
         q = q_raw.repeat(x.shape[0], 1, 1)
         p, p_attn = self.score(x, q)
+        print_tensor_stats("p", p)
         if self.divide > 1:
             raise NotImplementedError()
         if self.token_dim != 0:
             t = self.token_features(t)
         assert p.shape[1] == self.num_clusters
-        # Sinkhorn algorithm
-        p = log_optimal_transport(p, self.dust_bin, 3)
-        p = torch.exp(p)
-        # Normalize to maintain mass
-        if self.dust_bin is not None:
-            p = p[:, :-1, :]
-
-
+        if self.score_norm == "ot":
+            # Sinkhorn algorithm
+            p = log_optimal_transport(p, self.dust_bin, 3)
+            p = torch.exp(p)
+            # Normalize to maintain mass
+            if self.dust_bin is not None:
+                p = p[:, :-1, :]
+        elif self.score_norm == "softmax":
+            # Apply log_softmax first to get log probabilities
+            p = torch.log_softmax(p, dim=1)
+            p = torch.exp(p)
+        elif self.score_norm == "none":
+            pass
+        print_tensor_stats("p_norm", p)
+        print_tensor_stats("q", q_raw)
+        print_tensor_stats("f", f_raw)
         p = p.unsqueeze(1).repeat(1, self.cluster_dim, 1, 1)
         f = f.unsqueeze(2).repeat(1, 1, self.num_clusters, 1)
 

@@ -48,6 +48,7 @@ class QuerySelfAttn(torch.nn.Module):
                 # for stability purposes 
                 q = q + self.self_attn(q, q, q)[0]
             if self.self_attn_out_norm:
+                print("YES2")
                 q = self.norm_q(q)
             #######
             
@@ -95,6 +96,7 @@ class QueryCrossAttn(torch.nn.Module):
             if self.skip == "full":
                 out = cache + out
             if self.out_norm:
+                print("YES1")
                 out = self.norm2_out(out)
         elif self.arch == "linear":
             cache = out
