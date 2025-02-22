@@ -21,7 +21,7 @@ model:
     cluster_dim: 128
     token_dim: 0
     dropout: 0.3
-    freeze: "none"
+    freeze: "feature"
     divide_ratio: [1, 1, 1, 0]
     divide: 1
     num_queries: 256
