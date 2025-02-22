@@ -10,7 +10,6 @@ model:
     cluster_dim: 16
     token_dim: 256
     dropout: 0.3
-    freeze: "none"
     divide_ratio: [1, 1, 1, 0]
     divide: 1
     multi_scale: "1"
