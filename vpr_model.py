@@ -646,8 +646,6 @@ class VPRModel(pl.LightningModule):
               lambda_std * std_loss
             + lambda_cov * cov_loss
         )
-        print(std_loss)
-        print(cov_loss)
         return loss
 
     def off_diagonal(self, x):
