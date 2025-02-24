@@ -33,6 +33,7 @@ class QAA(nn.Module):
             out_norm=True,
             self_attn_out_norm=True,
             score_norm="ot",
+            intra_norm=True,
         ) -> None:
         super().__init__()
 
@@ -47,6 +48,7 @@ class QAA(nn.Module):
             raise NotImplementedError()
         self.num_queries = num_queries
         self.score_norm = score_norm
+        self.intra_norm = intra_norm
         
         if dropout > 0:
             dropout = nn.Dropout(dropout)
@@ -135,7 +137,10 @@ class QAA(nn.Module):
         f = f.unsqueeze(2).repeat(1, 1, self.num_clusters, 1)
 
         if self.token_dim == 0:
-            f = nn.functional.normalize((f * p).sum(dim=-1), p=2, dim=1).flatten(1)
+            if self.intra_norm:
+                f = nn.functional.normalize((f * p).sum(dim=-1), p=2, dim=1).flatten(1)
+            else:
+                f = (f * p).sum(dim=-1).flatten(1)
         else:
             f = torch.cat([
                 nn.functional.normalize(t, p=2, dim=-1),
