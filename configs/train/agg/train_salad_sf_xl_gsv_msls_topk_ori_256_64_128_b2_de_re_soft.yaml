@@ -28,7 +28,7 @@ model:
     skip_connection: "none"
     feature_nheads: 16
     score_nheads: 16
-    self_attn_out_norm: False
+    self_attn_out_norm: True
     out_norm: False
     score_norm: "softmax"
 
@@ -68,7 +68,7 @@ training:
   test_image_size: [322, 322]
   optimizer:
     name: AdamW
-    lr: 1e-5
+    lr: 4e-5
     backbone_lr: 8e-6
     weight_decay: 1e-3
     momentum: 0.9

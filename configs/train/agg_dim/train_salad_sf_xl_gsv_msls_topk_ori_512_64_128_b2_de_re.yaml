@@ -10,7 +10,6 @@ model:
     cluster_dim: 16
     token_dim: 256
     dropout: 0.3
-    freeze: "none"
     divide_ratio: [1, 1, 1, 0]
     divide: 1
     multi_scale: "1"
@@ -24,12 +23,14 @@ model:
     freeze: "none"
     divide_ratio: [1, 1, 1, 0]
     divide: 1
-    num_queries: 128
+    num_queries: 512
     attn_arch: "conv"
-    proj_early: False
-    skip_connection: "cross"
+    skip_connection: "none"
     feature_nheads: 16
     score_nheads: 16
+    self_attn_out_norm: True
+    out_norm: False
+    score_norm: "none"
 
 datasets:
   train_datasets: 
@@ -67,7 +68,7 @@ training:
   test_image_size: [322, 322]
   optimizer:
     name: AdamW
-    lr: 1e-5
+    lr: 4e-5
     backbone_lr: 8e-6
     weight_decay: 1e-3
     momentum: 0.9
@@ -88,6 +89,9 @@ training:
   prefetch_factor: 1
   recompute_desc: True
   recompute_interval: 4
-  decorrelation: "feature"
+  decorrelation: "none"
   decorrelation_lambda_std: 25.0
   decorrelation_lambda_cov: 1.0
+  decorrelation_lambda_total: 1.0
+  decorrelation_var_ctl: False
+  decorrelation_var_target: 1.0
