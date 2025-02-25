@@ -1,10 +1,10 @@
 import pytorch_lightning as pl
 import argparse
+from pytorch_lightning.loggers import WandbLogger
 import os
 
 from vpr_model import VPRModel
 from utils.load_cfg import load_config, load_datasets_config
-from utils.measure_flop import measure_flop
 from dataloaders.GenericDataloader import GenericDataModule
 import torch
 
@@ -19,6 +19,7 @@ if __name__ == '__main__':
     args = args.parse_args()
     # we load the training configuration
     train_cfg = load_config(args.config)
+    wandb_logger = WandbLogger(name=args.config.split('/')[-1].split('.')[0], project="UniVPR-2025")
     # wandb_logger = WandbLogger(name=args.config.split('/')[-1].split('.')[0], project="UniVPR")
     datamodule = GenericDataModule(
         train_batch_size=train_cfg.training.train_batch_size,
@@ -50,6 +51,7 @@ if __name__ == '__main__':
         check_val_every_n_epoch=1, # run validation every epoch
         reload_dataloaders_every_n_epochs=1, # we reload the dataset to shuffle the order
         log_every_n_steps=20,
+        logger=wandb_logger,
     )
 
     # we call the trainer, we give it the model and the datamodule
