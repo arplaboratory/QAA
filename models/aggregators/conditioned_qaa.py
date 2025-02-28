@@ -115,8 +115,8 @@ class ConditionedQAA(nn.Module):
         f = f_raw.repeat(x.shape[0], 1, 1)
         q_raw = self.queries_score() if not hasattr(self, "cached_query_score") else self.cached_query_score
         q = q_raw.repeat(x.shape[0], 1, 1)
-        f, f_attn = self.cluster_feature(x_f, f)
-        p, p_attn = self.score(x_p, q)
+        f, f_attn = self.cluster_feature(x, f)
+        p, p_attn = self.score(x, q)
         if self.divide > 1:
             raise NotImplementedError()
         if self.token_dim != 0:
