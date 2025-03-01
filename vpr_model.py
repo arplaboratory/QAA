@@ -131,7 +131,7 @@ class VPRModel(pl.LightningModule):
     # the forward pass of the lightning model
     def forward(self, x, domain_idx=None):
         x = self.backbone(x, domain_idx=domain_idx)
-        if self.visualize and "Queries" not in self.agg_arch:
+        if self.visualize and "QAA" not in self.agg_arch:
             raise NotImplementedError()
         if self.decorrelation == "none" or domain_idx == None:
             x = self.aggregator(x, domain_idx=domain_idx, visualize=self.visualize)
@@ -354,7 +354,7 @@ class VPRModel(pl.LightningModule):
         self.batch_acc = []
         # self.log_img_first_iter = False
 
-    def _visualize_batch(self, dataset_name, batch_idx, places, score):
+    def _visualize_batch(self, dataset_name, batch_idx, places, score, attn_map):
         if not os.path.isdir(f'vis/{dataset_name}'):
             os.mkdir(f'vis/{dataset_name}')
         os.mkdir(f'vis/{dataset_name}/{batch_idx}')
@@ -395,7 +395,7 @@ class VPRModel(pl.LightningModule):
         elif self.visualize:
             descriptors, attn_map, score = self(places)
             dataset_name = self.trainer.datamodule.val_datasets[dataloader_idx].dataset_name
-            self._visualize_batch(dataset_name, batch_idx, places, score)
+            self._visualize_batch(dataset_name, batch_idx, places, score, attn_map)
         else:
             descriptors = self(places)
         if dataloader_idx is None: # Only one val dataset
@@ -486,7 +486,7 @@ class VPRModel(pl.LightningModule):
         elif self.visualize:
             descriptors, attn_map, score = self(places)
             dataset_name = self.trainer.datamodule.test_datasets[dataloader_idx].dataset_name
-            self._visualize_batch(dataset_name, batch_idx, places, score)
+            self._visualize_batch(dataset_name, batch_idx, places, score, attn_map)
         else:
             descriptors = self(places)
         if dataloader_idx is None: # Only one val dataset
@@ -504,7 +504,7 @@ class VPRModel(pl.LightningModule):
         self.current_dataloader_idx = 0
         if self.visualize:            
             self.visualize_queries()
-        if self.agg_arch == "QAA":
+        if self.agg_arch == "QAA" or self.agg_arch == "BoQ":
             self.aggregator.cache_query()
     
     def on_test_epoch_end(self):
@@ -528,7 +528,7 @@ class VPRModel(pl.LightningModule):
         self.test_outputs = []
         self.results_list = []
 
-        if self.agg_arch == "QAA":
+        if self.agg_arch == "QAA" or self.agg_arch == "BoQ":
             self.aggregator.clean_cache()
 
     def test_calculate_recall(self, dataloader_idx):

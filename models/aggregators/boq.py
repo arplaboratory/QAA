@@ -15,18 +15,29 @@ class BoQBlock(torch.nn.Module):
         self.cross_attn = torch.nn.MultiheadAttention(in_dim, num_heads=nheads, batch_first=True)
         self.norm_out = torch.nn.LayerNorm(in_dim)
         
+    def cache_query(self):
+        q = self.queries
+        self.cached_q = q + self.self_attn(q, q, q)[0]
+        self.cached_q = self.norm_q(self.cached_q)
+
+    def clean_cache(self):
+        del self.cached_q
 
     def forward(self, x):
         B = x.size(0)
         x = self.encoder(x)
         
-        q = self.queries.repeat(B, 1, 1)
-        
-        # the following two lines are used during training.
-        # for stability purposes 
-        q = q + self.self_attn(q, q, q)[0]
-        q = self.norm_q(q)
-        #######
+        if hasattr(self, "cached_q"):
+            q = self.cached_q
+            q = q.repeat(B, 1, 1)
+        else:
+            q = self.queries.repeat(B, 1, 1)
+            
+            # the following two lines are used during training.
+            # for stability purposes 
+            q = q + self.self_attn(q, q, q)[0]
+            q = self.norm_q(q)
+            #######
         
         out, attn = self.cross_attn(q, x, x)        
         out = self.norm_out(out)
@@ -45,6 +56,14 @@ class BoQ(torch.nn.Module):
         
         self.fc = torch.nn.Linear(num_layers*num_queries, row_dim)
         
+    def cache_query(self):
+        for i in range(len(self.boqs)):
+            self.boqs[i].cache_query()
+
+    def clean_cache(self):
+        for i in range(len(self.boqs)):
+            self.boqs[i].clean_cache()
+
     def forward(self, x, domain_idx=None, visualize=None):
         # reduce input dimension using 3x3 conv when using ResNet
         if len(x) == 3:
