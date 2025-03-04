@@ -16,11 +16,11 @@ model:
   agg_arch: QAA
   agg_config:
     num_channels: 768
-    num_clusters: 64
+    num_clusters: 32
     cluster_dim: 128
     token_dim: 0
     dropout: 0.3
-    freeze: "feature"
+    freeze: "none"
     divide_ratio: [1, 1, 1, 0]
     divide: 1
     num_queries: 256
@@ -34,9 +34,9 @@ model:
 
 datasets:
   train_datasets: 
-    # - SF_XL
+    - SF_XL
     - GSV
-    # - mapillary_sls
+    - mapillary_sls
   val_datasets: 
     - pitts30k
     - pitts250k
