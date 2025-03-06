@@ -5,6 +5,7 @@ import argparse
 from vpr_model import VPRModel
 from utils.load_cfg import load_config, load_datasets_config
 from dataloaders.GenericDataloader import GenericDataModule
+import torch
 
 import ssl
 ssl._create_default_https_context = ssl._create_unverified_context # For downloading the pretrained models
@@ -15,7 +16,7 @@ if __name__ == '__main__':
     args = args.parse_args()
     # we load the training configuration
     train_cfg = load_config(args.config)
-    wandb_logger = WandbLogger(name=args.config.split('/')[-1].split('.')[0], project="UniVPR")
+    wandb_logger = WandbLogger(name=args.config.split('/')[-1].split('.')[0], project="UniVPR-2025")
     datamodule = GenericDataModule(
         train_batch_size=train_cfg.training.train_batch_size,
         test_batch_size=train_cfg.training.test_batch_size,
@@ -48,9 +49,13 @@ if __name__ == '__main__':
         miner_name=train_cfg.training.miner["name"], # example: TripletMarginMiner, MultiSimilarityMiner, PairMarginMiner
         miner_margin=train_cfg.training.miner["margin"],
         faiss_gpu=train_cfg.training.faiss_gpu,
-        cross_loss=train_cfg.training.cross_loss,
-        cross_loss_weight=train_cfg.training.cross_loss_weight,
         recompute_desc=train_cfg.training.recompute_desc,
+        decorrelation=train_cfg.training.decorrelation,
+        decorrelation_lambda_std=train_cfg.training.decorrelation_lambda_std,
+        decorrelation_lambda_cov=train_cfg.training.decorrelation_lambda_cov,
+        decorrelation_lambda_total=train_cfg.training.decorrelation_lambda_total,
+        decorrelation_var_target=train_cfg.training.decorrelation_var_target,
+        decorrelation_var_ctl=train_cfg.training.decorrelation_var_ctl,
     )
 
     # model params saving using Pytorch Lightning
@@ -59,7 +64,7 @@ if __name__ == '__main__':
         monitor=f'{train_cfg.datasets.target_val_dataset}_val/R1',
         filename=f'{model.encoder_arch}' + '_{epoch:02d}_R1[{pitts30k_val/R1:.4f}]_R5[{pitts30k_val/R5:.4f}]',
         auto_insert_metric_name=False,
-        save_weights_only=True,
+        save_weights_only=False,
         save_top_k=3,
         save_last=True,
         mode='max'
@@ -86,6 +91,11 @@ if __name__ == '__main__':
 
     # we call the trainer, we give it the model and the datamodule
     # trainer.validate(model=model, datamodule=datamodule)
-    trainer.fit(model=model, datamodule=datamodule)
-    trainer.validate(model=model, datamodule=datamodule, ckpt_path="best")
-    trainer.test(model=model, datamodule=datamodule, ckpt_path="best")
+    if hasattr(train_cfg.training, "load"):
+        print(f"Loading Model: {train_cfg.training.load}")
+        trainer.fit(model=model, datamodule=datamodule, ckpt_path=train_cfg.training.load)
+    else:
+        print("Training from scratch")
+        trainer.fit(model=model, datamodule=datamodule)
+    trainer.validate(model=model, datamodule=datamodule)
+    trainer.test(model=model, datamodule=datamodule)

@@ -9,55 +9,58 @@ model:
     num_clusters: 16
     cluster_dim: 16
     token_dim: 256
-    dust_bin: True
-    self_attn: True
     dropout: 0.3
-    freeze: "none"
+    divide_ratio: [1, 1, 1, 0]
     divide: 1
-    shared_clusters: 0
     multi_scale: "1"
-  agg_arch: SALAD
+  agg_arch: QAA
   agg_config:
     num_channels: 768
     num_clusters: 64
-    cluster_dim: 128
-    token_dim: 256
-    dust_bin: True
-    self_attn: True
+    cluster_dim: 16
+    token_dim: 0
     dropout: 0.3
     freeze: "none"
+    divide_ratio: [1, 1, 1, 0]
     divide: 1
-    shared_clusters: 0
-    num_queries: 64
+    num_queries: 256
+    attn_arch: "conv"
+    skip_connection: "none"
+    feature_nheads: 16
+    score_nheads: 16
+    self_attn_out_norm: True
+    out_norm: False
+    score_norm: "none"
 
 datasets:
   train_datasets: 
+    - SF_XL
     - GSV
     - mapillary_sls
   val_datasets: 
-    - mapillary_sls
-    - SF_XL
-    # - pitts30k
-    # - pitts250k
-    # - svox
-  test_datasets:
-    # - pitts30k
+    - pitts30k
     - pitts250k
-    # - mapillary_sls
-    # - svox
+    - mapillary_sls
+    - svox
+    - SF_XL
+  test_datasets:
+    - pitts30k
+    - pitts250k
+    - mapillary_sls
+    - svox
     - tokyo247
-    # - SPED
-    # - nordland
-    # - nordland_subset
-    # - amstertime
-    # - eynsham
+    - SPED
+    - nordland
+    - nordland_subset
+    - amstertime
+    - eynsham
   target_val_dataset: mapillary_sls
 training:
-  num_epochs: 1
-  train_batch_size: 4
-  test_batch_size: 4
+  num_epochs: 80
+  train_batch_size: 30
+  test_batch_size: 256
   img_per_place: 4
-  num_workers: 0
+  num_workers: 4
   sampled_similar_places: 15
   num_processes: 15
   num_batches: 4000
@@ -65,14 +68,16 @@ training:
   test_image_size: [322, 322]
   optimizer:
     name: AdamW
-    lr: 6e-5
-    weight_decay: 9.5e-9
+    lr: 4e-5
+    backbone_lr: 8e-6
+    weight_decay: 1e-3
     momentum: 0.9
   scheduler:
-    name: linear
+    name: multistep
     args:
-      start_factor: 1
-      end_factor: 0.2
+      gamma: 0.1
+      milestones:
+        - 80
       total_iters: 4000
   loss:
     name: 'MultiSimilarityLoss'
@@ -80,8 +85,13 @@ training:
     name: 'MultiSimilarityMiner'
     margin: 0.1
   faiss_gpu: False
-  recompute_clusters: False
+  recompute_clusters: True
   prefetch_factor: 1
+  recompute_desc: True
   recompute_interval: 4
-  cross_loss: False
-  cross_loss_weight: 1.0
+  decorrelation: "none"
+  decorrelation_lambda_std: 25.0
+  decorrelation_lambda_cov: 1.0
+  decorrelation_lambda_total: 1.0
+  decorrelation_var_ctl: False
+  decorrelation_var_target: 1.0

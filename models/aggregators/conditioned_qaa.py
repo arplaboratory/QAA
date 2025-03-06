@@ -3,7 +3,6 @@ import torch.nn as nn
 from .attention import QuerySelfAttn, QueryCrossAttn
 from .salad import log_optimal_transport
 
-
 class ConditionedQAA(nn.Module):
     """
     This class represents the Sinkhorn Algorithm for Locally Aggregated Descriptors (SALAD) model.
@@ -24,9 +23,17 @@ class ConditionedQAA(nn.Module):
             divide_ratio=[1,1,1,0],
             divide=1,
             num_queries=32,
-            self_attn=True,
+            self_attn="both",
             dust_bin=True,
             freeze="none",
+            feature_nheads=4,
+            score_nheads=4,
+            attn_arch="conv",
+            skip_connection="none",
+            out_norm=True,
+            self_attn_out_norm=True,
+            score_norm="ot",
+            intra_norm=True,
         ) -> None:
         super().__init__()
 
@@ -40,6 +47,8 @@ class ConditionedQAA(nn.Module):
         if self.divide > 1:
             raise NotImplementedError()
         self.num_queries = num_queries
+        self.score_norm = score_norm
+        self.intra_norm = intra_norm
         
         if dropout > 0:
             dropout = nn.Dropout(dropout)
@@ -55,10 +64,16 @@ class ConditionedQAA(nn.Module):
             )
         # MLP for local features f_i
         # MLP for score matrix S
-        self.queries_score = QuerySelfAttn(self.num_channels, self.num_queries, nheads=self.num_channels // 64, self_attn=self_attn)
-        self.queries_feature = QuerySelfAttn(self.num_channels, self.num_queries, nheads=self.num_channels // 64, self_attn=self_attn)
-        self.score = QueryCrossAttn(self.num_channels, self.num_clusters, nheads=self.num_channels // 64)
-        self.cluster_feature = QueryCrossAttn(self.num_channels, self.cluster_dim, nheads=self.num_channels // 64)
+        if self_attn == "both" or self_attn == "feature":
+            self.queries_feature = QuerySelfAttn(self.num_channels, self.num_queries, nheads=feature_nheads, self_attn_flag=True, self_attn_out_norm=self_attn_out_norm)
+        else:
+            self.queries_feature = QuerySelfAttn(self.num_channels, self.num_queries, nheads=feature_nheads, self_attn_flag=False, self_attn_out_norm=self_attn_out_norm)
+        if self_attn == "both" or self_attn == "score":
+            self.queries_score = QuerySelfAttn(self.num_channels, self.num_queries, nheads=score_nheads, self_attn_flag=True, self_attn_out_norm=self_attn_out_norm)
+        else:
+            self.queries_score = QuerySelfAttn(self.num_channels, self.num_queries, nheads=score_nheads, self_attn_flag=False, self_attn_out_norm=self_attn_out_norm)
+        self.score = QueryCrossAttn(self.num_channels, self.num_clusters, nheads=score_nheads, arch=attn_arch, skip=skip_connection, out_norm=out_norm)
+        self.cluster_feature = QueryCrossAttn(self.num_channels, self.cluster_dim, nheads=score_nheads, arch=attn_arch, skip=skip_connection, out_norm=out_norm)
         if divide > 1:
             raise NotImplementedError()
         # Dustbin parameter z
@@ -67,8 +82,20 @@ class ConditionedQAA(nn.Module):
         else:
             self.dust_bin = None
 
+    def cache_query(self):
+        self.cached_query_score = self.queries_score()
+        self.cached_query_feature = self.queries_feature()
 
-    def forward(self, x, domain_idx=None, visualize=False):
+    def clean_cache(self):
+        del self.cached_query_score
+        del self.cached_query_feature
+
+    def adjust_queries(self, num_queries):
+        # Need to adjust both score and feature queries:
+        self.queries_score.adjust_queries(num_queries)
+        self.queries_feature.adjust_queries(num_queries)
+
+    def forward(self, x, domain_idx=None, visualize=False, decorrelation="none"):
         """
         x (tuple): A tuple containing two elements, f and t. 
             (torch.Tensor): The feature tensors (t_i) [B, C, H // 14, W // 14].
@@ -83,9 +110,11 @@ class ConditionedQAA(nn.Module):
         else:
             x, t = x # Extract features and token
             domain_desc = None
-
-        f = self.queries_feature().repeat(x.shape[0], 1, 1)
-        q = self.queries_score().repeat(x.shape[0], 1, 1)
+        
+        f_raw = self.queries_feature() if not hasattr(self, "cached_query_feature") else self.cached_query_feature
+        f = f_raw.repeat(x.shape[0], 1, 1)
+        q_raw = self.queries_score() if not hasattr(self, "cached_query_score") else self.cached_query_score
+        q = q_raw.repeat(x.shape[0], 1, 1)
         f, f_attn = self.cluster_feature(x, f)
         p, p_attn = self.score(x, q)
         if self.divide > 1:
@@ -93,19 +122,27 @@ class ConditionedQAA(nn.Module):
         if self.token_dim != 0:
             t = self.token_features(t)
         assert p.shape[1] == self.num_clusters
-        # Sinkhorn algorithm
-        p = log_optimal_transport(p, self.dust_bin, 3)
-        p = torch.exp(p)
-        # Normalize to maintain mass
-        if self.dust_bin is not None:
-            p = p[:, :-1, :]
-
-
+        if self.score_norm == "ot":
+            # Sinkhorn algorithm
+            p = log_optimal_transport(p, self.dust_bin, 3)
+            p = torch.exp(p)
+            # Normalize to maintain mass
+            if self.dust_bin is not None:
+                p = p[:, :-1, :]
+        elif self.score_norm == "softmax":
+            # Apply log_softmax first to get log probabilities
+            p = torch.log_softmax(p, dim=1)
+            p = torch.exp(p)
+        elif self.score_norm == "none":
+            pass
         p = p.unsqueeze(1).repeat(1, self.cluster_dim, 1, 1)
         f = f.unsqueeze(2).repeat(1, 1, self.num_clusters, 1)
 
         if self.token_dim == 0:
-            f = nn.functional.normalize((f * p).sum(dim=-1), p=2, dim=1).flatten(1)
+            if self.intra_norm:
+                f = nn.functional.normalize((f * p).sum(dim=-1), p=2, dim=1).flatten(1)
+            else:
+                f = (f * p).sum(dim=-1).flatten(1)
         else:
             f = torch.cat([
                 nn.functional.normalize(t, p=2, dim=-1),
@@ -115,5 +152,7 @@ class ConditionedQAA(nn.Module):
         if domain_desc is not None:
             return nn.functional.normalize(f, p=2, dim=-1), domain_desc
         if visualize:
-            return nn.functional.normalize(f, p=2, dim=-1), p_attn
+            return nn.functional.normalize(f, p=2, dim=-1), p_attn, p
+        if decorrelation != "none":
+            return nn.functional.normalize(f, p=2, dim=-1), q_raw, f_raw
         return nn.functional.normalize(f, p=2, dim=-1)

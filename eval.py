@@ -1,5 +1,6 @@
 import pytorch_lightning as pl
 import argparse
+from pytorch_lightning.loggers import WandbLogger
 import os
 
 from vpr_model import VPRModel
@@ -18,6 +19,7 @@ if __name__ == '__main__':
     args = args.parse_args()
     # we load the training configuration
     train_cfg = load_config(args.config)
+    wandb_logger = WandbLogger(name=args.config.split('/')[-1].split('.')[0], project="UniVPR-2025")
     # wandb_logger = WandbLogger(name=args.config.split('/')[-1].split('.')[0], project="UniVPR")
     datamodule = GenericDataModule(
         train_batch_size=train_cfg.training.train_batch_size,
@@ -33,7 +35,8 @@ if __name__ == '__main__':
     if args.visualize:
         model.visualize = True
         if os.path.isdir('vis'):
-            raise ValueError('Visualisation directory does exist')
+            pass
+            # raise ValueError('Visualisation directory does exist')
         else:
             os.mkdir('vis')
 
@@ -49,16 +52,9 @@ if __name__ == '__main__':
         check_val_every_n_epoch=1, # run validation every epoch
         reload_dataloaders_every_n_epochs=1, # we reload the dataset to shuffle the order
         log_every_n_steps=20,
+        logger=wandb_logger,
     )
 
-    from lightning.fabric.utilities.throughput import measure_flops
-    with torch.device("cuda"):
-        model = model.cuda()
-        x = torch.randn(1, 3, 322, 322).cuda()
-    model_fwd = lambda: model(x)
-    fwd_flops = measure_flops(model, model_fwd)/ 1e9
-    print(fwd_flops + "GLOPS")
-    
     # we call the trainer, we give it the model and the datamodule
     trainer.validate(model=model, datamodule=datamodule)
     trainer.test(model=model, datamodule=datamodule)

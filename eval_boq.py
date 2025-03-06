@@ -3,6 +3,7 @@ import argparse
 
 from utils.load_cfg import load_config
 from dataloaders.GenericDataloader import GenericDataModule
+from vpr_model import VPRModel
 import utils
 import torch
 
@@ -148,14 +149,6 @@ if __name__ == '__main__':
         reload_dataloaders_every_n_epochs=1, # we reload the dataset to shuffle the order
         log_every_n_steps=20,
     )
-
-    from lightning.fabric.utilities.throughput import measure_flops
-    with torch.device("cuda"):
-        model = model.cuda()
-        x = torch.randn(1, 3, 322, 322).cuda()
-    model_fwd = lambda: model(x)
-    fwd_flops = measure_flops(model, model_fwd)/ 1e9
-    print(fwd_flops+"GFLOPS")
 
     # we call the trainer, we give it the model and the datamodule
     trainer.test(model=model, datamodule=datamodule)

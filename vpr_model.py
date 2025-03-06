@@ -4,8 +4,10 @@ from torch.optim import lr_scheduler, optimizer
 import torchvision
 import torch.nn.functional as F
 import os
+import numpy as np
 
 import utils
+from utils.measure_flop import measure_flop
 from models import helper
 from dataloaders.GenericDataloader import IMAGENET_MEAN_STD
 from PIL import Image
@@ -60,9 +62,13 @@ class VPRModel(pl.LightningModule):
         miner_name='MultiSimilarityMiner', 
         miner_margin=0.1,
         faiss_gpu=False,
-        cross_loss=False,
-        cross_loss_weight=1.0,
         recompute_desc=False,
+        decorrelation="none",
+        decorrelation_lambda_std=25.0,
+        decorrelation_lambda_cov=1.0,
+        decorrelation_lambda_total=1.0,
+        decorrelation_var_target=1.0,
+        decorrelation_var_ctl=False,
     ):
         super().__init__()
 
@@ -95,9 +101,13 @@ class VPRModel(pl.LightningModule):
         self.batch_acc = [] # we will keep track of the % of trivial pairs/triplets at the loss level 
 
         self.faiss_gpu = faiss_gpu
-        self.cross_loss = cross_loss
-        self.cross_loss_weight = cross_loss_weight
         self.recompute_desc = recompute_desc
+        self.decorrelation = decorrelation
+        self.decorrelation_lambda_std = decorrelation_lambda_std
+        self.decorrelation_lambda_cov = decorrelation_lambda_cov
+        self.decorrelation_lambda_total = decorrelation_lambda_total
+        self.decorrelation_var_ctl = decorrelation_var_ctl
+        self.decorrelation_var_target = decorrelation_var_target
         
         # ----------------------------------
         # get the backbone and the aggregator
@@ -112,13 +122,23 @@ class VPRModel(pl.LightningModule):
         self.val_outputs = []
         self.log_img_first_iter = False
         self.visualize = False
-        
+        self.coding_rate = []
+    
+    def setup(self, stage):
+        if stage == "fit" or stage == "test" or stage == "validate":
+            measure_flop(self)
+            if self.agg_arch == "QAA":
+                self.logger.experiment.log({"actual_num_queries": self.aggregator.queries_score.queries.shape[1]})
+
     # the forward pass of the lightning model
     def forward(self, x, domain_idx=None):
         x = self.backbone(x, domain_idx=domain_idx)
-        if self.visualize and "Queries" not in self.agg_arch:
+        if self.visualize and "QAA" not in self.agg_arch:
             raise NotImplementedError()
-        x = self.aggregator(x, domain_idx=domain_idx, visualize=self.visualize)
+        if self.decorrelation == "none" or domain_idx == None:
+            x = self.aggregator(x, domain_idx=domain_idx, visualize=self.visualize)
+        else:
+            x = self.aggregator(x, domain_idx=domain_idx, visualize=self.visualize, decorrelation=self.decorrelation)
         return x
     
     # configure the optimizer 
@@ -127,10 +147,13 @@ class VPRModel(pl.LightningModule):
             params = [{'params': self.aggregator.parameters()}]
             print(f"Add params: aggregator")
         else:
-            params = [{'params': self.aggregator.token_features.parameters()}]
-            print(f"Add params: aggregator - token_features")
-            params = params + [{'params': self.aggregator.score.parameters()}]
-            print(f"Add params: aggregator - score")
+            params = []
+            if hasattr(self.aggregator, "token_features"):
+                params = params + [{'params': self.aggregator.token_features.parameters()}]
+                print(f"Add params: aggregator - token_features")
+            if self.aggregator.freeze != "score_prediction":
+                params = params + [{'params': self.aggregator.score.parameters()}]
+                print(f"Add params: aggregator - score")
             if hasattr(self.aggregator, "cluster_feature"):
                 params = params + [{'params': self.aggregator.cluster_feature.parameters()}]
                 print(f"Add params: aggregator - feature_cross_attn")
@@ -140,6 +163,13 @@ class VPRModel(pl.LightningModule):
             elif self.aggregator.freeze == "score":
                 params = params + [{'params': self.aggregator.queries_feature.parameters()}]
                 print(f"Add params: aggregator - queries_feature")
+            elif self.aggregator.freeze == "score_prediction":
+                params = params + [{'params': self.aggregator.queries_score.parameters()}]
+                print(f"Add params: aggregator - queries_score")
+                params = params + [{'params': self.aggregator.queries_feature.parameters()}]
+                print(f"Add params: aggregator - queries_feature")
+            elif self.aggregator.freeze == "score_feature":
+                pass
             else:
                 raise NotImplementedError()
         if hasattr(self.backbone, "domain_prompt_model"):
@@ -287,6 +317,8 @@ class VPRModel(pl.LightningModule):
         # Feed forward the batch to the model
         if self.backbone.domain_prompt != "none":
             descriptors, domain_desc = self(images, domain_idx)
+        elif self.decorrelation != "none":
+            descriptors, query_p, query_f = self(images, domain_idx)
         else:
             descriptors = self(images, domain_idx) # Here we are calling the method forward that we defined above
 
@@ -305,34 +337,20 @@ class VPRModel(pl.LightningModule):
                 desc = descriptors[prev_BS_N:prev_BS_N+BS*N]
                 lab = labels[prev_BS_N:prev_BS_N+BS*N]
             loss += self.loss_function(desc, lab)
-            if self.cross_loss:
-                if self.backbone.multi_adapt == "none":
-                    if i == 0:
-                        desc = domain_desc[:BS*N]
-                        lab = labels[:BS*N]
-                    else:
-                        desc = domain_desc[prev_BS_N:prev_BS_N+BS*N]
-                        lab = labels[prev_BS_N:prev_BS_N+BS*N]
-                    domain_loss = self.loss_function(desc, lab)
-                else:
-                    domain_loss = 0
-                    for j in range(len(domain_desc)):
-                        if i == 0:
-                            desc = domain_desc[j][:BS*N]
-                            lab = labels[:BS*N]
-                        else:
-                            desc = domain_desc[j][prev_BS_N:prev_BS_N+BS*N]
-                            lab = labels[prev_BS_N:prev_BS_N+BS*N]
-                        domain_loss += self.loss_function(desc, lab)
-                loss += self.cross_loss_weight * domain_loss
             if i == 0:
                 prev_BS_N = BS*N
             else:
                 prev_BS_N += BS*N
         
+        if self.decorrelation != "none":
+            if self.decorrelation == "score":
+                loss += self.decorrelation_lambda_total * self.variance_covariance_rows(query_p, lambda_std=self.decorrelation_lambda_std, lambda_cov=self.decorrelation_lambda_cov, var_ctl=self.decorrelation_var_ctl, d=self.decorrelation_var_target)
+            elif self.decorrelation == "feature":
+                loss += self.decorrelation_lambda_total * self.variance_covariance_rows(query_f, lambda_std=self.decorrelation_lambda_std, lambda_cov=self.decorrelation_lambda_cov, var_ctl=self.decorrelation_var_ctl, d=self.decorrelation_var_target)
+            elif self.decorrelation == "both":
+                loss += self.decorrelation_lambda_total * self.variance_covariance_rows(query_p, lambda_std=self.decorrelation_lambda_std, lambda_cov=self.decorrelation_lambda_cov, var_ctl=self.decorrelation_var_ctl, d=self.decorrelation_var_target)
+                loss += self.decorrelation_lambda_total * self.variance_covariance_rows(query_f, lambda_std=self.decorrelation_lambda_std, lambda_cov=self.decorrelation_lambda_cov, var_ctl=self.decorrelation_var_ctl, d=self.decorrelation_var_target)
         self.log('loss', loss.item(), logger=True, prog_bar=True)
-        if self.cross_loss:
-            self.log('domain_loss', domain_loss.item(), logger=True, prog_bar=True)
         return {'loss': loss}
     
     def on_train_epoch_end(self):
@@ -340,6 +358,40 @@ class VPRModel(pl.LightningModule):
         self.batch_acc = []
         # self.log_img_first_iter = False
 
+    def _visualize_batch(self, dataset_name, batch_idx, places, score, attn_map):
+        if not os.path.isdir(f'vis/{dataset_name}'):
+            os.mkdir(f'vis/{dataset_name}')
+        if not os.path.isdir(f'vis/{dataset_name}/{batch_idx}'):
+            os.mkdir(f'vis/{dataset_name}/{batch_idx}')
+        attn_map = (attn_map - attn_map.min())/(attn_map.max() - attn_map.min())
+        attn_map = attn_map.view(-1, self.aggregator.num_queries, places.shape[-2]//14, places.shape[-1]//14)
+        attn_map = F.interpolate(attn_map, size=(places.shape[-2], places.shape[-1]), mode='bilinear', align_corners=True)
+        for i in range(len(places)):
+            self.coding_rate.append(self.mcr2_coding_rate(score[i].cpu().numpy()))
+            ndarr = inv_base_transform(places[i]).mul(255).add_(0.5).clamp_(0, 255).permute(1, 2, 0).to("cpu", torch.uint8).numpy()
+            im = Image.fromarray(ndarr)
+            im.save(f'vis/{dataset_name}/{batch_idx}/place_{i}.png')
+            for j in range(len(attn_map[i])):
+                ndarr_attn = attn_map[i][j].unsqueeze(0).mul(255).add_(0.5).clamp_(0, 255).permute(1, 2, 0).to("cpu", torch.uint8).numpy()
+                plt.figure()
+                plt.imshow(ndarr)
+                plt.imshow(ndarr_attn, alpha=0.5, cmap='jet')
+                plt.axis('off')
+                plt.savefig(f'vis/{dataset_name}/{batch_idx}/attn_map_{i}_{j}.png', bbox_inches='tight', transparent="True", pad_inches=0)
+                plt.close()
+            # Calculate the similarity matrix between scores of current place and current place
+            plt.figure()
+            plt.imshow(torch.matmul(score[i][0].T, score[i][0]).cpu().numpy(), cmap='viridis')
+            plt.axis('off')
+            plt.savefig(f'vis/{dataset_name}/{batch_idx}/score_sim_matrix_{i}.png', bbox_inches='tight', transparent="True", pad_inches=0)
+            plt.close()
+            # Calculate the similarity matrix between scores of 0-th place and current place
+            plt.figure()
+            plt.imshow(torch.matmul(score[i][0].T, score[0][0]).cpu().numpy(), cmap='viridis')
+            plt.axis('off')
+            plt.savefig(f'vis/{dataset_name}/{batch_idx}/score_0_sim_matrix_{i}.png', bbox_inches='tight', transparent="True", pad_inches=0)
+            plt.close()
+    
     # For validation, we will also iterate step by step over the validation set
     # this is the way Pytorch Lghtning is made. All about modularity, folks.
     def validation_step(self, batch, batch_idx, dataloader_idx=None):
@@ -349,36 +401,7 @@ class VPRModel(pl.LightningModule):
         elif self.visualize:
             descriptors, attn_map, score = self(places)
             dataset_name = self.trainer.datamodule.val_datasets[dataloader_idx].dataset_name
-            if not os.path.isdir(f'vis/{dataset_name}'):
-                os.mkdir(f'vis/{dataset_name}')
-            os.mkdir(f'vis/{dataset_name}/{batch_idx}')
-            attn_map = (attn_map - attn_map.min())/(attn_map.max() - attn_map.min())
-            attn_map = attn_map.view(-1, self.aggregator.num_queries, places.shape[-2]//14, places.shape[-1]//14)
-            attn_map = F.interpolate(attn_map, size=(places.shape[-2], places.shape[-1]), mode='bilinear', align_corners=True)
-            for i in range(len(places)):
-                ndarr = inv_base_transform(places[i]).mul(255).add_(0.5).clamp_(0, 255).permute(1, 2, 0).to("cpu", torch.uint8).numpy()
-                im = Image.fromarray(ndarr)
-                im.save(f'vis/{dataset_name}/{batch_idx}/place_{i}.png')
-                for j in range(len(attn_map[i])):
-                    ndarr_attn = attn_map[i][j].unsqueeze(0).mul(255).add_(0.5).clamp_(0, 255).permute(1, 2, 0).to("cpu", torch.uint8).numpy()
-                    plt.figure()
-                    plt.imshow(ndarr)
-                    plt.imshow(ndarr_attn, alpha=0.5, cmap='jet')
-                    plt.axis('off')
-                    plt.savefig(f'vis/{dataset_name}/{batch_idx}/attn_map_{i}_{j}.png', bbox_inches='tight', transparent="True", pad_inches=0)
-                    plt.close()
-                # Calculate the similarity matrix between scores of current place and current place
-                plt.figure()
-                plt.imshow(torch.matmul(score[i][0].T, score[i][0]).cpu().numpy(), cmap='viridis')
-                plt.axis('off')
-                plt.savefig(f'vis/{dataset_name}/{batch_idx}/score_sim_matrix_{i}.png', bbox_inches='tight', transparent="True", pad_inches=0)
-                plt.close()
-                # Calculate the similarity matrix between scores of 0-th place and current place
-                plt.figure()
-                plt.imshow(torch.matmul(score[i][0].T, score[0][0]).cpu().numpy(), cmap='viridis')
-                plt.axis('off')
-                plt.savefig(f'vis/{dataset_name}/{batch_idx}/score_0_sim_matrix_{i}.png', bbox_inches='tight', transparent="True", pad_inches=0)
-                plt.close()
+            self._visualize_batch(dataset_name, batch_idx, places, score, attn_map)
         else:
             descriptors = self(places)
         if dataloader_idx is None: # Only one val dataset
@@ -386,6 +409,8 @@ class VPRModel(pl.LightningModule):
         if self.current_dataloader_idx != dataloader_idx:
             self.val_calculate_recall(self.current_dataloader_idx)
             self.current_dataloader_idx = dataloader_idx
+            if len(self.coding_rate) != 0:
+                np.save("coding_rate.npy", np.array(self.coding_rate))
         self.val_outputs.append(descriptors.detach().cpu())
         return descriptors.detach().cpu()
     
@@ -396,6 +421,8 @@ class VPRModel(pl.LightningModule):
         self.current_dataloader_idx = 0
         if self.visualize:            
             self.visualize_queries()
+        if self.agg_arch == "QAA":
+            self.aggregator.cache_query()
     
     def on_validation_epoch_end(self):
         """this return descriptors in their order
@@ -422,6 +449,9 @@ class VPRModel(pl.LightningModule):
         else:
             print("Use existing descriptors for recomputing if recomputing is enabled")
             self.trainer.datamodule.model = None
+
+        if self.agg_arch == "QAA" or self.agg_arch == "BoQ":
+            self.aggregator.clean_cache()
 
     def val_calculate_recall(self, dataloader_idx):
         # Clean memory once one dataset finished
@@ -464,36 +494,7 @@ class VPRModel(pl.LightningModule):
         elif self.visualize:
             descriptors, attn_map, score = self(places)
             dataset_name = self.trainer.datamodule.test_datasets[dataloader_idx].dataset_name
-            if not os.path.isdir(f'vis/{dataset_name}'):
-                os.mkdir(f'vis/{dataset_name}')
-            os.mkdir(f'vis/{dataset_name}/{batch_idx}')
-            attn_map = (attn_map - attn_map.min())/(attn_map.max() - attn_map.min())
-            attn_map = attn_map.view(-1, self.aggregator.num_queries, places.shape[-2]//14, places.shape[-1]//14)
-            attn_map = F.interpolate(attn_map, size=(places.shape[-2], places.shape[-1]), mode='bilinear', align_corners=True)
-            for i in range(len(places)):
-                ndarr = inv_base_transform(places[i]).mul(255).add_(0.5).clamp_(0, 255).permute(1, 2, 0).to("cpu", torch.uint8).numpy()
-                im = Image.fromarray(ndarr)
-                im.save(f'vis/{dataset_name}/{batch_idx}/place_{i}.png')
-                for j in range(len(attn_map[i])):
-                    ndarr_attn = attn_map[i][j].unsqueeze(0).mul(255).add_(0.5).clamp_(0, 255).permute(1, 2, 0).to("cpu", torch.uint8).numpy()
-                    plt.figure()
-                    plt.imshow(ndarr)
-                    plt.imshow(ndarr_attn, alpha=0.5, cmap='jet')
-                    plt.axis('off')
-                    plt.savefig(f'vis/{dataset_name}/{batch_idx}/attn_map_{i}_{j}.png', bbox_inches='tight', transparent="True", pad_inches=0)
-                    plt.close()
-                # Calculate the similarity matrix between scores of current place and current place
-                plt.figure()
-                plt.imshow(torch.matmul(score[i][0].T, score[i][0]).cpu().numpy(), cmap='viridis')
-                plt.axis('off')
-                plt.savefig(f'vis/{dataset_name}/{batch_idx}/score_sim_matrix_{i}.png', bbox_inches='tight', transparent="True", pad_inches=0)
-                plt.close()
-                # Calculate the similarity matrix between scores of 0-th place and current place
-                plt.figure()
-                plt.imshow(torch.matmul(score[i][0].T, score[0][0]).cpu().numpy(), cmap='viridis')
-                plt.axis('off')
-                plt.savefig(f'vis/{dataset_name}/{batch_idx}/score_0_sim_matrix_{i}.png', bbox_inches='tight', transparent="True", pad_inches=0)
-                plt.close()
+            self._visualize_batch(dataset_name, batch_idx, places, score, attn_map)
         else:
             descriptors = self(places)
         if dataloader_idx is None: # Only one val dataset
@@ -511,6 +512,8 @@ class VPRModel(pl.LightningModule):
         self.current_dataloader_idx = 0
         if self.visualize:            
             self.visualize_queries()
+        if self.agg_arch == "QAA" or self.agg_arch == "BoQ":
+            self.aggregator.cache_query()
     
     def on_test_epoch_end(self):
         """this return descriptors in their order
@@ -532,6 +535,9 @@ class VPRModel(pl.LightningModule):
         # reset the outputs list
         self.test_outputs = []
         self.results_list = []
+
+        if self.agg_arch == "QAA" or self.agg_arch == "BoQ":
+            self.aggregator.clean_cache()
 
     def test_calculate_recall(self, dataloader_idx):
         # Clean memory once one dataset finished
@@ -622,3 +628,88 @@ class VPRModel(pl.LightningModule):
         plt.axis('off')
         plt.savefig(f'vis//sim_matrix_score.png', bbox_inches='tight', transparent="True", pad_inches=0)
         plt.close()
+
+    def variance_covariance_rows(self, x, lambda_std=1.0, lambda_cov=1.0, d=1.0, var_ctl=False):
+        """
+        variance_covariance-style decorrelation among columns
+        of a (L, D) matrix. If L is your 'query size' and
+        D is your 'feature dimension', this penalizes 
+        correlation among the D columns across the L samples.
+        """
+        x = x.squeeze(0)
+        L, D = x.shape
+        
+        x = x - x.mean(dim=0)
+
+        std_x = torch.sqrt(x.var(dim=0) + 0.0001)
+        if var_ctl:
+            std_loss = torch.mean((std_x - d).pow(2))
+        else:
+            std_loss = torch.mean(F.relu(d - std_x))
+
+        cov_x = (x.T @ x) / (L - 1)
+        cov_loss = off_diagonal(cov_x).pow_(2).sum().div(D)
+
+        loss = (
+              lambda_std * std_loss
+            + lambda_cov * cov_loss
+        )
+        return loss
+
+    def off_diagonal(self, x):
+        """Return flattened view of off-diagonal elements of a square matrix."""
+        n, m = x.shape
+        assert n == m
+        return x.flatten()[:-1].view(n - 1, n + 1)[:, 1:].flatten()
+
+    def freeze_backbone(self):
+        self.backbone_config['num_trainable_blocks'] = 0
+        print("Freeze Backbone")
+
+    def freeze_all(self):
+        self.freeze_backbone()
+        self.aggregator.freeze = "score_prediction"
+        print("Freeze Score Prediction")
+
+    def adjust_queries(self, num_queries):
+        self.aggregator.adjust_queries(num_queries)
+
+    def mcr2_coding_rate(self, Z: np.ndarray, epsilon: float = 0.001) -> float:
+        """
+        Computes the coding rate R(Z, epsilon) as used in the MCR^2 principle:
+
+            R(Z, epsilon) = (1/2) * log det[ I + (d / (m * epsilon^2)) * Z Z^T ]
+
+        Parameters
+        ----------
+        Z : np.ndarray
+            Data matrix of shape (d, m).
+            - d = feature dimension
+            - m = number of samples
+        epsilon : float
+            Noise or distortion scale (epsilon > 0).
+
+        Returns
+        -------
+        float
+            The coding rate R(Z, epsilon).
+        """
+        # Z should be d x m. If your data is (m, d), transpose first.
+        d, m = Z.shape
+
+        # Compute alpha = d / (m * epsilon^2)
+        alpha = d / (m * (epsilon ** 2))
+
+        # Construct (I + alpha * Z Z^T), which is d x d
+        I_d = np.eye(d)
+        M = I_d + alpha * (Z @ Z.T)  # matrix multiply d x m and m x d => d x d
+
+        # Use a stable determinant method (slogdet gives sign and logdet)
+        sign, logdet = np.linalg.slogdet(M)
+        # If sign < 0, the matrix is numerically singular or negative (should not happen if Z is real)
+        if sign <= 0:
+            raise ValueError("Matrix inside log-det is not positive definite. Check your data or epsilon.")
+
+        # coding rate
+        R_value = 0.5 * logdet
+        return R_value
