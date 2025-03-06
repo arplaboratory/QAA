@@ -28,55 +28,35 @@ if __name__ == '__main__':
         mixed_precision=True,
     )
     
-    if not hasattr(train_cfg.training, "load"):
-        print("Training from scratch")
-        model = VPRModel(
-            #---- Encoder
-            backbone_arch=train_cfg.model.backbone_arch,
-            backbone_config=train_cfg.model.backbone_config,
-            agg_arch=train_cfg.model.agg_arch,
-            agg_config=train_cfg.model.agg_config,
-            lr=train_cfg.training.optimizer["lr"],
-            backbone_lr=train_cfg.training.optimizer["backbone_lr"] if "backbone_lr" in train_cfg.training.optimizer else train_cfg.training.optimizer["lr"],
-            optimizer=train_cfg.training.optimizer["name"],
-            weight_decay=train_cfg.training.optimizer["weight_decay"], # 0.001 for sgd and 0 for adam,
-            momentum=train_cfg.training.optimizer["momentum"],
-            lr_sched=train_cfg.training.scheduler["name"],
-            lr_sched_args = train_cfg.training.scheduler["args"],
+    model = VPRModel(
+        #---- Encoder
+        backbone_arch=train_cfg.model.backbone_arch,
+        backbone_config=train_cfg.model.backbone_config,
+        agg_arch=train_cfg.model.agg_arch,
+        agg_config=train_cfg.model.agg_config,
+        lr=train_cfg.training.optimizer["lr"],
+        backbone_lr=train_cfg.training.optimizer["backbone_lr"] if "backbone_lr" in train_cfg.training.optimizer else train_cfg.training.optimizer["lr"],
+        optimizer=train_cfg.training.optimizer["name"],
+        weight_decay=train_cfg.training.optimizer["weight_decay"], # 0.001 for sgd and 0 for adam,
+        momentum=train_cfg.training.optimizer["momentum"],
+        lr_sched=train_cfg.training.scheduler["name"],
+        lr_sched_args = train_cfg.training.scheduler["args"],
 
-            #----- Loss functions
-            # example: ContrastiveLoss, TripletMarginLoss, MultiSimilarityLoss,
-            # FastAPLoss, CircleLoss, SupConLoss,
-            loss_name=train_cfg.training.loss["name"],
-            miner_name=train_cfg.training.miner["name"], # example: TripletMarginMiner, MultiSimilarityMiner, PairMarginMiner
-            miner_margin=train_cfg.training.miner["margin"],
-            faiss_gpu=train_cfg.training.faiss_gpu,
-            recompute_desc=train_cfg.training.recompute_desc,
-            decorrelation=train_cfg.training.decorrelation,
-            decorrelation_lambda_std=train_cfg.training.decorrelation_lambda_std,
-            decorrelation_lambda_cov=train_cfg.training.decorrelation_lambda_cov,
-            decorrelation_lambda_total=train_cfg.training.decorrelation_lambda_total,
-            decorrelation_var_target=train_cfg.training.decorrelation_var_target,
-            decorrelation_var_ctl=train_cfg.training.decorrelation_var_ctl,
-        )
-    else:
-        model = VPRModel.load_from_checkpoint(train_cfg.training.load,
-                                              lr=train_cfg.training.optimizer["lr"],
-                                              backbone_lr=train_cfg.training.optimizer["backbone_lr"] if "backbone_lr" in train_cfg.training.optimizer else train_cfg.training.optimizer["lr"],
-                                              decorrelation=train_cfg.training.decorrelation,
-                                              decorrelation_lambda_std=train_cfg.training.decorrelation_lambda_std,
-                                              decorrelation_lambda_cov=train_cfg.training.decorrelation_lambda_cov,
-                                              decorrelation_lambda_total=train_cfg.training.decorrelation_lambda_total,
-                                              decorrelation_var_target=train_cfg.training.decorrelation_var_target,
-                                              decorrelation_var_ctl=train_cfg.training.decorrelation_var_ctl,)
-        print(f"Loading Model: {train_cfg.training.load}")
-        if train_cfg.training.finetune_method == "freeze_backbone":
-            model.freeze_backbone()
-        elif train_cfg.training.finetune_method == "freeze_all":
-            model.freeze_all()
-        elif train_cfg.training.finetune_method == "train_all":
-            pass
-        model.adjust_queries(train_cfg.model.agg_config["num_queries"])
+        #----- Loss functions
+        # example: ContrastiveLoss, TripletMarginLoss, MultiSimilarityLoss,
+        # FastAPLoss, CircleLoss, SupConLoss,
+        loss_name=train_cfg.training.loss["name"],
+        miner_name=train_cfg.training.miner["name"], # example: TripletMarginMiner, MultiSimilarityMiner, PairMarginMiner
+        miner_margin=train_cfg.training.miner["margin"],
+        faiss_gpu=train_cfg.training.faiss_gpu,
+        recompute_desc=train_cfg.training.recompute_desc,
+        decorrelation=train_cfg.training.decorrelation,
+        decorrelation_lambda_std=train_cfg.training.decorrelation_lambda_std,
+        decorrelation_lambda_cov=train_cfg.training.decorrelation_lambda_cov,
+        decorrelation_lambda_total=train_cfg.training.decorrelation_lambda_total,
+        decorrelation_var_target=train_cfg.training.decorrelation_var_target,
+        decorrelation_var_ctl=train_cfg.training.decorrelation_var_ctl,
+    )
 
     # model params saving using Pytorch Lightning
     # we save the best 3 models accoring to Recall@1 on pittsburg val
@@ -84,7 +64,7 @@ if __name__ == '__main__':
         monitor=f'{train_cfg.datasets.target_val_dataset}_val/R1',
         filename=f'{model.encoder_arch}' + '_{epoch:02d}_R1[{pitts30k_val/R1:.4f}]_R5[{pitts30k_val/R5:.4f}]',
         auto_insert_metric_name=False,
-        save_weights_only=True,
+        save_weights_only=False,
         save_top_k=3,
         save_last=True,
         mode='max'
@@ -111,6 +91,11 @@ if __name__ == '__main__':
 
     # we call the trainer, we give it the model and the datamodule
     # trainer.validate(model=model, datamodule=datamodule)
-    trainer.fit(model=model, datamodule=datamodule)
-    trainer.validate(model=model, datamodule=datamodule, ckpt_path="best")
-    trainer.test(model=model, datamodule=datamodule, ckpt_path="best")
+    if hasattr(train_cfg.training, "load"):
+        print(f"Loading Model: {train_cfg.training.load}")
+        trainer.fit(model=model, datamodule=datamodule, ckpt_path=train_cfg.training.load)
+    else:
+        print("Training from scratch")
+        trainer.fit(model=model, datamodule=datamodule)
+    trainer.validate(model=model, datamodule=datamodule)
+    trainer.test(model=model, datamodule=datamodule)

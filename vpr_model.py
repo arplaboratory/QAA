@@ -4,6 +4,7 @@ from torch.optim import lr_scheduler, optimizer
 import torchvision
 import torch.nn.functional as F
 import os
+import numpy as np
 
 import utils
 from utils.measure_flop import measure_flop
@@ -121,6 +122,7 @@ class VPRModel(pl.LightningModule):
         self.val_outputs = []
         self.log_img_first_iter = False
         self.visualize = False
+        self.coding_rate = []
     
     def setup(self, stage):
         if stage == "fit" or stage == "test" or stage == "validate":
@@ -166,6 +168,8 @@ class VPRModel(pl.LightningModule):
                 print(f"Add params: aggregator - queries_score")
                 params = params + [{'params': self.aggregator.queries_feature.parameters()}]
                 print(f"Add params: aggregator - queries_feature")
+            elif self.aggregator.freeze == "score_feature":
+                pass
             else:
                 raise NotImplementedError()
         if hasattr(self.backbone, "domain_prompt_model"):
@@ -357,11 +361,13 @@ class VPRModel(pl.LightningModule):
     def _visualize_batch(self, dataset_name, batch_idx, places, score, attn_map):
         if not os.path.isdir(f'vis/{dataset_name}'):
             os.mkdir(f'vis/{dataset_name}')
-        os.mkdir(f'vis/{dataset_name}/{batch_idx}')
+        if not os.path.isdir(f'vis/{dataset_name}/{batch_idx}'):
+            os.mkdir(f'vis/{dataset_name}/{batch_idx}')
         attn_map = (attn_map - attn_map.min())/(attn_map.max() - attn_map.min())
         attn_map = attn_map.view(-1, self.aggregator.num_queries, places.shape[-2]//14, places.shape[-1]//14)
         attn_map = F.interpolate(attn_map, size=(places.shape[-2], places.shape[-1]), mode='bilinear', align_corners=True)
         for i in range(len(places)):
+            self.coding_rate.append(self.mcr2_coding_rate(score[i].cpu().numpy()))
             ndarr = inv_base_transform(places[i]).mul(255).add_(0.5).clamp_(0, 255).permute(1, 2, 0).to("cpu", torch.uint8).numpy()
             im = Image.fromarray(ndarr)
             im.save(f'vis/{dataset_name}/{batch_idx}/place_{i}.png')
@@ -403,6 +409,8 @@ class VPRModel(pl.LightningModule):
         if self.current_dataloader_idx != dataloader_idx:
             self.val_calculate_recall(self.current_dataloader_idx)
             self.current_dataloader_idx = dataloader_idx
+            if len(self.coding_rate) != 0:
+                np.save("coding_rate.npy", np.array(self.coding_rate))
         self.val_outputs.append(descriptors.detach().cpu())
         return descriptors.detach().cpu()
     
@@ -442,7 +450,7 @@ class VPRModel(pl.LightningModule):
             print("Use existing descriptors for recomputing if recomputing is enabled")
             self.trainer.datamodule.model = None
 
-        if self.agg_arch == "QAA":
+        if self.agg_arch == "QAA" or self.agg_arch == "BoQ":
             self.aggregator.clean_cache()
 
     def val_calculate_recall(self, dataloader_idx):
@@ -665,3 +673,43 @@ class VPRModel(pl.LightningModule):
 
     def adjust_queries(self, num_queries):
         self.aggregator.adjust_queries(num_queries)
+
+    def mcr2_coding_rate(self, Z: np.ndarray, epsilon: float = 0.001) -> float:
+        """
+        Computes the coding rate R(Z, epsilon) as used in the MCR^2 principle:
+
+            R(Z, epsilon) = (1/2) * log det[ I + (d / (m * epsilon^2)) * Z Z^T ]
+
+        Parameters
+        ----------
+        Z : np.ndarray
+            Data matrix of shape (d, m).
+            - d = feature dimension
+            - m = number of samples
+        epsilon : float
+            Noise or distortion scale (epsilon > 0).
+
+        Returns
+        -------
+        float
+            The coding rate R(Z, epsilon).
+        """
+        # Z should be d x m. If your data is (m, d), transpose first.
+        d, m = Z.shape
+
+        # Compute alpha = d / (m * epsilon^2)
+        alpha = d / (m * (epsilon ** 2))
+
+        # Construct (I + alpha * Z Z^T), which is d x d
+        I_d = np.eye(d)
+        M = I_d + alpha * (Z @ Z.T)  # matrix multiply d x m and m x d => d x d
+
+        # Use a stable determinant method (slogdet gives sign and logdet)
+        sign, logdet = np.linalg.slogdet(M)
+        # If sign < 0, the matrix is numerically singular or negative (should not happen if Z is real)
+        if sign <= 0:
+            raise ValueError("Matrix inside log-det is not positive definite. Check your data or epsilon.")
+
+        # coding rate
+        R_value = 0.5 * logdet
+        return R_value

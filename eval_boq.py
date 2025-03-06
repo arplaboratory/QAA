@@ -2,7 +2,6 @@ import pytorch_lightning as pl
 import argparse
 
 from utils.load_cfg import load_config
-from utils.measure_flop import measure_flop
 from dataloaders.GenericDataloader import GenericDataModule
 from vpr_model import VPRModel
 import utils

@@ -133,6 +133,7 @@ class QAA(nn.Module):
             p = torch.exp(p)
         elif self.score_norm == "none":
             pass
+        p_cross = p
         p = p.unsqueeze(1).repeat(1, self.cluster_dim, 1, 1)
         f = f.unsqueeze(2).repeat(1, 1, self.num_clusters, 1)
 
@@ -150,7 +151,7 @@ class QAA(nn.Module):
         if domain_desc is not None:
             return nn.functional.normalize(f, p=2, dim=-1), domain_desc
         if visualize:
-            return nn.functional.normalize(f, p=2, dim=-1), p_attn, p
+            return nn.functional.normalize(f, p=2, dim=-1), p_attn, p_cross
         if decorrelation != "none":
             return nn.functional.normalize(f, p=2, dim=-1), q_raw, f_raw
         return nn.functional.normalize(f, p=2, dim=-1)
