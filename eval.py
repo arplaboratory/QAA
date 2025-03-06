@@ -35,7 +35,8 @@ if __name__ == '__main__':
     if args.visualize:
         model.visualize = True
         if os.path.isdir('vis'):
-            raise ValueError('Visualisation directory does exist')
+            pass
+            # raise ValueError('Visualisation directory does exist')
         else:
             os.mkdir('vis')
 
