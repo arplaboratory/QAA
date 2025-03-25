@@ -97,5 +97,5 @@ if __name__ == '__main__':
     else:
         print("Training from scratch")
         trainer.fit(model=model, datamodule=datamodule)
-    trainer.validate(model=model, datamodule=datamodule)
-    trainer.test(model=model, datamodule=datamodule)
+    trainer.validate(model=model, datamodule=datamodule, ckpt_path="best")
+    trainer.test(model=model, datamodule=datamodule, ckpt_path="best")
