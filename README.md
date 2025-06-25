@@ -4,7 +4,7 @@ This repository is the official implementation for [Query-Based Adaptive Aggrega
 
 ## Summary
 
-We introduce Query-based Adaptive Aggregation (QAA) to expand the model memory capacity, leading to better generalization performance for diverse datasets. We also introduce the UniVPR framework for efficient multi-dataset joint training.
+We introduce Query-based Adaptive Aggregation (QAA) to expand the model memory capacity, leading to better generalization performance for diverse datasets.
 
 ## Setup
 
