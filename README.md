@@ -4,7 +4,7 @@ This repository is the official implementation for [Query-Based Adaptive Aggrega
 
 ## Summary
 
-We introduce Query-based Adaptive Aggregation (QAA) to expand the model memory capacity, leading to better generalization performance for diverse datasets. We also introduce the UniVPR framework for efficient multi-dataset joint training.
+We introduce Query-based Adaptive Aggregation (QAA) to expand the model memory capacity, leading to better generalization performance for diverse datasets. We also introduce the QAA framework for efficient multi-dataset joint training.
 
 ## Setup
 
@@ -43,12 +43,12 @@ The preprocessing results will be saved in the cache/datasets directory. The pro
 ```
 singularity exec --overlay $overlay_path:ro \
                  /scratch/work/public/singularity/cuda12.1.1-cudnn8.9.0-devel-ubuntu22.04.2.sif \
-                 /bin/bash -c "source ~/.bashrc; conda activate UniVPR; python3 dataloaders/GenerateDatasetNpy.py --dataset_name SPED"
+                 /bin/bash -c "source ~/.bashrc; conda activate QAA; python3 dataloaders/GenerateDatasetNpy.py --dataset_name SPED"
 ```
 with:
 ```
 mount $overlay_path / -t squashfs -o loop # Do this only if you use .sqf files; Otherwise skip mounting
-source ~/.bashrc; conda activate UniVPR; python3 dataloaders/GenerateDatasetNpy.py --dataset_name SPED
+source ~/.bashrc; conda activate QAA; python3 dataloaders/GenerateDatasetNpy.py --dataset_name SPED
 ```
 
 To include a new dataset, refer to the scripts `preprocess_dataset_npy.sh` and `dataloaders/GenerateDatasetNpy.py` for instructions on generating `.npy` files.
@@ -76,7 +76,7 @@ singularity exec --nv \
                 --overlay $overlay_path_SF_XL_test:ro \
                 --overlay $overlay_path_SF_XL_train:ro \
                  /scratch/work/public/singularity/cuda12.1.1-cudnn8.9.0-devel-ubuntu22.04.2.sif \
-                 /bin/bash -c "source ~/.bashrc; conda activate UniVPR; python3 -u main.py --config $CONFIG"
+                 /bin/bash -c "source ~/.bashrc; conda activate QAA; python3 -u main.py --config $CONFIG"
 ```
 with:
 ```
@@ -95,7 +95,7 @@ mount $overlay_path_amstertime / -t squashfs -o loop
 mount $overlay_path_SF_XL_val / -t squashfs -o loop
 mount $overlay_path_SF_XL_test / -t squashfs -o loop
 mount $overlay_path_SF_XL_train / -t squashfs -o loop
-source ~/.bashrc; conda activate UniVPR; python3 -u main.py --config $CONFIG
+source ~/.bashrc; conda activate QAA; python3 -u main.py --config $CONFIG
 ```
 
 ## Evaluation

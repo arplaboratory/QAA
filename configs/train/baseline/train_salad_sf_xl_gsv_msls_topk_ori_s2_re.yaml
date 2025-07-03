@@ -1,6 +1,6 @@
 # PyTorch Training Parameters
 model:
-  backbone_arch: dinov2_vitb14
+  backbone_arch: dinov2_vits14
   backbone_config: 
     num_trainable_blocks: 2
     return_token: True
@@ -13,24 +13,17 @@ model:
     divide_ratio: [1, 1, 1, 0]
     divide: 1
     multi_scale: "1"
-  agg_arch: QAA
+  agg_arch: SALAD
   agg_config:
-    num_channels: 768
+    num_channels: 384
     num_clusters: 64
     cluster_dim: 128
-    token_dim: 0
+    token_dim: 256
     dropout: 0.3
-    freeze: "score"
+    freeze: "none"
     divide_ratio: [1, 1, 1, 0]
     divide: 1
-    num_queries: 256
-    attn_arch: "conv"
-    skip_connection: "none"
-    feature_nheads: 16
-    score_nheads: 16
-    self_attn_out_norm: True
-    out_norm: False
-    score_norm: "none"
+    num_queries: 64
 
 datasets:
   train_datasets: 

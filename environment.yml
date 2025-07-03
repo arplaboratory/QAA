@@ -1,4 +1,4 @@
-name: UniVPR
+name: QAA
 channels:
   - defaults
   - xformers
