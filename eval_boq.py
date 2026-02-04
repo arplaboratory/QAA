@@ -88,7 +88,7 @@ class GenericModel(pl.LightningModule):
             assert test_dataset.split == "test"
             print(f"Save predictions to msls_preds.txt")
             try:
-                test_dataset.save_predictions(preds, f'UniVPR/{self.logger.version}/checkpoints/msls_preds.txt')
+                test_dataset.save_predictions(preds, f'QAA/{self.logger.version}/checkpoints/msls_preds.txt')
             except Exception:
                 print("MSLS PRED TEXT SAVE IN ROOT FOLDER")
                 test_dataset.save_predictions(preds, f'./msls_preds.txt')
@@ -121,7 +121,7 @@ if __name__ == '__main__':
     args = args.parse_args()
     # we load the training configuration
     train_cfg = load_config(args.config)
-    # wandb_logger = WandbLogger(name=args.config.split('/')[-1].split('.')[0], project="UniVPR")
+    # wandb_logger = WandbLogger(name=args.config.split('/')[-1].split('.')[0], project="QAA")
     datamodule = GenericDataModule(
         train_batch_size=train_cfg.training.train_batch_size,
         test_batch_size=train_cfg.training.test_batch_size,
