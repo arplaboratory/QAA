@@ -6,9 +6,10 @@ channels:
   - nvidia
 dependencies:
   - python=3.10
-  - pytorch::pytorch==2.1.0
+  - pytorch::pytorch=2.1.0
   - pytorch::pytorch-cuda=12.1
-  - pytorch::torchvision==0.16.0
+  - pytorch::torchvision=0.16.0
+  - mkl<2025.0.0
   - xformers
   - pip
   - matplotlib
@@ -20,3 +21,4 @@ dependencies:
     - pytorch-metric-learning==2.3.0
     - torchmetrics==1.2.0
     - wandb
+    - lightning

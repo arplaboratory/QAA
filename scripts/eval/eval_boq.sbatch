@@ -6,8 +6,8 @@
 #SBATCH --gres=gpu:h100:1
 #SBATCH --account=pr_122_tandon_advanced
 #SBATCH --mem=350GB
-#SBATCH --job-name=eval_salad
-#SBATCH --output=eval_salad.out
+#SBATCH --job-name=eval
+#SBATCH --output=eval.out
 
 overlay_path_gsv="datasets_sqf/GSV.sqf"
 overlay_path_pitts30k="datasets_sqf/pitts30k.sqf"

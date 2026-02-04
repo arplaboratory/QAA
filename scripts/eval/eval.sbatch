@@ -6,8 +6,8 @@
 #SBATCH --gres=gpu:h100:1
 #SBATCH --account=pr_122_tandon_advanced
 #SBATCH --mem=350GB
-#SBATCH --job-name=eval_salad
-#SBATCH --output=eval_salad.out
+#SBATCH --job-name=eval
+#SBATCH --output=eval.out
 
 overlay_path_gsv="datasets_sqf/GSV.sqf"
 overlay_path_pitts30k="datasets_sqf/pitts30k.sqf"
@@ -41,4 +41,4 @@ singularity exec --nv \
                 --overlay $overlay_path_SF_XL_test:ro \
                 --overlay $overlay_path_SF_XL_train:ro \
                  /scratch/work/public/singularity/cuda12.1.1-cudnn8.9.0-devel-ubuntu22.04.2.sif \
-                 /bin/bash -c "source ~/.bashrc; conda activate QAA; python3 -u eval.py --config $CONFIG --ckpt_path $CKPT --visualize"
+                 /bin/bash -c "source ~/.bashrc; conda activate QAA; python3 -u eval.py --config $CONFIG --ckpt_path $CKPT"

@@ -73,7 +73,7 @@ Download preprocessed dataset caches from [link]() (released after review). Plac
 
 ## Train
 
-All training scripts are included in `train.sh`, with config files in `configs/train` folder. The provided code relies on [singularity](https://github.com/sylabs/singularity). If you do not have singularity installed, replace the `scripts/train/train_salad_longer.sbatch`:
+All training scripts are included in `train.sh`, with config files in `configs/train` folder. The provided code relies on [singularity](https://github.com/sylabs/singularity). If you do not have singularity installed, replace the `scripts/train/train_longer.sbatch`:
 ```
 singularity exec --nv \
                 --overlay $overlay_path_gsv:ro \
