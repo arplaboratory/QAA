@@ -112,10 +112,6 @@ class VPRModel(pl.LightningModule):
         # ----------------------------------
         # get the backbone and the aggregator
         self.backbone = helper.get_backbone(backbone_arch, backbone_config)
-        if agg_arch == "QueriesSALAD":
-            agg_arch = "QAA"
-        if agg_arch == "ConditionedQueriesSALAD":
-            agg_arch = "ConditionedQAA"
         self.aggregator = helper.get_aggregator(agg_arch, agg_config)
 
         # For validation in Lightning v2.0.0
