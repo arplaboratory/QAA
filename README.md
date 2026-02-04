@@ -57,7 +57,7 @@ If you don't want to use `.sqf` files, just put the dataset folder into `dataset
 ## Preprocess
 
 ### Option 1: Use Preprocessed Data
-Download preprocessed dataset caches from [link](https://drive.google.com/file/d/1BvdxqFvQv1uvZ3k9dnmGiaFeayxEE657/view?usp=drive_link). Place the files in the `cache/datasets` directory.
+Download preprocessed dataset caches from [link](https://drive.google.com/file/d/1tcS8XHgNhDPjYoKXn8Q36ezoTYBi06h9/view?usp=drive_link). Place the files in the `cache/datasets` directory.
 
 ### Option 2: Preprocess from Scratch
 Run the following scripts:
