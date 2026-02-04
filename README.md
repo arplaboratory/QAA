@@ -1,6 +1,21 @@
 # Query-Based Adaptive Aggregation for Multi-Dataset Joint Training Toward Universal Visual Place Recognition
 
+[![arXiv](https://img.shields.io/badge/arXiv-2507.03831-B31B1B.svg)](https://www.arxiv.org/abs/2507.03831)
+[![Hugging Face](https://img.shields.io/badge/Hugging%20Face%20Model-ThermalGen-blue.svg)]()
+[![Model](https://img.shields.io/badge/Model-ThermalGen-green.svg)]()
+
 This repository is the official implementation for [Query-Based Adaptive Aggregation for Multi-Dataset Joint Training Toward Universal Visual Place Recognition]().
+
+Related works:  
+
+```
+@article{xiao2025query,
+  title={Query-Based Adaptive Aggregation for Multi-Dataset Joint Training Toward Universal Visual Place Recognition},
+  author={Xiao, Jiuhong and Zhou, Yang and Loianno, Giuseppe},
+  journal={arXiv preprint arXiv:2507.03831},
+  year={2025}
+}
+```
 
 ## Summary
 
@@ -39,16 +54,16 @@ Run the following scripts:
 ./preprocess_dataset_cluster_sfxl.sh  # For clustering the SF-XL training set
 ```
 
-The preprocessing results will be saved in the cache/datasets directory. The provided code relies on [singularity](https://github.com/sylabs/singularity). If you do not have singularity installed, replace the following example command:
+The preprocessing results will be saved in the cache/datasets directory. The provided code relies on [singularity](https://github.com/sylabs/singularity). If you do not have Singularity installed, replace the following example command:
 ```
 singularity exec --overlay $overlay_path:ro \
                  /scratch/work/public/singularity/cuda12.1.1-cudnn8.9.0-devel-ubuntu22.04.2.sif \
-                 /bin/bash -c "source ~/.bashrc; conda activate UniVPR; python3 dataloaders/GenerateDatasetNpy.py --dataset_name SPED"
+                 /bin/bash -c "source ~/.bashrc; conda activate QAA; python3 dataloaders/GenerateDatasetNpy.py --dataset_name SPED"
 ```
 with:
 ```
-mount $overlay_path / -t squashfs -o loop # Do this only if you use .sqf files; Otherwise skip mounting
-source ~/.bashrc; conda activate UniVPR; python3 dataloaders/GenerateDatasetNpy.py --dataset_name SPED
+# mount $overlay_path / -t squashfs -o loop # Do this only if you use .sqf files; Otherwise skip mounting
+source ~/.bashrc; conda activate QAA; python3 dataloaders/GenerateDatasetNpy.py --dataset_name SPED
 ```
 
 To include a new dataset, refer to the scripts `preprocess_dataset_npy.sh` and `dataloaders/GenerateDatasetNpy.py` for instructions on generating `.npy` files.
@@ -76,26 +91,27 @@ singularity exec --nv \
                 --overlay $overlay_path_SF_XL_test:ro \
                 --overlay $overlay_path_SF_XL_train:ro \
                  /scratch/work/public/singularity/cuda12.1.1-cudnn8.9.0-devel-ubuntu22.04.2.sif \
-                 /bin/bash -c "source ~/.bashrc; conda activate UniVPR; python3 -u main.py --config $CONFIG"
+                 /bin/bash -c "source ~/.bashrc; conda activate QAA; python3 -u main.py --config $CONFIG"
 ```
 with:
 ```
 # Do this only if you use .sqf files; Otherwise skip mounting
-mount $overlay_path_gsv / -t squashfs -o loop
-mount $overlay_path_pitts30k / -t squashfs -o loop
-mount $overlay_path_pitts250k / -t squashfs -o loop
-mount $overlay_path_msls / -t squashfs -o loop
-mount $overlay_path_svox / -t squashfs -o loop
-mount $overlay_path_nordland / -t squashfs -o loop
-mount $overlay_path_nordland_subset / -t squashfs -o loop
-mount $overlay_path_sped / -t squashfs -o loop
-mount $overlay_path_tokyo247 / -t squashfs -o loop
-mount $overlay_path_eynsham / -t squashfs -o loop
-mount $overlay_path_amstertime / -t squashfs -o loop
-mount $overlay_path_SF_XL_val / -t squashfs -o loop
-mount $overlay_path_SF_XL_test / -t squashfs -o loop
-mount $overlay_path_SF_XL_train / -t squashfs -o loop
-source ~/.bashrc; conda activate UniVPR; python3 -u main.py --config $CONFIG
+# mount $overlay_path_gsv / -t squashfs -o loop
+# mount $overlay_path_pitts30k / -t squashfs -o loop
+# mount $overlay_path_pitts250k / -t squashfs -o loop
+# mount $overlay_path_msls / -t squashfs -o loop
+# mount $overlay_path_svox / -t squashfs -o loop
+# mount $overlay_path_nordland / -t squashfs -o loop
+# mount $overlay_path_nordland_subset / -t squashfs -o loop
+# mount $overlay_path_sped / -t squashfs -o loop
+# mount $overlay_path_tokyo247 / -t squashfs -o loop
+# mount $overlay_path_eynsham / -t squashfs -o loop
+# mount $overlay_path_amstertime / -t squashfs -o loop
+# mount $overlay_path_SF_XL_val / -t squashfs -o loop
+# mount $overlay_path_SF_XL_test / -t squashfs -o loop
+# mount $overlay_path_SF_XL_train / -t squashfs -o loop
+
+source ~/.bashrc; conda activate QAA; python3 -u main.py --config $CONFIG
 ```
 
 ## Evaluation
@@ -113,9 +129,3 @@ This code is based on the amazing work of:
  - [MixVPR](https://github.com/amaralibey/MixVPR)
  - [GSV-Cities](https://github.com/amaralibey/gsv-cities)
  - [DINOv2](https://github.com/facebookresearch/dinov2)
-
-## Cite
-Here is the bibtex to cite our paper
-```
-TBD
-```
