@@ -1,8 +1,8 @@
 # Query-Based Adaptive Aggregation for Multi-Dataset Joint Training Toward Universal Visual Place Recognition
 
 [![arXiv](https://img.shields.io/badge/arXiv-2507.03831-B31B1B.svg)](https://www.arxiv.org/abs/2507.03831)
-[![Hugging Face](https://img.shields.io/badge/Hugging%20Face%20Model-ThermalGen-blue.svg)]()
-[![Model](https://img.shields.io/badge/Model-ThermalGen-green.svg)]()
+[![Hugging Face](https://img.shields.io/badge/Hugging%20Face%20Model-QAA-blue.svg)](https://huggingface.co/collections/xjh19972/query-based-adaptive-aggregation-qaa-models)
+[![Resources](https://img.shields.io/badge/Resources-QAA-green.svg)](https://drive.google.com/drive/folders/1tNH0exNmBd_9bEkZWiH6eLi4NyAHGDsO?usp=drive_link)
 
 This repository is the official implementation for [Query-Based Adaptive Aggregation for Multi-Dataset Joint Training Toward Universal Visual Place Recognition]().
 
@@ -28,6 +28,16 @@ Create a conda environment with the following:
 conda env create -f environment.yml
 ```
 
+## Simple Inference Demo
+
+To quickly get started with QAA, we provide a [`QAA_demo.py`](QAA_demo.py) script. This demo automatically downloads the model from Hugging Face and runs inference on a random tensor:
+
+```bash
+# From the QAA root directory
+conda activate QAA
+python QAA_demo.py
+```
+
 ## Dataset
 
 For training, download [GSV-Cities](https://github.com/amaralibey/gsv-cities), [MSLS](https://www.mapillary.com/dataset/places), and [SF-XL](https://docs.google.com/forms/d/e/1FAIpQLSdQEcRULPLNr0Zk5x85jNw3vcel_RxoQoKtsrJA7QPjWPVqZg/viewform). 
@@ -46,7 +56,10 @@ If you don't want to use `.sqf` files, just put the dataset folder into `dataset
 
 ## Preprocess
 
-### Option 1: Preprocess from Scratch
+### Option 1: Use Preprocessed Data
+Download preprocessed dataset caches from [link](https://drive.google.com/file/d/1BvdxqFvQv1uvZ3k9dnmGiaFeayxEE657/view?usp=drive_link). Place the files in the `cache/datasets` directory.
+
+### Option 2: Preprocess from Scratch
 Run the following scripts:
 
 ```
@@ -67,9 +80,6 @@ source ~/.bashrc; conda activate QAA; python3 dataloaders/GenerateDatasetNpy.py 
 ```
 
 To include a new dataset, refer to the scripts `preprocess_dataset_npy.sh` and `dataloaders/GenerateDatasetNpy.py` for instructions on generating `.npy` files.
-
-### Option 2: Use Preprocessed Data
-Download preprocessed dataset caches from [link]() (released after review). Place the files in the `cache/datasets` directory.
 
 ## Train
 
@@ -120,7 +130,7 @@ All evaluation scripts are included in `eval.sh`, with config files in `configs/
 
 ## Model weights
 
-The model weights are provided in [link]() (released after review).
+The model weights are provided in [link](https://drive.google.com/file/d/1BvdxqFvQv1uvZ3k9dnmGiaFeayxEE657/view?usp=drive_link).
 
 ## Acknowledgements
 This code is based on the amazing work of:
